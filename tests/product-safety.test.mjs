@@ -30,14 +30,14 @@ test("is installable as a portrait standalone PWA", () => {
   assert.equal(manifest.short_name, "TachoCommand");
   assert.equal(manifest.display, "standalone");
   assert.equal(manifest.orientation, "portrait-primary");
-  assert.equal(manifest.start_url, "/");
+  assert.equal(manifest.start_url, "/app");
   assert.ok(manifest.icons.length > 0);
 });
 
 test("offline cache is same-origin and keeps a navigation fallback", () => {
   assert.match(serviceWorker, /url\.origin !== self\.location\.origin/);
   assert.match(serviceWorker, /request\.mode === "navigate"/);
-  assert.match(serviceWorker, /caches\.match\("\/"\)/);
+  assert.match(serviceWorker, /caches\.match\(url\.pathname === "\/app" \? "\/app" : "\/"\)/);
 });
 
 test("requests only published standard optional BLE services and keeps reports data-minimal", async () => {
