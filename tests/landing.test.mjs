@@ -18,3 +18,9 @@ test("landing offers three languages and never claims iPhone support", () => {
   assert.match(landing, /value="de"/);
   assert.match(landing, /iPhone\/Safari i stariji tahografi trenutno nisu podržani/);
 });
+
+test("mobile landing bypasses the failing server image optimizer", () => {
+  assert.match(landing, /cockpit\.webp/);
+  assert.equal((landing.match(/unoptimized/g) ?? []).length, 2);
+  assert.doesNotMatch(landing, /screenshots\/cockpit\.png/);
+});

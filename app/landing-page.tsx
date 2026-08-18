@@ -203,7 +203,7 @@ export default function LandingPage() {
           <div className="hero-phone-halo" />
           <div className="hero-phone">
             <div className="phone-speaker" />
-            <Image src="/screenshots/cockpit.png" alt="TachoCommand cockpit" width={520} height={725} priority />
+            <Image src="/screenshots/cockpit.webp" alt="TachoCommand cockpit" width={520} height={725} priority unoptimized />
           </div>
           <span className="floating-chip chip-top"><i />BLE READY</span>
           <span className="floating-chip chip-bottom">SR • EN • DE</span>
@@ -237,7 +237,7 @@ export default function LandingPage() {
         </div>
         <div className="screenshot-grid">
           <figure>
-            <div className="screen-frame"><Image src="/screenshots/cockpit.png" alt={t.screenNames[0]} width={520} height={725} /></div>
+            <div className="screen-frame"><Image src="/screenshots/cockpit.webp" alt={t.screenNames[0]} width={520} height={725} unoptimized /></div>
             <figcaption><span>01</span>{t.screenNames[0]}</figcaption>
           </figure>
           {t.screenNames.slice(1).map((name, index) => (
