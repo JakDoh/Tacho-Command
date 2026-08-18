@@ -1,5 +1,5 @@
-const CACHE_NAME = "tachocommand-shell-v1";
-const CORE_ASSETS = ["/", "/manifest.webmanifest", "/favicon.svg"];
+const CACHE_NAME = "tachocommand-shell-v2";
+const CORE_ASSETS = ["/", "/app", "/manifest.webmanifest", "/favicon.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS)));
@@ -28,7 +28,7 @@ self.addEventListener("fetch", (event) => {
           if (response.ok) caches.open(CACHE_NAME).then((cache) => cache.put(request, response.clone()));
           return response;
         })
-        .catch(() => caches.match(request).then((cached) => cached || caches.match("/"))),
+        .catch(() => caches.match(request).then((cached) => cached || caches.match(url.pathname === "/app" ? "/app" : "/"))),
     );
     return;
   }

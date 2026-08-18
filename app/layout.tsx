@@ -2,9 +2,9 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "TachoCommand — vozački cockpit",
+  title: "TachoCommand — tvoj vozački cockpit",
   description:
-    "Mobilni pomoćnik za pregled vremena vožnje, pauza i rada. Dizajniran za profesionalne vozače kamiona i autobusa.",
+    "Mobilni pomoćnik za profesionalne vozače autobusa i kamiona. Pregled vožnje, pauza, smene i Smart Tacho 2 beta povezivanja.",
   manifest: "/manifest.webmanifest",
   applicationName: "TachoCommand",
   appleWebApp: {
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     title: "TachoCommand",
   },
   formatDetection: { telephone: false },
-  other: { "codex-preview": "development" },
+  other: { "codex-preview": "development", "application-status": "closed-beta" },
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",

@@ -9,6 +9,7 @@ import {
   classifyTachoServices,
   TACHO_OPTIONAL_SERVICE_UUIDS,
 } from "../lib/tacho-ble.js";
+import AccessGate from "./access-gate";
 
 type Activity = "drive" | "work" | "available" | "rest";
 type Tab = "cockpit" | "log" | "device" | "more";
@@ -337,6 +338,7 @@ export default function TachoCommandApp() {
   };
 
   return (
+    <AccessGate>
     <main className="app-shell">
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
@@ -686,5 +688,6 @@ export default function TachoCommandApp() {
         {notice && <div className="toast" role="status">{notice}</div>}
       </section>
     </main>
+    </AccessGate>
   );
 }

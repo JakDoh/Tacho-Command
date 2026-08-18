@@ -1,0 +1,20 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+const landing = await readFile(new URL("../app/landing-page.tsx", import.meta.url), "utf8");
+const appPage = await readFile(new URL("../app/app/page.tsx", import.meta.url), "utf8");
+
+test("public root is a truthful closed-beta landing and the cockpit lives at /app", () => {
+  assert.match(landing, /ZATVORENA BETA/);
+  assert.match(landing, /Kupovina se otvara nakon bete/);
+  assert.match(landing, /tahograf ostaje zvanični izvor/i);
+  assert.match(appPage, /TachoCommandApp/);
+});
+
+test("landing offers three languages and never claims iPhone support", () => {
+  assert.match(landing, /value="sr"/);
+  assert.match(landing, /value="en"/);
+  assert.match(landing, /value="de"/);
+  assert.match(landing, /iPhone\/Safari i stariji tahografi trenutno nisu podržani/);
+});
