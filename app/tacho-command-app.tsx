@@ -4,6 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { resolveLocale, translations } from "../lib/i18n.js";
 import type { Locale } from "../lib/i18n.js";
 import { evaluateDrivingSnapshot } from "../lib/tacho-rules.js";
+import {
+  buildCompatibilityReport,
+  classifyTachoServices,
+  TACHO_OPTIONAL_SERVICE_UUIDS,
+} from "../lib/tacho-ble.js";
 
 type Activity = "drive" | "work" | "available" | "rest";
 type Tab = "cockpit" | "log" | "device" | "more";
@@ -16,14 +21,18 @@ type ActivityEvent = {
   source: "demo" | "manual";
 };
 
+type BlePrimaryService = { uuid: string };
+type BleGattServer = {
+  connected: boolean;
+  connect: () => Promise<BleGattServer>;
+  disconnect: () => void;
+  getPrimaryServices: () => Promise<BlePrimaryService[]>;
+};
+
 type BleDevice = {
   id: string;
   name?: string;
-  gatt?: {
-    connected: boolean;
-    connect: () => Promise<{ connected: boolean }>;
-    disconnect: () => void;
-  };
+  gatt?: BleGattServer;
   addEventListener: (type: "gattserverdisconnected", listener: () => void) => void;
 };
 
@@ -90,6 +99,8 @@ export default function TachoCommandApp() {
   const [showTimeEditor, setShowTimeEditor] = useState(false);
   const [deviceState, setDeviceState] = useState<DeviceState>("idle");
   const [device, setDevice] = useState<BleDevice | null>(null);
+  const [detectedServiceUuids, setDetectedServiceUuids] = useState<string[]>([]);
+  const [protocolServiceDetected, setProtocolServiceDetected] = useState<boolean | null>(null);
   const [online, setOnline] = useState(true);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [events, setEvents] = useState<ActivityEvent[]>([
@@ -232,7 +243,7 @@ export default function TachoCommandApp() {
 
   const connectBluetooth = async () => {
     const bluetooth = (navigator as Navigator & {
-      bluetooth?: { requestDevice: (options: { acceptAllDevices: boolean }) => Promise<BleDevice> };
+      bluetooth?: { requestDevice: (options: { acceptAllDevices: boolean; optionalServices: readonly string[] }) => Promise<BleDevice> };
     }).bluetooth;
     if (!bluetooth) {
       setDeviceState("unsupported");
@@ -241,16 +252,29 @@ export default function TachoCommandApp() {
     }
     try {
       setDeviceState("connecting");
-      const selected = await bluetooth.requestDevice({ acceptAllDevices: true });
+      const selected = await bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: TACHO_OPTIONAL_SERVICE_UUIDS,
+      });
       selected.addEventListener("gattserverdisconnected", () => {
         setDeviceState("idle");
         setNotice("BLE veza je prekinuta. Nijedan tahografski podatak nije sačuvan kao verifikovan.");
       });
       if (!selected.gatt) throw new Error("GATT unavailable");
-      await selected.gatt.connect();
+      const server = await selected.gatt.connect();
+      let serviceUuids: string[] = [];
+      try {
+        const services = await server.getPrimaryServices();
+        serviceUuids = services.map((service) => service.uuid);
+      } catch {
+        serviceUuids = [];
+      }
+      const classification = classifyTachoServices(serviceUuids);
+      setDetectedServiceUuids(classification.normalizedServices);
+      setProtocolServiceDetected(classification.hasStandardTachoService);
       setDevice(selected);
       setDeviceState("linked");
-      setNotice("BLE veza je uspostavljena. Tahografski protokol još nije verifikovan, zato cockpit ostaje u ručnom režimu.");
+      setNotice(classification.hasStandardTachoService ? t.protocolServiceDetected : t.protocolServiceMissing);
     } catch (error) {
       const cancelled = error instanceof DOMException && error.name === "NotFoundError";
       setDeviceState(cancelled ? "idle" : "error");
@@ -258,9 +282,29 @@ export default function TachoCommandApp() {
     }
   };
 
+  const copyCompatibilityReport = async () => {
+    const report = buildCompatibilityReport({
+      createdAt: new Date().toISOString(),
+      appVersion: "0.2-foundation",
+      locale,
+      deviceName: device?.name,
+      userAgent: navigator.userAgent,
+      serviceUuids: detectedServiceUuids,
+      connectionState: deviceState,
+    });
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(report, null, 2));
+      setNotice(t.reportCopied);
+    } catch {
+      setNotice(t.reportCopyFailed);
+    }
+  };
+
   const disconnectBluetooth = () => {
     device?.gatt?.disconnect();
     setDevice(null);
+    setDetectedServiceUuids([]);
+    setProtocolServiceDetected(null);
     setDeviceState("idle");
     setNotice("BLE veza je bezbedno prekinuta.");
   };
@@ -504,12 +548,28 @@ export default function TachoCommandApp() {
               )}
             </div>
 
+            {deviceState === "linked" && (
+              <button className="secondary-button" type="button" onClick={copyCompatibilityReport}>
+                {t.copyBetaReport}
+              </button>
+            )}
+
             <div className="truth-card">
               <p className="section-kicker">ŠTA JE POTVRĐENO</p>
               <ul>
                 <li className="pass"><span>✓</span><div><strong>Smart Tacho 2 koristi Bluetooth Low Energy</strong><small>EU tehnička specifikacija zahteva BLE 5.0 ili noviji interfejs.</small></div></li>
                 <li className="pass"><span>✓</span><div><strong>Vozač mora dati saglasnost</strong><small>Lični podaci nisu dostupni kroz ITS interfejs bez saglasnosti vozača.</small></div></li>
-                <li className="pending"><span>…</span><div><strong>VDO / Stoneridge protokol</strong><small>Pravo čitanje zahteva test na fizičkom uređaju i proizvođačke identifikatore usluga.</small></div></li>
+                <li className={protocolServiceDetected === true ? "pass" : "pending"}>
+                  <span>{protocolServiceDetected === true ? "✓" : "…"}</span>
+                  <div>
+                    <strong>EU Smart Tacho 2 GATT servisi</strong>
+                    <small>{protocolServiceDetected === true
+                      ? t.protocolServiceDetected
+                      : protocolServiceDetected === false
+                        ? t.protocolServiceMissing
+                        : "Čeka se kontrolisani test na fizičkom uređaju."}</small>
+                  </div>
+                </li>
                 <li className="blocked"><span>×</span><div><strong>Lažni `.DDD` je uklonjen</strong><small>Aplikacija neće generisati simulirani fajl sa zvaničnom ekstenzijom.</small></div></li>
               </ul>
             </div>

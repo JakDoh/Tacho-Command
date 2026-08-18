@@ -40,3 +40,11 @@ test("offline cache is same-origin and keeps a navigation fallback", () => {
   assert.match(serviceWorker, /request\.mode === "navigate"/);
   assert.match(serviceWorker, /caches\.match\("\/"\)/);
 });
+
+test("requests only published standard optional BLE services and keeps reports data-minimal", async () => {
+  const bleSource = await readFile(new URL("../lib/tacho-ble.js", import.meta.url), "utf8");
+  assert.match(bleSource, /eef90782-55dd-4388-b80b-695aba7a69b5/);
+  assert.match(bleSource, /fa213def-aef4-475c-bcea-0a8d69073efc/);
+  assert.match(bleSource, /No driver name, card number, vehicle registration, location, or raw tachograph data/);
+  assert.match(appSource, /optionalServices: TACHO_OPTIONAL_SERVICE_UUIDS/);
+});

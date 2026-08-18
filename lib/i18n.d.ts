@@ -7,7 +7,8 @@ export type Translation = Readonly<Record<
   "checkDevice" | "yourTachoCommand" | "fastLocalTransparent" | "version" | "language" | "languageHint" | "languageSr" |
   "languageEn" | "languageDe" | "navCockpit" | "navLog" | "navDevice" | "navMore" | "activityDrive" | "activityDriveShort" |
   "activityWork" | "activityWorkShort" | "activityAvailable" | "activityRest" | "activityRestShort" | "stopAndBreak" |
-  "pauseInProgress" | "planBreak" | "modeChanged" | "officialSource",
+  "pauseInProgress" | "planBreak" | "modeChanged" | "officialSource" | "copyBetaReport" | "protocolServiceDetected" |
+  "protocolServiceMissing" | "reportCopied" | "reportCopyFailed",
   string
 >>;
 export const supportedLocales: readonly Locale[];
