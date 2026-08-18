@@ -14,6 +14,15 @@ import AccessGate from "./access-gate";
 type Activity = "drive" | "work" | "available" | "rest";
 type Tab = "cockpit" | "log" | "device" | "more";
 type DeviceState = "idle" | "connecting" | "linked" | "unsupported" | "error";
+type FieldTestProfile = {
+  vehicleType: "bus" | "truck" | "other";
+  tachoBrand: "vdo" | "stoneridge" | "other";
+  tachoModel: string;
+};
+type BleTestEvent = {
+  at: string;
+  event: "connection-attempt" | "device-selected" | "gatt-connected" | "services-scanned" | "disconnected" | "cancelled" | "connection-error";
+};
 
 type ActivityEvent = {
   id: string;
@@ -102,6 +111,8 @@ export default function TachoCommandApp() {
   const [device, setDevice] = useState<BleDevice | null>(null);
   const [detectedServiceUuids, setDetectedServiceUuids] = useState<string[]>([]);
   const [protocolServiceDetected, setProtocolServiceDetected] = useState<boolean | null>(null);
+  const [fieldTestProfile, setFieldTestProfile] = useState<FieldTestProfile>({ vehicleType: "bus", tachoBrand: "vdo", tachoModel: "" });
+  const [bleTestEvents, setBleTestEvents] = useState<BleTestEvent[]>([]);
   const [online, setOnline] = useState(true);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [events, setEvents] = useState<ActivityEvent[]>([
@@ -138,6 +149,16 @@ export default function TachoCommandApp() {
           window.localStorage.removeItem("tachocommand.manual.v1");
         }
       }
+      const savedFieldTest = window.localStorage.getItem("tachocommand.field-test.v2");
+      if (savedFieldTest) {
+        try {
+          const state = JSON.parse(savedFieldTest) as { profile?: FieldTestProfile; events?: BleTestEvent[] };
+          if (state.profile) setFieldTestProfile(state.profile);
+          if (Array.isArray(state.events)) setBleTestEvents(state.events.slice(-40));
+        } catch {
+          window.localStorage.removeItem("tachocommand.field-test.v2");
+        }
+      }
     }, 0);
 
     const onlineHandler = () => setOnline(true);
@@ -171,6 +192,10 @@ export default function TachoCommandApp() {
     }, 10000);
     return () => window.clearInterval(persistence);
   }, [demoMode]);
+
+  useEffect(() => {
+    window.localStorage.setItem("tachocommand.field-test.v2", JSON.stringify({ profile: fieldTestProfile, events: bleTestEvents.slice(-40) }));
+  }, [fieldTestProfile, bleTestEvents]);
 
   useEffect(() => {
     lastTickAt.current = Date.now();
@@ -231,6 +256,10 @@ export default function TachoCommandApp() {
 
   const activityOptions = useMemo(() => Object.entries(activityMeta) as [Activity, (typeof activityMeta)[Activity]][], [activityMeta]);
 
+  const addBleTestEvent = (event: BleTestEvent["event"]) => {
+    setBleTestEvents((current) => [...current, { at: new Date().toISOString(), event }].slice(-40));
+  };
+
   const chooseActivity = (next: Activity) => {
     setActivity(next);
     setDemoMode(false);
@@ -252,17 +281,21 @@ export default function TachoCommandApp() {
       return;
     }
     try {
+      addBleTestEvent("connection-attempt");
       setDeviceState("connecting");
       const selected = await bluetooth.requestDevice({
         acceptAllDevices: true,
         optionalServices: TACHO_OPTIONAL_SERVICE_UUIDS,
       });
+      addBleTestEvent("device-selected");
       selected.addEventListener("gattserverdisconnected", () => {
+        addBleTestEvent("disconnected");
         setDeviceState("idle");
         setNotice("BLE veza je prekinuta. Nijedan tahografski podatak nije sačuvan kao verifikovan.");
       });
       if (!selected.gatt) throw new Error("GATT unavailable");
       const server = await selected.gatt.connect();
+      addBleTestEvent("gatt-connected");
       let serviceUuids: string[] = [];
       try {
         const services = await server.getPrimaryServices();
@@ -271,6 +304,7 @@ export default function TachoCommandApp() {
         serviceUuids = [];
       }
       const classification = classifyTachoServices(serviceUuids);
+      addBleTestEvent("services-scanned");
       setDetectedServiceUuids(classification.normalizedServices);
       setProtocolServiceDetected(classification.hasStandardTachoService);
       setDevice(selected);
@@ -278,20 +312,28 @@ export default function TachoCommandApp() {
       setNotice(classification.hasStandardTachoService ? t.protocolServiceDetected : t.protocolServiceMissing);
     } catch (error) {
       const cancelled = error instanceof DOMException && error.name === "NotFoundError";
+      addBleTestEvent(cancelled ? "cancelled" : "connection-error");
       setDeviceState(cancelled ? "idle" : "error");
       setNotice(cancelled ? "Izbor uređaja je otkazan." : "BLE veza nije uspela. Aplikacija neće prikazati lažno povezivanje.");
     }
   };
 
   const copyCompatibilityReport = async () => {
+    const firstEventAt = bleTestEvents[0]?.at;
     const report = buildCompatibilityReport({
       createdAt: new Date().toISOString(),
-      appVersion: "0.2-foundation",
+      appVersion: "0.3-field-test",
       locale,
+      ...fieldTestProfile,
       deviceName: device?.name,
       userAgent: navigator.userAgent,
       serviceUuids: detectedServiceUuids,
       connectionState: deviceState,
+      sessionStartedAt: firstEventAt,
+      sessionDurationSeconds: firstEventAt ? (Date.now() - new Date(firstEventAt).getTime()) / 1000 : 0,
+      attemptCount: bleTestEvents.filter((entry) => entry.event === "connection-attempt").length,
+      disconnectCount: bleTestEvents.filter((entry) => entry.event === "disconnected").length,
+      events: bleTestEvents,
     });
     try {
       await navigator.clipboard.writeText(JSON.stringify(report, null, 2));
@@ -528,6 +570,33 @@ export default function TachoCommandApp() {
               <span className={`device-orb ${deviceState}`} aria-hidden="true">⌁</span>
             </div>
 
+            <div className="field-profile-card">
+              <div>
+                <p className="section-kicker">ANONIMNI PROFIL TESTA</p>
+                <h3>Koji uređaj proveravamo?</h3>
+                <p>Čuva se samo na ovom telefonu i ulazi u beta izveštaj bez imena, kartice, registracije i lokacije.</p>
+              </div>
+              <div className="field-profile-grid">
+                <label>VOZILO
+                  <select value={fieldTestProfile.vehicleType} onChange={(event) => setFieldTestProfile((current) => ({ ...current, vehicleType: event.target.value as FieldTestProfile["vehicleType"] }))}>
+                    <option value="bus">Autobus</option>
+                    <option value="truck">Kamion</option>
+                    <option value="other">Drugo</option>
+                  </select>
+                </label>
+                <label>TAHOGRAF
+                  <select value={fieldTestProfile.tachoBrand} onChange={(event) => setFieldTestProfile((current) => ({ ...current, tachoBrand: event.target.value as FieldTestProfile["tachoBrand"] }))}>
+                    <option value="vdo">VDO / DTCO</option>
+                    <option value="stoneridge">Stoneridge</option>
+                    <option value="other">Drugi</option>
+                  </select>
+                </label>
+                <label className="field-profile-model">MODEL / VERZIJA (AKO JE POZNATA)
+                  <input value={fieldTestProfile.tachoModel} onChange={(event) => setFieldTestProfile((current) => ({ ...current, tachoModel: event.target.value.slice(0, 60) }))} placeholder="npr. DTCO 4.1a" />
+                </label>
+              </div>
+            </div>
+
             <div className="device-status-card">
               <div className="status-line">
                 <span className={`status-light ${deviceState}`} />
@@ -550,10 +619,18 @@ export default function TachoCommandApp() {
               )}
             </div>
 
-            {deviceState === "linked" && (
+            {bleTestEvents.length > 0 && (
               <button className="secondary-button" type="button" onClick={copyCompatibilityReport}>
                 {t.copyBetaReport}
               </button>
+            )}
+
+            {bleTestEvents.length > 0 && (
+              <div className="field-session-strip" aria-label="Sažetak beta testa">
+                <div><span>POKUŠAJI</span><strong>{bleTestEvents.filter((entry) => entry.event === "connection-attempt").length}</strong></div>
+                <div><span>PREKIDI</span><strong>{bleTestEvents.filter((entry) => entry.event === "disconnected").length}</strong></div>
+                <div><span>EU SERVIS</span><strong>{protocolServiceDetected === true ? "DA" : protocolServiceDetected === false ? "NE" : "—"}</strong></div>
+              </div>
             )}
 
             <div className="truth-card">
@@ -621,7 +698,7 @@ export default function TachoCommandApp() {
             </div>
 
             <div className="about-card">
-              <div><span>{t.version}</span><strong>0.2 Foundation</strong></div>
+              <div><span>{t.version}</span><strong>0.3 Field Test</strong></div>
               <div><span>Izvor podataka</span><strong>{demoMode ? "Demo" : "Ručni lokalni"}</strong></div>
               <div><span>Cloud nalog</span><strong>Nije potreban</strong></div>
             </div>

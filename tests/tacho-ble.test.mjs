@@ -38,10 +38,21 @@ test("compatibility report excludes driver and vehicle identifiers by design", (
     createdAt: "2026-08-18T21:30:00.000Z",
     appVersion: "0.2",
     locale: "de",
+    vehicleType: "bus",
+    tachoBrand: "VDO",
+    tachoModel: "DTCO 4.1a",
     deviceName: "DTCO 4.1",
     connectionState: "linked",
+    sessionStartedAt: "2026-08-18T21:29:00.000Z",
+    sessionDurationSeconds: 60.9,
+    attemptCount: 2,
+    disconnectCount: 1,
     userAgent: "Test Browser",
     serviceUuids: [TACHO_DOWNLOAD_SERVICE_UUID],
+    events: [
+      { at: "2026-08-18T21:29:00.000Z", event: "connection-attempt", secret: "removed" },
+      { at: "2026-08-18T21:30:00.000Z", event: "services-scanned" },
+    ],
   });
   const serialized = JSON.stringify(report);
   assert.equal(report.standardServiceDetected, true);
@@ -49,4 +60,10 @@ test("compatibility report excludes driver and vehicle identifiers by design", (
     assert.equal(serialized.includes(`"${forbidden}"`), false);
   }
   assert.match(report.privacy, /No driver name/);
+  assert.equal(report.schema, "tachocommand-field-test-v2");
+  assert.equal(report.vehicleType, "bus");
+  assert.equal(report.tachoBrand, "VDO");
+  assert.equal(report.sessionDurationSeconds, 60);
+  assert.equal(report.events.length, 2);
+  assert.deepEqual(Object.keys(report.events[0]), ["at", "event"]);
 });
