@@ -38,6 +38,7 @@ export default function AccessGate({ children }: { children: ReactNode }) {
   const [access, setAccess] = useState<AccessStatus>({ status: "loading" });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [showActivation, setShowActivation] = useState(false);
 
   useEffect(() => {
     const timeout = window.setTimeout(async () => {
@@ -62,6 +63,7 @@ export default function AccessGate({ children }: { children: ReactNode }) {
       const next = await response.json() as AccessStatus;
       setAccess(next);
       cacheAccess(next);
+      setShowActivation(false);
     } catch {
       setMessage("Demo trenutno nije dostupan. Pokušaj ponovo.");
     } finally {
@@ -87,6 +89,7 @@ export default function AccessGate({ children }: { children: ReactNode }) {
       }
       setAccess(next);
       cacheAccess(next);
+      setShowActivation(false);
     } catch {
       setMessage("Aktivacija trenutno nije dostupna. Pokušaj ponovo.");
     } finally {
@@ -106,8 +109,31 @@ export default function AccessGate({ children }: { children: ReactNode }) {
       <>
         <div className="access-ribbon">
           <span><i />{access.status === "licensed" ? "BETA LICENCA" : `DEMO • ${remaining}`}</span>
-          <Link href="/">tachocommand.com</Link>
+          <div className="access-ribbon-actions">
+            {access.status === "active" && (
+              <button type="button" onClick={() => { setMessage(""); setShowActivation(true); }}>Aktiviraj kod</button>
+            )}
+            <Link href="/">Sajt</Link>
+          </div>
         </div>
+        {showActivation && access.status === "active" && (
+          <div className="access-activation-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) setShowActivation(false); }}>
+            <section className="access-card access-activation-card" role="dialog" aria-modal="true" aria-labelledby="active-code-title">
+              <button className="access-close" type="button" aria-label="Zatvori" onClick={() => setShowActivation(false)}>×</button>
+              <span className="beta-badge"><i />BETA LICENCA</span>
+              <h1 id="active-code-title">Aktiviraj puni beta pristup.</h1>
+              <p>Demo neće biti prekinut ako pogrešiš kod. Nakon uspešne aktivacije aplikacija ostaje otključana na ovom telefonu.</p>
+              <form className="activation-form" onSubmit={activate}>
+                <label htmlFor="beta-code-active">BETA AKTIVACIONI KOD</label>
+                <div>
+                  <input id="beta-code-active" name="code" autoComplete="off" autoCapitalize="characters" placeholder="TCB-XXXX-XXXX-XXXXX-XXXXX" required autoFocus />
+                  <button type="submit" disabled={busy}>{busy ? "…" : "Aktiviraj"}</button>
+                </div>
+              </form>
+              {message && <p className="access-error" role="alert">{message}</p>}
+            </section>
+          </div>
+        )}
         {children}
       </>
     );

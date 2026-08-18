@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   createBetaCode,
@@ -12,6 +13,7 @@ import {
 } from "../lib/trial-token.js";
 
 const secret = "test-only-secret-with-enough-entropy";
+const accessGate = await readFile(new URL("../app/access-gate.tsx", import.meta.url), "utf8");
 
 test("trial token is signed and expires after exactly 72 hours", async () => {
   const startedAt = 1_800_000_000;
@@ -38,4 +40,10 @@ test("beta access cookie never contains the activation code", async () => {
     issuedAt: 1_800_000_000,
   });
   assert.equal(await verifyBetaLicenseToken("wrong-secret", token), null);
+});
+
+test("an active demo always exposes the beta-code upgrade flow", () => {
+  assert.match(accessGate, /access\.status === "active"/);
+  assert.match(accessGate, /Aktiviraj kod/);
+  assert.match(accessGate, /beta-code-active/);
 });
