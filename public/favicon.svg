@@ -1,0 +1,7 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="132" fill="#08111F"/>
+  <rect x="48" y="48" width="416" height="416" rx="108" fill="url(#paint)"/>
+  <path d="M129 157H312V211H249V361H191V211H129V157Z" fill="#06131F"/>
+  <path d="M322 151C361 151 390 163 411 184L375 225C361 212 344 205 325 205C289 205 268 226 268 259C268 292 290 313 325 313C344 313 361 307 376 294L411 335C389 357 360 368 321 368C250 368 207 325 207 259C207 193 251 151 322 151Z" fill="#06131F" fill-opacity=".8"/>
+  <defs><linearGradient id="paint" x1="78" y1="67" x2="438" y2="464" gradientUnits="userSpaceOnUse"><stop stop-color="#68E2FF"/><stop offset="1" stop-color="#2187CE"/></linearGradient></defs>
+</svg>
