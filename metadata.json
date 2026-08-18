@@ -1,7 +1,0 @@
-{
-  "name": "TachoMaster",
-  "description": "Profesionalna aplikacija za očitavanje digitalnih tahografa i kartica vozača putem Bluetooth-a, preuzimanje DDD fajlova, analizu radnog vremena (EU 561/2006) i arhiviranje.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
-
