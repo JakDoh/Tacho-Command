@@ -99,7 +99,7 @@ export default function TachoCommandApp() {
     { id: "demo-1", activity: "work", startedAt: "2026-08-18T11:41:00.000Z", source: "demo" },
   ]);
   const latestManualState = useRef({ activity, continuousDrive, dailyDrive, shiftElapsed, restElapsed, events });
-  const lastTickAt = useRef(Date.now());
+  const lastTickAt = useRef(0);
 
   useEffect(() => {
     latestManualState.current = { activity, continuousDrive, dailyDrive, shiftElapsed, restElapsed, events };
