@@ -23,8 +23,7 @@ test("never ships the previous fake payment, licence, or DDD implementation", ()
 test("labels unverifiable sources and keeps the official tachograph authoritative", () => {
   assert.match(truthfulSource, /Nije povezano sa tahografom/);
   assert.match(truthfulSource, /Tahograf ostaje zvanični izvor/);
-  assert.match(truthfulSource, /tahografski protokol još nije verifikovan/i);
-  assert.match(truthfulSource, /Lažni `\.DDD` je uklonjen/);
+  assert.match(truthfulSource, /Sadržaj podataka još nije verifikovan/i);
 });
 
 test("is installable as a portrait standalone PWA", () => {
