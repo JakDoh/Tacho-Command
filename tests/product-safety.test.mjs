@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const appSource = await readFile(new URL("../app/tacho-command-app.tsx", import.meta.url), "utf8");
+const i18nSource = await readFile(new URL("../lib/i18n.js", import.meta.url), "utf8");
+const truthfulSource = `${appSource}\n${i18nSource}`;
 const manifest = JSON.parse(await readFile(new URL("../public/manifest.webmanifest", import.meta.url), "utf8"));
 const serviceWorker = await readFile(new URL("../public/sw.js", import.meta.url), "utf8");
 
@@ -19,8 +21,8 @@ test("never ships the previous fake payment, licence, or DDD implementation", ()
 });
 
 test("labels unverifiable sources and keeps the official tachograph authoritative", () => {
-  assert.match(appSource, /Nije povezano sa tahografom/);
-  assert.match(appSource, /Tahograf ostaje zvanični izvor/);
+  assert.match(truthfulSource, /Nije povezano sa tahografom/);
+  assert.match(truthfulSource, /Tahograf ostaje zvanični izvor/);
   assert.match(appSource, /tahografski protokol još nije verifikovan/i);
   assert.match(appSource, /Lažni `\.DDD` je uklonjen/);
 });

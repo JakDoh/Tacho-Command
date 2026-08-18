@@ -260,3 +260,7 @@ button { -webkit-tap-highlight-color: transparent; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+.language-setting { width: 100%; display: grid; grid-template-columns: 2rem 1fr auto; gap: .75rem; align-items: center; padding: .85rem .9rem; border-top: 1px solid rgba(69,97,127,.2); color: var(--ink); }
+.language-setting div { display: grid; gap: .18rem; }
+.language-setting select { min-width: 7.4rem; border: 1px solid #2b4966; border-radius: .62rem; padding: .55rem .65rem; background: #071421; color: #eaf4ff; font-size: .64rem; font-weight: 800; }

@@ -53,3 +53,11 @@ npm run validate:artifact
 4. Obtain manufacturer protocol documentation or an authorised integration path.
 5. Add signed-file validation before enabling any `.DDD` export.
 6. Complete privacy, terms, legal review, and field-driver validation before commercial release.
+
+## Foundation v0.2
+
+- The standard EU driving-time pilot rules live in a pure, versioned module with executable boundary tests.
+- The rule module explicitly excludes national working-time rules and temporary derogations until they are separately verified.
+- The interface foundation supports exactly Serbian (Latin), English, and German.
+- Timer updates derive elapsed seconds from timestamps so browser throttling does not silently lose active time.
+- Production hardware data is still blocked behind the physical-device validation gate.
