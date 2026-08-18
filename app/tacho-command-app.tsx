@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { resolveLocale, translations } from "../lib/i18n.js";
+import type { Locale } from "../lib/i18n.js";
+import { evaluateDrivingSnapshot } from "../lib/tacho-rules.js";
 
 type Activity = "drive" | "work" | "available" | "rest";
 type Tab = "cockpit" | "log" | "device" | "more";
@@ -34,13 +37,6 @@ const HOUR = 60 * MINUTE;
 const CONTINUOUS_LIMIT = 4 * HOUR + 30 * MINUTE;
 const DAILY_LIMIT = 9 * HOUR;
 const SHIFT_REFERENCE = 13 * HOUR;
-
-const activityMeta: Record<Activity, { label: string; short: string; symbol: string }> = {
-  drive: { label: "Vožnja", short: "VOŽNJA", symbol: "●" },
-  work: { label: "Drugi rad", short: "RAD", symbol: "◆" },
-  available: { label: "Raspoloživost", short: "POA", symbol: "◫" },
-  rest: { label: "Pauza / odmor", short: "PAUZA", symbol: "Ⅱ" },
-};
 
 const formatClock = (totalSeconds: number) => {
   const safe = Math.max(0, Math.floor(totalSeconds));
@@ -83,6 +79,7 @@ function MetricBar({
 
 export default function TachoCommandApp() {
   const [activity, setActivity] = useState<Activity>("drive");
+  const [locale, setLocale] = useState<Locale>("sr");
   const [selectedTab, setSelectedTab] = useState<Tab>("cockpit");
   const [continuousDrive, setContinuousDrive] = useState(3 * HOUR + 42 * MINUTE);
   const [dailyDrive, setDailyDrive] = useState(6 * HOUR + 30 * MINUTE);
@@ -102,6 +99,7 @@ export default function TachoCommandApp() {
     { id: "demo-1", activity: "work", startedAt: "2026-08-18T11:41:00.000Z", source: "demo" },
   ]);
   const latestManualState = useRef({ activity, continuousDrive, dailyDrive, shiftElapsed, restElapsed, events });
+  const lastTickAt = useRef(0);
 
   useEffect(() => {
     latestManualState.current = { activity, continuousDrive, dailyDrive, shiftElapsed, restElapsed, events };
@@ -110,6 +108,7 @@ export default function TachoCommandApp() {
   useEffect(() => {
     const hydrate = window.setTimeout(() => {
       setOnline(navigator.onLine);
+      setLocale(resolveLocale(window.localStorage.getItem("tachocommand.locale"), navigator.language));
       const saved = window.localStorage.getItem("tachocommand.manual.v1");
       if (saved) {
         try {
@@ -149,6 +148,11 @@ export default function TachoCommandApp() {
   }, []);
 
   useEffect(() => {
+    window.localStorage.setItem("tachocommand.locale", locale);
+    document.documentElement.lang = locale === "sr" ? "sr-Latn" : locale;
+  }, [locale]);
+
+  useEffect(() => {
     if (demoMode) return;
     const persistence = window.setInterval(() => {
       window.localStorage.setItem("tachocommand.manual.v1", JSON.stringify(latestManualState.current));
@@ -157,15 +161,25 @@ export default function TachoCommandApp() {
   }, [demoMode]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setShiftElapsed((value) => value + 1);
+    lastTickAt.current = Date.now();
+    const tick = () => {
+      const now = Date.now();
+      const elapsedSeconds = Math.floor((now - lastTickAt.current) / 1000);
+      if (elapsedSeconds < 1) return;
+      lastTickAt.current += elapsedSeconds * 1000;
+      setShiftElapsed((value) => value + elapsedSeconds);
       if (activity === "drive") {
-        setContinuousDrive((value) => value + 1);
-        setDailyDrive((value) => value + 1);
+        setContinuousDrive((value) => value + elapsedSeconds);
+        setDailyDrive((value) => value + elapsedSeconds);
       }
-      if (activity === "rest") setRestElapsed((value) => value + 1);
-    }, 1000);
-    return () => window.clearInterval(timer);
+      if (activity === "rest") setRestElapsed((value) => value + elapsedSeconds);
+    };
+    const timer = window.setInterval(tick, 1000);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", tick);
+    };
   }, [activity]);
 
   useEffect(() => {
@@ -174,17 +188,36 @@ export default function TachoCommandApp() {
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
-  const remainingContinuous = CONTINUOUS_LIMIT - continuousDrive;
-  const remainingDaily = DAILY_LIMIT - dailyDrive;
-  const urgency = remainingContinuous <= 0 ? "over" : remainingContinuous <= 30 * MINUTE ? "soon" : "ok";
+  const t = translations[locale];
+  const activityMeta = useMemo<Record<Activity, { label: string; short: string; symbol: string }>>(() => ({
+    drive: { label: t.activityDrive, short: t.activityDriveShort, symbol: "●" },
+    work: { label: t.activityWork, short: t.activityWorkShort, symbol: "◆" },
+    available: { label: t.activityAvailable, short: "POA", symbol: "◫" },
+    rest: { label: t.activityRest, short: t.activityRestShort, symbol: "Ⅱ" },
+  }), [t]);
+
+  const ruleResults = useMemo(() => evaluateDrivingSnapshot({
+    continuousDriveSeconds: continuousDrive,
+    dailyDriveSeconds: dailyDrive,
+    weeklyDriveSeconds: 0,
+    fortnightlyDriveSeconds: 0,
+    currentBreakSeconds: restElapsed,
+  }), [continuousDrive, dailyDrive, restElapsed]);
+  const continuousRule = ruleResults.rules.find((rule) => rule.id === "continuous-driving");
+  const dailyRule = ruleResults.rules.find((rule) => rule.id === "daily-driving");
+  const remainingContinuous = continuousRule?.remainingSeconds ?? CONTINUOUS_LIMIT - continuousDrive;
+  const remainingDaily = dailyRule?.remainingSeconds ?? DAILY_LIMIT - dailyDrive;
+  const urgency = continuousRule?.status === "exceeded" || continuousRule?.status === "limit"
+    ? "over"
+    : continuousRule?.status === "warning" ? "soon" : "ok";
   const nextAction =
     urgency === "over"
-      ? "Zaustavi vozilo i započni propisanu pauzu"
+      ? t.stopAndBreak
       : activity === "rest"
-        ? "Pauza je u toku"
-        : `Planiraj pauzu za ${formatClock(remainingContinuous)}`;
+        ? t.pauseInProgress
+        : t.planBreak.replace("{time}", formatClock(remainingContinuous));
 
-  const activityOptions = useMemo(() => Object.entries(activityMeta) as [Activity, (typeof activityMeta)[Activity]][], []);
+  const activityOptions = useMemo(() => Object.entries(activityMeta) as [Activity, (typeof activityMeta)[Activity]][], [activityMeta]);
 
   const chooseActivity = (next: Activity) => {
     setActivity(next);
@@ -194,7 +227,7 @@ export default function TachoCommandApp() {
       { id: `${Date.now()}-${next}`, activity: next, startedAt: new Date().toISOString(), source: "manual" },
       ...current.filter((entry) => entry.source === "manual"),
     ].slice(0, 40));
-    setNotice(`Ručni režim promenjen: ${activityMeta[next].label}. Tahograf ostaje zvanični izvor.`);
+    setNotice(`${t.modeChanged}: ${activityMeta[next].label}. ${t.officialSource}.`);
   };
 
   const connectBluetooth = async () => {
@@ -269,7 +302,7 @@ export default function TachoCommandApp() {
           <div className="brand-lockup">
             <div className="brand-mark" aria-hidden="true"><span>TC</span></div>
             <div>
-              <p className="eyebrow">DRIVER ASSISTANT</p>
+              <p className="eyebrow">{t.driverAssistant}</p>
               <h1>Tacho<span>Command</span></h1>
             </div>
           </div>
@@ -292,30 +325,30 @@ export default function TachoCommandApp() {
             type="button"
             aria-label="Promeni prikaz izvora podataka"
           >
-            <span /> {demoMode ? "DEMO" : "RUČNO"}
+            <span /> {demoMode ? t.sourceDemo : t.sourceManual}
           </button>
         </header>
 
         <div className="truth-strip">
           <span className="truth-icon">i</span>
-          <p><strong>Nije povezano sa tahografom.</strong> Prikazani podaci su {demoMode ? "demonstracioni" : "ručno vođeni"}.</p>
+          <p><strong>{t.truthNotConnected}</strong> {t.truthShownData} {demoMode ? t.truthDemo : t.truthManual}.</p>
         </div>
 
         <div className={`screen-content ${selectedTab === "cockpit" ? "" : "hidden-screen"}`}>
           <section className={`hero-card ${urgency}`}>
             <div className="hero-topline">
               <div>
-                <p className="section-kicker">SLEDEĆA BEZBEDNA ODLUKA</p>
+                <p className="section-kicker">{t.nextSafeDecision}</p>
                 <h2>{nextAction}</h2>
               </div>
-              <span className="live-pill"><i /> U TOKU</span>
+              <span className="live-pill"><i /> {t.inProgress}</span>
             </div>
 
             <div className="countdown-row">
               <div className="countdown">
-                <span>{urgency === "over" ? "PREKORAČENO" : activity === "rest" ? "PAUZA" : "DO PAUZE"}</span>
+                <span>{urgency === "over" ? t.exceeded : activity === "rest" ? t.pause : t.untilBreak}</span>
                 <strong>{activity === "rest" ? formatClock(restElapsed) : formatClock(Math.abs(remainingContinuous))}</strong>
-                <small>{activityMeta[activity].label} • ručni unos</small>
+                <small>{activityMeta[activity].label} • {t.manualInput}</small>
               </div>
               <div className="dial" style={{ "--progress": `${clampPercent(continuousDrive, CONTINUOUS_LIMIT) * 3.6}deg` } as React.CSSProperties}>
                 <div><strong>{clampPercent(continuousDrive, CONTINUOUS_LIMIT)}</strong><span>%</span></div>
@@ -323,18 +356,18 @@ export default function TachoCommandApp() {
             </div>
 
             <div className="hero-rule">
-              <span>Referenca: 4 h 30 min kontinuirane vožnje</span>
-              <button type="button" onClick={() => setNotice("Ovo je pomoćni prikaz. Uvek proveri tahograf i konkretne uslove svoje smene.")}>Zašto?</button>
+              <span>{t.continuousReference} • {ruleResults.rulesetId}</span>
+              <button type="button" onClick={() => setNotice("Ovo je pomoćni prikaz. Uvek proveri tahograf i konkretne uslove svoje smene.")}>{t.why}</button>
             </div>
           </section>
 
           <section className="activity-card">
             <div className="section-title-row">
               <div>
-                <p className="section-kicker">TRENUTNA AKTIVNOST</p>
-                <h3>Ručni pomoćni zapis</h3>
+                <p className="section-kicker">{t.currentActivity}</p>
+                <h3>{t.manualHelper}</h3>
               </div>
-              <span className="local-badge">NA UREĐAJU</span>
+              <span className="local-badge">{t.onDevice}</span>
             </div>
             <div className="activity-grid">
               {activityOptions.map(([key, meta]) => (
@@ -355,28 +388,28 @@ export default function TachoCommandApp() {
           <section className="metrics-card">
             <div className="section-title-row compact">
               <div>
-                <p className="section-kicker">PREGLED SMENE</p>
-                <h3>Vreme na jednom mestu</h3>
+                <p className="section-kicker">{t.shiftOverview}</p>
+                <h3>{t.timeOnePlace}</h3>
               </div>
-              <button className="text-button" type="button" onClick={() => setShowTimeEditor(true)}>Podesi</button>
+              <button className="text-button" type="button" onClick={() => setShowTimeEditor(true)}>{t.adjust}</button>
             </div>
             <MetricBar
-              label="Kontinuirana vožnja"
-              hint="Referentna granica 04:30"
+              label={t.continuousDrive}
+              hint={t.referenceLimit}
               value={`${formatClock(continuousDrive)} / 04:30`}
               percent={clampPercent(continuousDrive, CONTINUOUS_LIMIT)}
               tone={urgency === "over" ? "red" : urgency === "soon" ? "amber" : "cyan"}
             />
             <MetricBar
-              label="Dnevna vožnja"
-              hint={`Preostalo ${formatClock(remainingDaily)}`}
+              label={t.dailyDrive}
+              hint={`${t.remaining} ${formatClock(remainingDaily)}`}
               value={`${formatClock(dailyDrive)} / 09:00`}
               percent={clampPercent(dailyDrive, DAILY_LIMIT)}
               tone="blue"
             />
             <MetricBar
-              label="Trajanje smene"
-              hint="Informativna referenca 13:00"
+              label={t.shiftDuration}
+              hint={t.shiftReference}
               value={`${formatClock(shiftElapsed)} / 13:00`}
               percent={clampPercent(shiftElapsed, SHIFT_REFERENCE)}
               tone="violet"
@@ -387,13 +420,13 @@ export default function TachoCommandApp() {
             <div className="connection-copy">
               <span className="connection-icon">⌁</span>
               <div>
-                <p className="section-kicker">TAHOGRAF VEZA</p>
-                <h3>{deviceState === "linked" ? device?.name || "BLE uređaj povezan" : "Nije povezano"}</h3>
+                <p className="section-kicker">{t.tachoConnection}</p>
+                <h3>{deviceState === "linked" ? device?.name || "BLE uređaj povezan" : t.notConnected}</h3>
                 <p>{deviceState === "linked" ? "BLE link postoji; tahografski protokol nije verifikovan." : "Proveri da li telefon i pregledač podržavaju bezbedan BLE pristup."}</p>
               </div>
             </div>
             <button type="button" className="primary-button" onClick={() => { setSelectedTab("device"); setNotice("Otvoren je centar za kompatibilnost uređaja."); }}>
-              Proveri uređaj <span>→</span>
+              {t.checkDevice} <span>→</span>
             </button>
           </section>
 
@@ -427,7 +460,7 @@ export default function TachoCommandApp() {
                   <div className={`timeline-dot ${entry.activity}`}><span>{activityMeta[entry.activity].symbol}</span></div>
                   <div>
                     <strong>{activityMeta[entry.activity].label}</strong>
-                    <span>{new Intl.DateTimeFormat("sr-RS", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }).format(new Date(entry.startedAt))}</span>
+                    <span>{new Intl.DateTimeFormat(locale === "sr" ? "sr-Latn-RS" : locale === "de" ? "de-DE" : "en-GB", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }).format(new Date(entry.startedAt))}</span>
                   </div>
                   <em>{entry.source === "demo" ? "DEMO" : index === 0 ? "SADA" : "RUČNO"}</em>
                 </div>
@@ -498,8 +531,8 @@ export default function TachoCommandApp() {
             <div className="module-heading">
               <div>
                 <p className="section-kicker">PODEŠAVANJA</p>
-                <h2 id="more-title">Tvoj TachoCommand</h2>
-                <p>Brz, lokalno orijentisan i transparentan prema vozaču.</p>
+                <h2 id="more-title">{t.yourTachoCommand}</h2>
+                <p>{t.fastLocalTransparent}</p>
               </div>
               <div className="app-mini-mark">TC</div>
             </div>
@@ -508,6 +541,15 @@ export default function TachoCommandApp() {
               <button type="button" onClick={installApp}><span className="setting-icon">⇩</span><div><strong>Instaliraj aplikaciju</strong><small>Dodaj TachoCommand na početni ekran</small></div><em>›</em></button>
               <button type="button" onClick={() => setShowTimeEditor(true)}><span className="setting-icon">◷</span><div><strong>Podesi ručna vremena</strong><small>Kontinuirana, dnevna vožnja i smena</small></div><em>›</em></button>
               <button type="button" onClick={() => setNotice(online ? "Mreža je dostupna. Ručni podaci se i dalje čuvaju samo lokalno." : "Offline režim je aktivan; Cockpit nastavlja da radi.")}><span className="setting-icon">◎</span><div><strong>Offline status</strong><small>{online ? "Mreža dostupna" : "Aplikacija radi bez mreže"}</small></div><em className={online ? "good" : "warn"}>●</em></button>
+              <label className="language-setting">
+                <span className="setting-icon">文</span>
+                <div><strong>{t.language}</strong><small>{t.languageHint}</small></div>
+                <select value={locale} onChange={(event) => setLocale(event.target.value as Locale)} aria-label={t.language}>
+                  <option value="sr">{t.languageSr}</option>
+                  <option value="en">{t.languageEn}</option>
+                  <option value="de">{t.languageDe}</option>
+                </select>
+              </label>
             </div>
 
             <div className="ad-boundary-card">
@@ -517,7 +559,7 @@ export default function TachoCommandApp() {
             </div>
 
             <div className="about-card">
-              <div><span>Verzija</span><strong>0.1 Pilot</strong></div>
+              <div><span>{t.version}</span><strong>0.2 Foundation</strong></div>
               <div><span>Izvor podataka</span><strong>{demoMode ? "Demo" : "Ručni lokalni"}</strong></div>
               <div><span>Cloud nalog</span><strong>Nije potreban</strong></div>
             </div>
@@ -562,10 +604,10 @@ export default function TachoCommandApp() {
 
         <nav className="bottom-nav" aria-label="Glavna navigacija">
           {([
-            ["cockpit", "▦", "Cockpit"],
-            ["log", "≡", "Dnevnik"],
-            ["device", "⌁", "Uređaj"],
-            ["more", "•••", "Više"],
+            ["cockpit", "▦", t.navCockpit],
+            ["log", "≡", t.navLog],
+            ["device", "⌁", t.navDevice],
+            ["more", "•••", t.navMore],
           ] as [Tab, string, string][]).map(([tab, icon, label]) => (
             <button
               type="button"
