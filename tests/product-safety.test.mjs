@@ -23,8 +23,7 @@ test("never ships the previous fake payment, licence, or DDD implementation", ()
 test("labels unverifiable sources and keeps the official tachograph authoritative", () => {
   assert.match(truthfulSource, /Nije povezano sa tahografom/);
   assert.match(truthfulSource, /Tahograf ostaje zvanični izvor/);
-  assert.match(appSource, /tahografski protokol još nije verifikovan/i);
-  assert.match(appSource, /Lažni `\.DDD` je uklonjen/);
+  assert.match(truthfulSource, /Sadržaj podataka još nije verifikovan/i);
 });
 
 test("is installable as a portrait standalone PWA", () => {
@@ -39,4 +38,12 @@ test("offline cache is same-origin and keeps a navigation fallback", () => {
   assert.match(serviceWorker, /url\.origin !== self\.location\.origin/);
   assert.match(serviceWorker, /request\.mode === "navigate"/);
   assert.match(serviceWorker, /caches\.match\("\/"\)/);
+});
+
+test("requests only published standard optional BLE services and keeps reports data-minimal", async () => {
+  const bleSource = await readFile(new URL("../lib/tacho-ble.js", import.meta.url), "utf8");
+  assert.match(bleSource, /eef90782-55dd-4388-b80b-695aba7a69b5/);
+  assert.match(bleSource, /fa213def-aef4-475c-bcea-0a8d69073efc/);
+  assert.match(bleSource, /No driver name, card number, vehicle registration, location, or raw tachograph data/);
+  assert.match(appSource, /optionalServices: TACHO_OPTIONAL_SERVICE_UUIDS/);
 });
