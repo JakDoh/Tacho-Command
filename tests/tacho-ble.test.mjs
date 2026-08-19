@@ -3,7 +3,12 @@ import test from "node:test";
 import {
   buildCompatibilityReport,
   classifyTachoServices,
+  classifyTachoTransport,
+  TACHO_DIAGNOSTICS_CREDITS_UUID,
+  TACHO_DIAGNOSTICS_FIFO_UUID,
   TACHO_DIAGNOSTICS_SERVICE_UUID,
+  TACHO_DOWNLOAD_CREDITS_UUID,
+  TACHO_DOWNLOAD_FIFO_UUID,
   TACHO_DOWNLOAD_SERVICE_UUID,
   TACHO_OPTIONAL_SERVICE_UUIDS,
 } from "../lib/tacho-ble.js";
@@ -33,6 +38,23 @@ test("does not call a generic BLE device a verified tachograph", () => {
   assert.deepEqual(result.matchedStandardServices, []);
 });
 
+test("requires all four official FIFO and credits characteristics", () => {
+  const complete = classifyTachoTransport([
+    { serviceUuid: TACHO_DOWNLOAD_SERVICE_UUID, characteristicUuids: [TACHO_DOWNLOAD_FIFO_UUID, TACHO_DOWNLOAD_CREDITS_UUID] },
+    { serviceUuid: TACHO_DIAGNOSTICS_SERVICE_UUID, characteristicUuids: [TACHO_DIAGNOSTICS_FIFO_UUID, TACHO_DIAGNOSTICS_CREDITS_UUID] },
+  ]);
+  assert.equal(complete.transportReady, true);
+  assert.deepEqual(complete.checks, {
+    downloadFifo: true,
+    downloadCredits: true,
+    diagnosticsFifo: true,
+    diagnosticsCredits: true,
+  });
+  assert.equal(classifyTachoTransport([
+    { serviceUuid: TACHO_DOWNLOAD_SERVICE_UUID, characteristicUuids: [TACHO_DOWNLOAD_FIFO_UUID] },
+  ]).transportReady, false);
+});
+
 test("compatibility report excludes driver and vehicle identifiers by design", () => {
   const report = buildCompatibilityReport({
     createdAt: "2026-08-18T21:30:00.000Z",
@@ -49,6 +71,9 @@ test("compatibility report excludes driver and vehicle identifiers by design", (
     disconnectCount: 1,
     userAgent: "Test Browser",
     serviceUuids: [TACHO_DOWNLOAD_SERVICE_UUID],
+    serviceCharacteristics: [
+      { serviceUuid: TACHO_DOWNLOAD_SERVICE_UUID, characteristicUuids: [TACHO_DOWNLOAD_FIFO_UUID, TACHO_DOWNLOAD_CREDITS_UUID] },
+    ],
     events: [
       { at: "2026-08-18T21:29:00.000Z", event: "connection-attempt", secret: "removed" },
       { at: "2026-08-18T21:30:00.000Z", event: "services-scanned" },
@@ -65,5 +90,7 @@ test("compatibility report excludes driver and vehicle identifiers by design", (
   assert.equal(report.tachoBrand, "VDO");
   assert.equal(report.sessionDurationSeconds, 60);
   assert.equal(report.events.length, 2);
+  assert.equal(report.transportReady, false);
+  assert.equal(report.transportChecks.downloadFifo, true);
   assert.deepEqual(Object.keys(report.events[0]), ["at", "event"]);
 });

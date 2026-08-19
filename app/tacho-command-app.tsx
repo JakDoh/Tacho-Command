@@ -7,6 +7,7 @@ import { evaluateDrivingSnapshot } from "../lib/tacho-rules.js";
 import {
   buildCompatibilityReport,
   classifyTachoServices,
+  classifyTachoTransport,
   TACHO_OPTIONAL_SERVICE_UUIDS,
 } from "../lib/tacho-ble.js";
 import AccessGate from "./access-gate";
@@ -21,7 +22,7 @@ type FieldTestProfile = {
 };
 type BleTestEvent = {
   at: string;
-  event: "connection-attempt" | "device-selected" | "gatt-connected" | "services-scanned" | "disconnected" | "cancelled" | "connection-error";
+  event: "connection-attempt" | "device-selected" | "gatt-connected" | "services-scanned" | "characteristics-scanned" | "disconnected" | "cancelled" | "connection-error";
 };
 
 type ActivityEvent = {
@@ -31,7 +32,8 @@ type ActivityEvent = {
   source: "demo" | "manual";
 };
 
-type BlePrimaryService = { uuid: string };
+type BleGattCharacteristic = { uuid: string };
+type BlePrimaryService = { uuid: string; getCharacteristics: () => Promise<BleGattCharacteristic[]> };
 type BleGattServer = {
   connected: boolean;
   connect: () => Promise<BleGattServer>;
@@ -110,10 +112,13 @@ export default function TachoCommandApp() {
   const [deviceState, setDeviceState] = useState<DeviceState>("idle");
   const [device, setDevice] = useState<BleDevice | null>(null);
   const [detectedServiceUuids, setDetectedServiceUuids] = useState<string[]>([]);
+  const [detectedCharacteristics, setDetectedCharacteristics] = useState<Array<{ serviceUuid: string; characteristicUuids: string[] }>>([]);
   const [protocolServiceDetected, setProtocolServiceDetected] = useState<boolean | null>(null);
+  const [transportReady, setTransportReady] = useState<boolean | null>(null);
   const [fieldTestProfile, setFieldTestProfile] = useState<FieldTestProfile>({ vehicleType: "bus", tachoBrand: "vdo", tachoModel: "" });
   const [bleTestEvents, setBleTestEvents] = useState<BleTestEvent[]>([]);
   const [online, setOnline] = useState(true);
+  const [installed, setInstalled] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [events, setEvents] = useState<ActivityEvent[]>([
     { id: "demo-4", activity: "drive", startedAt: "2026-08-18T15:18:00.000Z", source: "demo" },
@@ -131,6 +136,7 @@ export default function TachoCommandApp() {
   useEffect(() => {
     const hydrate = window.setTimeout(() => {
       setOnline(navigator.onLine);
+      setInstalled(window.matchMedia("(display-mode: standalone)").matches);
       setLocale(resolveLocale(window.localStorage.getItem("tachocommand.locale"), navigator.language));
       const saved = window.localStorage.getItem("tachocommand.manual.v1");
       if (saved) {
@@ -167,15 +173,21 @@ export default function TachoCommandApp() {
       event.preventDefault();
       setInstallPrompt(event as InstallPromptEvent);
     };
+    const installedHandler = () => {
+      setInstalled(true);
+      setInstallPrompt(null);
+    };
     window.addEventListener("online", onlineHandler);
     window.addEventListener("offline", offlineHandler);
     window.addEventListener("beforeinstallprompt", installHandler);
+    window.addEventListener("appinstalled", installedHandler);
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => undefined);
 
     return () => {
       window.removeEventListener("online", onlineHandler);
       window.removeEventListener("offline", offlineHandler);
       window.removeEventListener("beforeinstallprompt", installHandler);
+      window.removeEventListener("appinstalled", installedHandler);
       window.clearTimeout(hydrate);
     };
   }, []);
@@ -297,19 +309,36 @@ export default function TachoCommandApp() {
       const server = await selected.gatt.connect();
       addBleTestEvent("gatt-connected");
       let serviceUuids: string[] = [];
+      let serviceCharacteristics: Array<{ serviceUuid: string; characteristicUuids: string[] }> = [];
       try {
         const services = await server.getPrimaryServices();
         serviceUuids = services.map((service) => service.uuid);
+        const standardServices = services.filter((service) => TACHO_OPTIONAL_SERVICE_UUIDS.includes(service.uuid.toLowerCase()));
+        serviceCharacteristics = await Promise.all(standardServices.map(async (service) => {
+          try {
+            const characteristics = await service.getCharacteristics();
+            return { serviceUuid: service.uuid, characteristicUuids: characteristics.map((characteristic) => characteristic.uuid) };
+          } catch {
+            return { serviceUuid: service.uuid, characteristicUuids: [] };
+          }
+        }));
       } catch {
         serviceUuids = [];
+        serviceCharacteristics = [];
       }
       const classification = classifyTachoServices(serviceUuids);
+      const transport = classifyTachoTransport(serviceCharacteristics);
       addBleTestEvent("services-scanned");
+      addBleTestEvent("characteristics-scanned");
       setDetectedServiceUuids(classification.normalizedServices);
+      setDetectedCharacteristics(transport.serviceCharacteristics.map((entry) => ({ serviceUuid: entry.serviceUuid, characteristicUuids: [...entry.characteristicUuids] })));
       setProtocolServiceDetected(classification.hasStandardTachoService);
+      setTransportReady(transport.transportReady);
       setDevice(selected);
       setDeviceState("linked");
-      setNotice(classification.hasStandardTachoService ? t.protocolServiceDetected : t.protocolServiceMissing);
+      setNotice(transport.transportReady
+        ? "Kompletan FIFO/Credits transport je pronađen. Podaci još nisu očitani niti menjani."
+        : classification.hasStandardTachoService ? t.protocolServiceDetected : t.protocolServiceMissing);
     } catch (error) {
       const cancelled = error instanceof DOMException && error.name === "NotFoundError";
       addBleTestEvent(cancelled ? "cancelled" : "connection-error");
@@ -322,12 +351,13 @@ export default function TachoCommandApp() {
     const firstEventAt = bleTestEvents[0]?.at;
     const report = buildCompatibilityReport({
       createdAt: new Date().toISOString(),
-      appVersion: "0.3-field-test",
+      appVersion: "0.4-transport-probe",
       locale,
       ...fieldTestProfile,
       deviceName: device?.name,
       userAgent: navigator.userAgent,
       serviceUuids: detectedServiceUuids,
+      serviceCharacteristics: detectedCharacteristics,
       connectionState: deviceState,
       sessionStartedAt: firstEventAt,
       sessionDurationSeconds: firstEventAt ? (Date.now() - new Date(firstEventAt).getTime()) / 1000 : 0,
@@ -347,7 +377,9 @@ export default function TachoCommandApp() {
     device?.gatt?.disconnect();
     setDevice(null);
     setDetectedServiceUuids([]);
+    setDetectedCharacteristics([]);
     setProtocolServiceDetected(null);
+    setTransportReady(null);
     setDeviceState("idle");
     setNotice("BLE veza je bezbedno prekinuta.");
   };
@@ -360,6 +392,7 @@ export default function TachoCommandApp() {
     await installPrompt.prompt();
     const choice = await installPrompt.userChoice;
     setInstallPrompt(null);
+    if (choice.outcome === "accepted") setInstalled(true);
     setNotice(choice.outcome === "accepted" ? "TachoCommand je dodat na početni ekran." : "Instalacija je otkazana; možeš je pokrenuti kasnije.");
   };
 
@@ -630,6 +663,7 @@ export default function TachoCommandApp() {
                 <div><span>POKUŠAJI</span><strong>{bleTestEvents.filter((entry) => entry.event === "connection-attempt").length}</strong></div>
                 <div><span>PREKIDI</span><strong>{bleTestEvents.filter((entry) => entry.event === "disconnected").length}</strong></div>
                 <div><span>EU SERVIS</span><strong>{protocolServiceDetected === true ? "DA" : protocolServiceDetected === false ? "NE" : "—"}</strong></div>
+                <div><span>TRANSPORT</span><strong>{transportReady === true ? "4/4" : transportReady === false ? "NE" : "—"}</strong></div>
               </div>
             )}
 
@@ -647,6 +681,17 @@ export default function TachoCommandApp() {
                       : protocolServiceDetected === false
                         ? t.protocolServiceMissing
                         : "Čeka se kontrolisani test na fizičkom uređaju."}</small>
+                  </div>
+                </li>
+                <li className={transportReady === true ? "pass" : "pending"}>
+                  <span>{transportReady === true ? "✓" : "…"}</span>
+                  <div>
+                    <strong>FIFO/Credits karakteristike</strong>
+                    <small>{transportReady === true
+                      ? "Pronađene su sve četiri standardne transportne karakteristike. Aplikacija još nije uključila indications niti slala kredite."
+                      : transportReady === false
+                        ? "Servis postoji, ali kompletan transportni skup nije vidljiv. Sačuvaj novi beta izveštaj."
+                        : "Čeka se read-only provera karakteristika."}</small>
                   </div>
                 </li>
                 <li className="blocked"><span>×</span><div><strong>Lažni `.DDD` je uklonjen</strong><small>Aplikacija neće generisati simulirani fajl sa zvaničnom ekstenzijom.</small></div></li>
@@ -677,7 +722,11 @@ export default function TachoCommandApp() {
             </div>
 
             <div className="settings-list">
-              <button type="button" onClick={installApp}><span className="setting-icon">⇩</span><div><strong>Instaliraj aplikaciju</strong><small>Dodaj TachoCommand na početni ekran</small></div><em>›</em></button>
+              {installed ? (
+                <div className="installed-setting"><span className="setting-icon">✓</span><div><strong>Aplikacija je instalirana</strong><small>Pokrenuta je kao samostalna mobilna aplikacija</small></div><em className="good">●</em></div>
+              ) : (
+                <button type="button" onClick={installApp}><span className="setting-icon">⇩</span><div><strong>Instaliraj aplikaciju</strong><small>Dodaj TachoCommand na početni ekran</small></div><em>›</em></button>
+              )}
               <button type="button" onClick={() => setShowTimeEditor(true)}><span className="setting-icon">◷</span><div><strong>Podesi ručna vremena</strong><small>Kontinuirana, dnevna vožnja i smena</small></div><em>›</em></button>
               <button type="button" onClick={() => setNotice(online ? "Mreža je dostupna. Ručni podaci se i dalje čuvaju samo lokalno." : "Offline režim je aktivan; Cockpit nastavlja da radi.")}><span className="setting-icon">◎</span><div><strong>Offline status</strong><small>{online ? "Mreža dostupna" : "Aplikacija radi bez mreže"}</small></div><em className={online ? "good" : "warn"}>●</em></button>
               <label className="language-setting">
@@ -698,7 +747,7 @@ export default function TachoCommandApp() {
             </div>
 
             <div className="about-card">
-              <div><span>{t.version}</span><strong>0.3 Field Test</strong></div>
+              <div><span>{t.version}</span><strong>0.4 Transport Probe</strong></div>
               <div><span>Izvor podataka</span><strong>{demoMode ? "Demo" : "Ručni lokalni"}</strong></div>
               <div><span>Cloud nalog</span><strong>Nije potreban</strong></div>
             </div>

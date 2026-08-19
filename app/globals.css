@@ -177,7 +177,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .field-profile-grid label { display: grid; gap: .38rem; color: #71849a; font-size: .5rem; font-weight: 900; letter-spacing: .1em; }
 .field-profile-grid select, .field-profile-grid input { min-width: 0; width: 100%; border: 1px solid #294762; border-radius: .65rem; padding: .7rem .72rem; color: #e6f2fc; background: #071522; font-size: .64rem; font-weight: 750; }
 .field-profile-model { grid-column: 1 / -1; }
-.field-session-strip { display: grid; grid-template-columns: repeat(3, 1fr); overflow: hidden; border: 1px solid #20374d; border-radius: .85rem; background: #081522; }
+.field-session-strip { display: grid; grid-template-columns: repeat(4, 1fr); overflow: hidden; border: 1px solid #20374d; border-radius: .85rem; background: #081522; }
 .field-session-strip > div { display: grid; gap: .25rem; padding: .72rem .45rem; text-align: center; }
 .field-session-strip > div + div { border-left: 1px solid #20374d; }
 .field-session-strip span { color: #71859a; font-size: .47rem; font-weight: 900; letter-spacing: .09em; }
@@ -208,10 +208,11 @@ button { -webkit-tap-highlight-color: transparent; }
 
 .app-mini-mark { background: linear-gradient(145deg, #55dcff, #237bc9); color: #03111d; border: 0; font-size: .8rem; font-weight: 950; }
 .settings-list { overflow: hidden; }
-.settings-list button { width: 100%; display: grid; grid-template-columns: 2rem 1fr auto; gap: .75rem; align-items: center; padding: .85rem .9rem; border: 0; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
-.settings-list button + button { border-top: 1px solid rgba(69,97,127,.2); }
+.settings-list button, .installed-setting { width: 100%; display: grid; grid-template-columns: 2rem 1fr auto; gap: .75rem; align-items: center; padding: .85rem .9rem; border: 0; background: transparent; color: var(--ink); text-align: left; }
+.settings-list button { cursor: pointer; }
+.settings-list > * + * { border-top: 1px solid rgba(69,97,127,.2); }
 .setting-icon { width: 2rem; height: 2rem; display: grid; place-items: center; border-radius: .65rem; color: var(--cyan); background: rgba(66,211,255,.08); font-size: .9rem; }
-.settings-list button div { display: grid; gap: .18rem; }
+.settings-list button div, .installed-setting div { display: grid; gap: .18rem; }
 .settings-list strong { font-size: .7rem; }
 .settings-list small { color: var(--muted); font-size: .57rem; }
 .settings-list em { color: #71859d; font-size: 1.15rem; font-style: normal; }
