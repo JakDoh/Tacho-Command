@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildCompatibilityReport,
+  classifyApplicationProbe,
   classifyFlowControl,
   classifyTachoServices,
   classifyTachoTransport,
@@ -77,6 +78,22 @@ test("accepts only a positive non-rejection server credit as a ready flow-contro
   assert.equal(classifyFlowControl({ attempted: true, serverCredits: [0] }).ready, false);
 });
 
+test("classifies only a valid positive TesterPresent response as application-ready", () => {
+  const positive = classifyApplicationProbe({
+    attempted: true,
+    status: "positive",
+    fifoWriteCapabilities: { writeWithoutResponse: true },
+    fifoWriteAttempts: ["without-response"],
+    fifoWriteMethod: "without-response",
+    packetHeaderValid: true,
+    responseType: "positive",
+    responseService: 0x7e,
+  });
+  assert.equal(positive.ready, true);
+  assert.equal(positive.request, "uds-tester-present");
+  assert.equal(classifyApplicationProbe({ attempted: true, status: "negative", responseService: 0x7f, negativeResponseCode: 0x22 }).ready, false);
+});
+
 test("compatibility report excludes driver and vehicle identifiers by design", () => {
   const report = buildCompatibilityReport({
     createdAt: "2026-08-18T21:30:00.000Z",
@@ -106,6 +123,16 @@ test("compatibility report excludes driver and vehicle identifiers by design", (
       creditWriteAttempts: ["with-response"],
       creditWriteMethod: "with-response",
     },
+    applicationProbe: {
+      attempted: true,
+      status: "positive",
+      fifoWriteCapabilities: { writeWithoutResponse: true },
+      fifoWriteAttempts: ["without-response"],
+      fifoWriteMethod: "without-response",
+      packetHeaderValid: true,
+      responseType: "positive",
+      responseService: 0x7e,
+    },
     events: [
       { at: "2026-08-18T21:29:00.000Z", event: "connection-attempt", secret: "removed" },
       { at: "2026-08-18T21:30:00.000Z", event: "services-scanned" },
@@ -117,7 +144,7 @@ test("compatibility report excludes driver and vehicle identifiers by design", (
     assert.equal(serialized.includes(`"${forbidden}"`), false);
   }
   assert.match(report.privacy, /No driver name/);
-  assert.equal(report.schema, "tachocommand-field-test-v4");
+  assert.equal(report.schema, "tachocommand-field-test-v5");
   assert.equal(report.vehicleType, "bus");
   assert.equal(report.tachoBrand, "VDO");
   assert.equal(report.sessionDurationSeconds, 60);
@@ -126,5 +153,7 @@ test("compatibility report excludes driver and vehicle identifiers by design", (
   assert.equal(report.transportChecks.downloadFifo, true);
   assert.equal(report.flowControl.ready, true);
   assert.deepEqual(report.flowControl.serverCreditsReceived, [2]);
+  assert.equal(report.applicationProbe.ready, true);
+  assert.equal("rawBytes" in report.applicationProbe, false);
   assert.deepEqual(Object.keys(report.events[0]), ["at", "event"]);
 });

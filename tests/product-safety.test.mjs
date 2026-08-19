@@ -49,5 +49,11 @@ test("requests only published standard optional BLE services and keeps reports d
   assert.match(appSource, /const creditValue = Uint8Array\.of\(1\)/);
   assert.match(appSource, /credits\.writeValueWithResponse\(creditValue\)/);
   assert.match(appSource, /credits\.writeValueWithoutResponse\(creditValue\)/);
-  assert.doesNotMatch(appSource, /fifo\.writeValue/);
+  assert.match(appSource, /Uint8Array\.of\(1, 1, 0x3e, 0x00\)/);
+  assert.deepEqual(appSource.match(/fifo\.writeValue(?:WithResponse|WithoutResponse)?\(testerPresentPacket\)/g), [
+    "fifo.writeValueWithResponse(testerPresentPacket)",
+    "fifo.writeValueWithoutResponse(testerPresentPacket)",
+    "fifo.writeValue(testerPresentPacket)",
+  ]);
+  assert.doesNotMatch(appSource, /0x22, 0xf1|ReadDataByIdentifier/i);
 });

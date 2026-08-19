@@ -25,10 +25,11 @@ type FieldTestProfile = {
 };
 type BleTestEvent = {
   at: string;
-  event: "connection-attempt" | "device-selected" | "gatt-connected" | "services-scanned" | "characteristics-scanned" | "indications-enabled" | "client-credit-write-fallback" | "client-credit-sent" | "server-credit-received" | "flow-control-rejected" | "flow-control-timeout" | "flow-control-error" | "disconnected" | "cancelled" | "connection-error";
+  event: "connection-attempt" | "device-selected" | "gatt-connected" | "services-scanned" | "characteristics-scanned" | "indications-enabled" | "client-credit-write-fallback" | "client-credit-sent" | "server-credit-received" | "flow-control-rejected" | "flow-control-timeout" | "flow-control-error" | "tester-present-write-fallback" | "tester-present-sent" | "tester-present-response" | "tester-present-timeout" | "application-probe-error" | "disconnected" | "cancelled" | "connection-error";
 };
 
 type FlowControlState = "idle" | "arming" | "waiting" | "ready" | "rejected" | "timeout" | "error";
+type ApplicationProbeState = "idle" | "waiting" | "positive" | "negative" | "unexpected" | "timeout" | "error";
 
 type ActivityEvent = {
   id: string;
@@ -138,6 +139,12 @@ export default function TachoCommandApp() {
   const [creditWriteAttempts, setCreditWriteAttempts] = useState<string[]>([]);
   const [creditWriteMethod, setCreditWriteMethod] = useState("not-used");
   const [flowControlError, setFlowControlError] = useState({ name: "none", message: "none" });
+  const [applicationProbeState, setApplicationProbeState] = useState<ApplicationProbeState>("idle");
+  const [fifoWriteCapabilities, setFifoWriteCapabilities] = useState({ write: false, writeWithoutResponse: false });
+  const [fifoWriteAttempts, setFifoWriteAttempts] = useState<string[]>([]);
+  const [fifoWriteMethod, setFifoWriteMethod] = useState("not-used");
+  const [applicationProbeResponse, setApplicationProbeResponse] = useState({ packetHeaderValid: false, responseType: "none", responseService: null as number | null, negativeResponseCode: null as number | null });
+  const [applicationProbeError, setApplicationProbeError] = useState({ name: "none", message: "none" });
   const [fieldTestProfile, setFieldTestProfile] = useState<FieldTestProfile>({ vehicleType: "bus", tachoBrand: "vdo", tachoModel: "" });
   const [bleTestEvents, setBleTestEvents] = useState<BleTestEvent[]>([]);
   const [online, setOnline] = useState(true);
@@ -316,6 +323,7 @@ export default function TachoCommandApp() {
       return;
     }
     let linkEstablished = false;
+    let failureStage: "connection" | "flow-control" | "application-probe" = "connection";
     try {
       setFlowControlState("idle");
       setDiagnosticsFifoIndications(false);
@@ -326,6 +334,12 @@ export default function TachoCommandApp() {
       setCreditWriteAttempts([]);
       setCreditWriteMethod("not-used");
       setFlowControlError({ name: "none", message: "none" });
+      setApplicationProbeState("idle");
+      setFifoWriteCapabilities({ write: false, writeWithoutResponse: false });
+      setFifoWriteAttempts([]);
+      setFifoWriteMethod("not-used");
+      setApplicationProbeResponse({ packetHeaderValid: false, responseType: "none", responseService: null, negativeResponseCode: null });
+      setApplicationProbeError({ name: "none", message: "none" });
       addBleTestEvent("connection-attempt");
       setDeviceState("connecting");
       const selected = await bluetooth.requestDevice({
@@ -372,6 +386,7 @@ export default function TachoCommandApp() {
       setDevice(selected);
       setDeviceState("linked");
       linkEstablished = true;
+      failureStage = "flow-control";
       if (transport.transportReady) {
         setFlowControlState("arming");
         const fifo = diagnosticsCharacteristics.find((characteristic) => characteristic.uuid.toLowerCase() === TACHO_DIAGNOSTICS_FIFO_UUID);
@@ -379,6 +394,7 @@ export default function TachoCommandApp() {
         if (!fifo || !credits) throw new Error("Diagnostics characteristics unavailable");
 
         let resolveServerCredit: ((value: number) => void) | null = null;
+        let resolveFifoPacket: ((value: number[]) => void) | null = null;
         const serverCredit = new Promise<number>((resolve) => { resolveServerCredit = resolve; });
         credits.addEventListener("characteristicvaluechanged", (event) => {
           const characteristic = event.target as BleGattCharacteristic | null;
@@ -394,6 +410,14 @@ export default function TachoCommandApp() {
           }
           resolveServerCredit?.(value);
           resolveServerCredit = null;
+        });
+        fifo.addEventListener("characteristicvaluechanged", (event) => {
+          const characteristic = event.target as BleGattCharacteristic | null;
+          const view = characteristic?.value;
+          if (!view?.byteLength || !resolveFifoPacket) return;
+          const bytes = Array.from(new Uint8Array(view.buffer, view.byteOffset, Math.min(view.byteLength, 16)));
+          resolveFifoPacket(bytes);
+          resolveFifoPacket = null;
         });
 
         await credits.startNotifications();
@@ -451,7 +475,70 @@ export default function TachoCommandApp() {
         } else if (received === 0xff) {
           setNotice("Tahograf je odbio dijagnostički transport. Podaci nisu traženi niti menjani.");
         } else if (received > 0) {
-          setNotice(`Dijagnostički transport je prihvaćen (${received} kredit${received === 1 ? "" : "a"}). Nijedan tahografski podatak još nije tražen.`);
+          failureStage = "application-probe";
+          setApplicationProbeState("waiting");
+          const responsePacket = new Promise<number[]>((resolve) => { resolveFifoPacket = resolve; });
+          const fifoCapabilities = {
+            write: Boolean(fifo.properties?.write),
+            writeWithoutResponse: Boolean(fifo.properties?.writeWithoutResponse),
+          };
+          setFifoWriteCapabilities(fifoCapabilities);
+          const testerPresentPacket = Uint8Array.of(1, 1, 0x3e, 0x00);
+          const fifoAttempts: string[] = [];
+          let fifoMethod = "not-used";
+          let fifoFirstError: unknown = null;
+
+          if (fifoCapabilities.write && fifo.writeValueWithResponse) {
+            fifoAttempts.push("with-response");
+            setFifoWriteAttempts([...fifoAttempts]);
+            try {
+              await fifo.writeValueWithResponse(testerPresentPacket);
+              fifoMethod = "with-response";
+            } catch (error) {
+              fifoFirstError = error;
+            }
+          }
+          if (fifoMethod === "not-used" && fifoCapabilities.writeWithoutResponse && fifo.writeValueWithoutResponse) {
+            if (fifoFirstError) addBleTestEvent("tester-present-write-fallback");
+            fifoAttempts.push("without-response");
+            setFifoWriteAttempts([...fifoAttempts]);
+            await fifo.writeValueWithoutResponse(testerPresentPacket);
+            fifoMethod = "without-response";
+          }
+          if (fifoMethod === "not-used" && !fifoFirstError && fifo.writeValue) {
+            fifoAttempts.push("legacy-auto");
+            setFifoWriteAttempts([...fifoAttempts]);
+            await fifo.writeValue(testerPresentPacket);
+            fifoMethod = "legacy-auto";
+          }
+          if (fifoMethod === "not-used") throw fifoFirstError ?? new DOMException("Diagnostics FIFO does not expose a supported write method", "NotSupportedError");
+          setFifoWriteMethod(fifoMethod);
+          addBleTestEvent("tester-present-sent");
+
+          const packet = await Promise.race<number[] | null>([
+            responsePacket,
+            new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 6000)),
+          ]);
+          if (!packet) {
+            addBleTestEvent("tester-present-timeout");
+            setApplicationProbeState("timeout");
+            setNotice("Transport je potvrđen, ali TesterPresent nije dobio odgovor u roku od 6 sekundi. Tahografski podaci nisu traženi.");
+          } else {
+            addBleTestEvent("tester-present-response");
+            const packetHeaderValid = packet[0] === 1 && packet[1] === 1;
+            const responseService = packet[2] ?? null;
+            const positive = packetHeaderValid && responseService === 0x7e && packet[3] === 0x00;
+            const negative = packetHeaderValid && responseService === 0x7f && packet[3] === 0x3e;
+            const responseType = positive ? "positive" : negative ? "negative" : "unexpected";
+            const negativeResponseCode = negative ? packet[4] ?? null : null;
+            setApplicationProbeResponse({ packetHeaderValid, responseType, responseService, negativeResponseCode });
+            setApplicationProbeState(responseType);
+            setNotice(positive
+              ? "PASS: tahograf je pozitivno odgovorio na bezbednu UDS proveru. Nijedan vozački podatak nije tražen."
+              : negative
+                ? `Transport radi, ali je UDS provera odbijena kodom ${negativeResponseCode ?? "?"}.`
+                : "Stigao je odgovor, ali format nije očekivani TesterPresent odgovor. Sirovi sadržaj nije sačuvan.");
+          }
         }
       } else {
         setNotice(classification.hasStandardTachoService ? t.protocolServiceDetected : t.protocolServiceMissing);
@@ -459,10 +546,22 @@ export default function TachoCommandApp() {
     } catch (error) {
       const cancelled = error instanceof DOMException && error.name === "NotFoundError";
       const flowControlFailure = !cancelled && linkEstablished;
+      const safeError = {
+        name: error instanceof DOMException || error instanceof Error ? error.name : "UnknownError",
+        message: error instanceof DOMException || error instanceof Error ? error.message.slice(0, 180) : "Unknown BLE write error",
+      };
+      if (failureStage === "application-probe") {
+        setApplicationProbeError(safeError);
+        setApplicationProbeState("error");
+        addBleTestEvent("application-probe-error");
+        setDeviceState("linked");
+        setNotice(`BLE transport radi, ali bezbedna UDS provera nije uspela (${safeError.name}). Tahografski podaci nisu traženi.`);
+        return;
+      }
       if (flowControlFailure) {
         setFlowControlError({
-          name: error instanceof DOMException || error instanceof Error ? error.name : "UnknownError",
-          message: error instanceof DOMException || error instanceof Error ? error.message.slice(0, 180) : "Unknown BLE write error",
+          name: safeError.name,
+          message: safeError.message,
         });
       }
       addBleTestEvent(cancelled ? "cancelled" : flowControlFailure ? "flow-control-error" : "connection-error");
@@ -476,7 +575,7 @@ export default function TachoCommandApp() {
     const firstEventAt = bleTestEvents[0]?.at;
     const report = buildCompatibilityReport({
       createdAt: new Date().toISOString(),
-      appVersion: "0.6-adaptive-credit-write",
+      appVersion: "0.7-uds-presence-probe",
       locale,
       ...fieldTestProfile,
       deviceName: device?.name,
@@ -494,6 +593,16 @@ export default function TachoCommandApp() {
         creditWriteMethod,
         errorName: flowControlError.name,
         errorMessage: flowControlError.message,
+      },
+      applicationProbe: {
+        attempted: applicationProbeState !== "idle",
+        status: applicationProbeState,
+        fifoWriteCapabilities,
+        fifoWriteAttempts,
+        fifoWriteMethod,
+        ...applicationProbeResponse,
+        errorName: applicationProbeError.name,
+        errorMessage: applicationProbeError.message,
       },
       connectionState: deviceState,
       sessionStartedAt: firstEventAt,
@@ -526,6 +635,12 @@ export default function TachoCommandApp() {
     setCreditWriteAttempts([]);
     setCreditWriteMethod("not-used");
     setFlowControlError({ name: "none", message: "none" });
+    setApplicationProbeState("idle");
+    setFifoWriteCapabilities({ write: false, writeWithoutResponse: false });
+    setFifoWriteAttempts([]);
+    setFifoWriteMethod("not-used");
+    setApplicationProbeResponse({ packetHeaderValid: false, responseType: "none", responseService: null, negativeResponseCode: null });
+    setApplicationProbeError({ name: "none", message: "none" });
     setDeviceState("idle");
     setNotice("BLE veza je bezbedno prekinuta.");
   };
@@ -811,6 +926,7 @@ export default function TachoCommandApp() {
                 <div><span>EU SERVIS</span><strong>{protocolServiceDetected === true ? "DA" : protocolServiceDetected === false ? "NE" : "—"}</strong></div>
                 <div><span>TRANSPORT</span><strong>{transportReady === true ? "4/4" : transportReady === false ? "NE" : "—"}</strong></div>
                 <div><span>HANDSHAKE</span><strong>{flowControlState === "ready" ? "DA" : flowControlState === "rejected" ? "ODBIJEN" : flowControlState === "error" || flowControlState === "timeout" ? "NE" : flowControlState === "idle" ? "—" : "…"}</strong></div>
+                <div><span>UDS PROBA</span><strong>{applicationProbeState === "positive" ? "DA" : applicationProbeState === "negative" ? "ODBIJEN" : applicationProbeState === "timeout" || applicationProbeState === "error" || applicationProbeState === "unexpected" ? "NE" : applicationProbeState === "idle" ? "—" : "…"}</strong></div>
               </div>
             )}
 
@@ -856,6 +972,25 @@ export default function TachoCommandApp() {
                             : flowControlState === "arming" || flowControlState === "waiting"
                               ? "U toku je standardna FIFO/Credits sekvenca."
                               : "Čeka se kontrolisani test dok vozilo stoji."}</small>
+                  </div>
+                </li>
+                <li className={applicationProbeState === "positive" ? "pass" : applicationProbeState === "negative" || applicationProbeState === "unexpected" || applicationProbeState === "timeout" || applicationProbeState === "error" ? "blocked" : "pending"}>
+                  <span>{applicationProbeState === "positive" ? "✓" : applicationProbeState === "negative" || applicationProbeState === "unexpected" || applicationProbeState === "timeout" || applicationProbeState === "error" ? "×" : "…"}</span>
+                  <div>
+                    <strong>UDS TesterPresent</strong>
+                    <small>{applicationProbeState === "positive"
+                      ? "Tahograf je pozitivno odgovorio na bezbednu aplikacionu proveru."
+                      : applicationProbeState === "negative"
+                        ? `Tahograf je vratio negativan odgovor${applicationProbeResponse.negativeResponseCode === null ? "" : ` (kod ${applicationProbeResponse.negativeResponseCode})`}.`
+                        : applicationProbeState === "timeout"
+                          ? "Paket je poslat, ali odgovor nije stigao u roku od 6 sekundi."
+                          : applicationProbeState === "unexpected"
+                            ? "Odgovor je stigao, ali nije očekivani TesterPresent format."
+                            : applicationProbeState === "error"
+                              ? `Aplikaciona proba nije uspela (${applicationProbeError.name}).`
+                              : applicationProbeState === "waiting"
+                                ? "Čeka se odgovor tahografa."
+                                : "Čeka se potvrđen transport; ne traži vozačke podatke."}</small>
                   </div>
                 </li>
                 <li className="blocked"><span>×</span><div><strong>Lažni `.DDD` je uklonjen</strong><small>Aplikacija neće generisati simulirani fajl sa zvaničnom ekstenzijom.</small></div></li>
@@ -911,7 +1046,7 @@ export default function TachoCommandApp() {
             </div>
 
             <div className="about-card">
-              <div><span>{t.version}</span><strong>0.6 Adaptive Credit</strong></div>
+              <div><span>{t.version}</span><strong>0.7 UDS Presence Probe</strong></div>
               <div><span>Izvor podataka</span><strong>{demoMode ? "Demo" : "Ručni lokalni"}</strong></div>
               <div><span>Cloud nalog</span><strong>Nije potreban</strong></div>
             </div>
