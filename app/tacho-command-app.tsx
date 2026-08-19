@@ -25,11 +25,12 @@ type FieldTestProfile = {
 };
 type BleTestEvent = {
   at: string;
-  event: "connection-attempt" | "device-selected" | "gatt-connected" | "services-scanned" | "characteristics-scanned" | "indications-enabled" | "client-credit-write-fallback" | "client-credit-sent" | "server-credit-received" | "flow-control-rejected" | "flow-control-timeout" | "flow-control-error" | "tester-present-write-fallback" | "tester-present-sent" | "tester-present-response" | "tester-present-timeout" | "application-probe-error" | "rhmi-open-sent" | "rhmi-open-accepted" | "rhmi-open-negative" | "rhmi-status-pending" | "rhmi-status-open" | "rhmi-status-closed" | "rhmi-timeout" | "rhmi-error" | "disconnected" | "cancelled" | "connection-error";
+  event: "connection-attempt" | "device-selected" | "gatt-connected" | "services-scanned" | "characteristics-scanned" | "indications-enabled" | "client-credit-write-fallback" | "client-credit-sent" | "server-credit-received" | "flow-control-rejected" | "flow-control-timeout" | "flow-control-error" | "tester-present-write-fallback" | "tester-present-sent" | "tester-present-response" | "tester-present-timeout" | "application-probe-error" | "diagnostic-session-sent" | "diagnostic-session-positive" | "diagnostic-session-negative" | "diagnostic-session-timeout" | "rhmi-open-sent" | "rhmi-open-accepted" | "rhmi-open-negative" | "rhmi-status-query-sent" | "rhmi-status-open" | "rhmi-status-closed" | "rhmi-timeout" | "rhmi-error" | "disconnected" | "cancelled" | "connection-error";
 };
 
 type FlowControlState = "idle" | "arming" | "waiting" | "ready" | "rejected" | "timeout" | "error";
 type ApplicationProbeState = "idle" | "waiting" | "positive" | "negative" | "unexpected" | "timeout" | "error";
+type DiagnosticSessionState = "idle" | "waiting" | "positive" | "negative" | "unexpected" | "timeout" | "error";
 type RemoteHmiState = "idle" | "requesting" | "pending" | "open" | "rejected" | "blocked" | "timeout" | "error";
 
 type ActivityEvent = {
@@ -153,6 +154,9 @@ export default function TachoCommandApp() {
   const [fifoWriteMethod, setFifoWriteMethod] = useState("not-used");
   const [applicationProbeResponse, setApplicationProbeResponse] = useState({ packetHeaderValid: false, responseType: "none", responseService: null as number | null, negativeResponseCode: null as number | null });
   const [applicationProbeError, setApplicationProbeError] = useState({ name: "none", message: "none" });
+  const [diagnosticSessionState, setDiagnosticSessionState] = useState<DiagnosticSessionState>("idle");
+  const [diagnosticSessionResponse, setDiagnosticSessionResponse] = useState({ packetHeaderValid: false, responseType: "none", responseService: null as number | null, responseSubFunction: null as number | null, negativeResponseCode: null as number | null });
+  const [diagnosticSessionError, setDiagnosticSessionError] = useState({ name: "none", message: "none" });
   const [remoteHmiState, setRemoteHmiState] = useState<RemoteHmiState>("idle");
   const [remoteHmiStartResponse, setRemoteHmiStartResponse] = useState("none");
   const [remoteHmiStatusCode, setRemoteHmiStatusCode] = useState<number | null>(null);
@@ -337,7 +341,7 @@ export default function TachoCommandApp() {
       return;
     }
     let linkEstablished = false;
-    let failureStage: "connection" | "flow-control" | "application-probe" | "remote-hmi" = "connection";
+    let failureStage: "connection" | "flow-control" | "application-probe" | "diagnostic-session" | "remote-hmi" = "connection";
     try {
       setFlowControlState("idle");
       setDiagnosticsFifoIndications(false);
@@ -354,6 +358,9 @@ export default function TachoCommandApp() {
       setFifoWriteMethod("not-used");
       setApplicationProbeResponse({ packetHeaderValid: false, responseType: "none", responseService: null, negativeResponseCode: null });
       setApplicationProbeError({ name: "none", message: "none" });
+      setDiagnosticSessionState("idle");
+      setDiagnosticSessionResponse({ packetHeaderValid: false, responseType: "none", responseService: null, responseSubFunction: null, negativeResponseCode: null });
+      setDiagnosticSessionError({ name: "none", message: "none" });
       setRemoteHmiState("idle");
       setRemoteHmiStartResponse("none");
       setRemoteHmiStatusCode(null);
@@ -560,8 +567,6 @@ export default function TachoCommandApp() {
                 : "Stigao je odgovor, ali format nije očekivani TesterPresent odgovor. Sirovi sadržaj nije sačuvan.");
 
             if (positive) {
-              failureStage = "remote-hmi";
-              setRemoteHmiState("requesting");
               const exchangeUds = async (payload: number[], sentEvent: BleTestEvent["event"]) => {
                 const response = new Promise<number[]>((resolve) => { resolveFifoPacket = resolve; });
                 await writeGattByMethod(credits, usedMethod, Uint8Array.of(1));
@@ -574,6 +579,40 @@ export default function TachoCommandApp() {
                 ]);
               };
 
+              failureStage = "diagnostic-session";
+              setDiagnosticSessionState("waiting");
+              const diagnosticResponse = await exchangeUds([0x10, 0x01], "diagnostic-session-sent");
+              if (!diagnosticResponse) {
+                addBleTestEvent("diagnostic-session-timeout");
+                setDiagnosticSessionState("timeout");
+                setNotice("TesterPresent radi, ali DTCO nije odgovorio na zahtev za standardnu dijagnostičku sesiju. Remote HMI nije pokrenut.");
+                return;
+              }
+              const diagnosticHeaderValid = diagnosticResponse[0] === 1 && diagnosticResponse[1] === 1;
+              const diagnosticPositive = diagnosticHeaderValid && diagnosticResponse[2] === 0x50 && diagnosticResponse[3] === 0x01;
+              const diagnosticNegative = diagnosticHeaderValid && diagnosticResponse[2] === 0x7f && diagnosticResponse[3] === 0x10;
+              const diagnosticResponseType = diagnosticPositive ? "positive" : diagnosticNegative ? "negative" : "unexpected";
+              const diagnosticNegativeCode = diagnosticNegative ? diagnosticResponse[4] ?? null : null;
+              setDiagnosticSessionResponse({
+                packetHeaderValid: diagnosticHeaderValid,
+                responseType: diagnosticResponseType,
+                responseService: diagnosticResponse[2] ?? null,
+                responseSubFunction: diagnosticPositive ? diagnosticResponse[3] ?? null : null,
+                negativeResponseCode: diagnosticNegativeCode,
+              });
+              if (!diagnosticPositive) {
+                addBleTestEvent(diagnosticNegative ? "diagnostic-session-negative" : "diagnostic-session-timeout");
+                setDiagnosticSessionState(diagnosticNegative ? "negative" : "unexpected");
+                setNotice(diagnosticNegative
+                  ? `DTCO je odbio standardnu dijagnostičku sesiju (kod ${diagnosticNegativeCode ?? "?"}). Remote HMI nije pokrenut.`
+                  : "DTCO je vratio neočekivan odgovor na dijagnostičku sesiju. Remote HMI nije pokrenut.");
+                return;
+              }
+              addBleTestEvent("diagnostic-session-positive");
+              setDiagnosticSessionState("positive");
+
+              failureStage = "remote-hmi";
+              setRemoteHmiState("requesting");
               const openResponse = await exchangeUds([0x31, 0x01, 0xf2, 0x11], "rhmi-open-sent");
               if (!openResponse) {
                 addBleTestEvent("rhmi-timeout");
@@ -583,7 +622,7 @@ export default function TachoCommandApp() {
                 await new Promise<void>((resolve) => window.setTimeout(resolve, 500));
                 setRemoteHmiPollCount(1);
                 setRemoteHmiRecoveryStatusQueried(true);
-                const recoveryStatus = await exchangeUds([0x31, 0x03, 0xf2, 0x11], "rhmi-status-pending");
+                const recoveryStatus = await exchangeUds([0x31, 0x03, 0xf2, 0x11], "rhmi-status-query-sent");
                 const recoveryValid = Boolean(recoveryStatus)
                   && recoveryStatus?.[0] === 1 && recoveryStatus?.[1] === 1
                   && recoveryStatus?.[2] === 0x71 && recoveryStatus?.[3] === 0x03
@@ -634,7 +673,7 @@ export default function TachoCommandApp() {
                   for (let poll = 1; poll <= 12; poll += 1) {
                     await new Promise<void>((resolve) => window.setTimeout(resolve, poll === 1 ? 800 : 2000));
                     setRemoteHmiPollCount(poll);
-                    const statusResponse = await exchangeUds([0x31, 0x03, 0xf2, 0x11], "rhmi-status-pending");
+                    const statusResponse = await exchangeUds([0x31, 0x03, 0xf2, 0x11], "rhmi-status-query-sent");
                     if (!statusResponse) {
                       addBleTestEvent("rhmi-timeout");
                       setRemoteHmiState("timeout");
@@ -701,6 +740,13 @@ export default function TachoCommandApp() {
         setNotice(`BLE i UDS rade, ali Remote HMI sesija nije otvorena (${safeError.name}). Nijedan podatak nije očitan.`);
         return;
       }
+      if (failureStage === "diagnostic-session") {
+        setDiagnosticSessionError(safeError);
+        setDiagnosticSessionState("error");
+        setDeviceState("linked");
+        setNotice(`BLE i TesterPresent rade, ali dijagnostička sesija nije potvrđena (${safeError.name}). Remote HMI nije pokrenut.`);
+        return;
+      }
       if (failureStage === "application-probe") {
         setApplicationProbeError(safeError);
         setApplicationProbeState("error");
@@ -726,7 +772,7 @@ export default function TachoCommandApp() {
     const firstEventAt = bleTestEvents[0]?.at;
     const report = buildCompatibilityReport({
       createdAt: new Date().toISOString(),
-      appVersion: "0.9-rhmi-status-recovery",
+      appVersion: "0.10-diagnostic-session-gate",
       locale,
       ...fieldTestProfile,
       deviceName: device?.name,
@@ -754,6 +800,13 @@ export default function TachoCommandApp() {
         ...applicationProbeResponse,
         errorName: applicationProbeError.name,
         errorMessage: applicationProbeError.message,
+      },
+      diagnosticSession: {
+        attempted: diagnosticSessionState !== "idle",
+        status: diagnosticSessionState,
+        ...diagnosticSessionResponse,
+        errorName: diagnosticSessionError.name,
+        errorMessage: diagnosticSessionError.message,
       },
       remoteHmi: {
         attempted: remoteHmiState !== "idle",
@@ -802,6 +855,9 @@ export default function TachoCommandApp() {
     setFifoWriteMethod("not-used");
     setApplicationProbeResponse({ packetHeaderValid: false, responseType: "none", responseService: null, negativeResponseCode: null });
     setApplicationProbeError({ name: "none", message: "none" });
+    setDiagnosticSessionState("idle");
+    setDiagnosticSessionResponse({ packetHeaderValid: false, responseType: "none", responseService: null, responseSubFunction: null, negativeResponseCode: null });
+    setDiagnosticSessionError({ name: "none", message: "none" });
     setRemoteHmiState("idle");
     setRemoteHmiStartResponse("none");
     setRemoteHmiStatusCode(null);
@@ -1161,6 +1217,25 @@ export default function TachoCommandApp() {
                                 : "Čeka se potvrđen transport; ne traži vozačke podatke."}</small>
                   </div>
                 </li>
+                <li className={diagnosticSessionState === "positive" ? "pass" : diagnosticSessionState === "negative" || diagnosticSessionState === "unexpected" || diagnosticSessionState === "timeout" || diagnosticSessionState === "error" ? "blocked" : "pending"}>
+                  <span>{diagnosticSessionState === "positive" ? "✓" : diagnosticSessionState === "negative" || diagnosticSessionState === "unexpected" || diagnosticSessionState === "timeout" || diagnosticSessionState === "error" ? "×" : "…"}</span>
+                  <div>
+                    <strong>Standardna UDS sesija</strong>
+                    <small>{diagnosticSessionState === "positive"
+                      ? "DTCO je potvrdio standardnu dijagnostičku sesiju; Remote HMI proba može bezbedno da nastavi."
+                      : diagnosticSessionState === "negative"
+                        ? `DTCO je odbio sesiju${diagnosticSessionResponse.negativeResponseCode === null ? "" : ` (kod ${diagnosticSessionResponse.negativeResponseCode})`}; F211 nije poslat.`
+                        : diagnosticSessionState === "timeout"
+                          ? "TesterPresent radi, ali odgovor na zahtev za sesiju nije stigao; F211 nije poslat."
+                          : diagnosticSessionState === "unexpected"
+                            ? "Stigao je neočekivan format odgovora; F211 nije poslat."
+                            : diagnosticSessionState === "error"
+                              ? `Provera sesije nije uspela (${diagnosticSessionError.name}); F211 nije poslat.`
+                              : diagnosticSessionState === "waiting"
+                                ? "Čeka se potvrda standardne dijagnostičke sesije."
+                                : "Čeka se pozitivan TesterPresent odgovor."}</small>
+                  </div>
+                </li>
                 <li className={remoteHmiState === "open" ? "pass" : remoteHmiState === "rejected" || remoteHmiState === "blocked" || remoteHmiState === "timeout" || remoteHmiState === "error" ? "blocked" : "pending"}>
                   <span>{remoteHmiState === "open" ? "✓" : remoteHmiState === "rejected" || remoteHmiState === "blocked" || remoteHmiState === "timeout" || remoteHmiState === "error" ? "×" : "…"}</span>
                   <div>
@@ -1233,7 +1308,7 @@ export default function TachoCommandApp() {
             </div>
 
             <div className="about-card">
-              <div><span>{t.version}</span><strong>0.9 RHMI Status Recovery</strong></div>
+              <div><span>{t.version}</span><strong>0.10 Diagnostic Session Gate</strong></div>
               <div><span>Izvor podataka</span><strong>{demoMode ? "Demo" : "Ručni lokalni"}</strong></div>
               <div><span>Cloud nalog</span><strong>Nije potreban</strong></div>
             </div>

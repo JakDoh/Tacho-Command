@@ -7,6 +7,7 @@ export type ServiceClassification = Readonly<{
   hasStandardTachoService: boolean;
 }>;
 export function classifyTachoServices(serviceUuids?: readonly string[]): ServiceClassification;
+export function classifyDiagnosticSession(input?: Record<string, unknown>): Readonly<Record<string, unknown>>;
 export function buildCompatibilityReport(input?: {
   createdAt?: string;
   appVersion?: string;
