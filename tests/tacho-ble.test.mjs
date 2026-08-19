@@ -4,6 +4,7 @@ import {
   buildCompatibilityReport,
   classifyApplicationProbe,
   classifyDiagnosticSession,
+  classifyDriverCardRead,
   classifyFlowControl,
   classifyRemoteHmi,
   classifyTachoServices,
@@ -120,6 +121,23 @@ test("classifies only status 0x10 as an open Remote HMI session", () => {
   assert.equal(classifyRemoteHmi({ attempted: true, startResponse: "timeout", recoveryStatusQueried: true }).recoveryStatusQueried, true);
 });
 
+test("sanitizes read-only driver-card values without identifiers or raw bytes", () => {
+  const result = classifyDriverCardRead({
+    attempted: true,
+    results: [
+      { did: "f903", name: "driver-working-state", status: "positive", value: 3, unit: "state", activity: "drive", rawBytes: [3] },
+      { did: "F923", name: "continuous-driving-time", status: "positive", value: 222, unit: "minutes", cardNumber: "secret" },
+    ],
+  });
+  assert.equal(result.ready, true);
+  assert.equal(result.readOnly, true);
+  assert.equal(result.positiveCount, 2);
+  assert.equal(result.results[0].did, "F903");
+  assert.equal(result.results[1].value, 222);
+  assert.equal("rawBytes" in result.results[0], false);
+  assert.equal("cardNumber" in result.results[1], false);
+});
+
 test("compatibility report excludes driver and vehicle identifiers by design", () => {
   const report = buildCompatibilityReport({
     createdAt: "2026-08-18T21:30:00.000Z",
@@ -175,6 +193,13 @@ test("compatibility report excludes driver and vehicle identifiers by design", (
       pollCount: 2,
       recoveryStatusQueried: false,
     },
+    driverCardRead: {
+      attempted: true,
+      results: [
+        { did: "F903", name: "driver-working-state", status: "positive", value: 0, unit: "state", activity: "rest" },
+        { did: "F923", name: "continuous-driving-time", status: "positive", value: 45, unit: "minutes" },
+      ],
+    },
     events: [
       { at: "2026-08-18T21:29:00.000Z", event: "connection-attempt", secret: "removed" },
       { at: "2026-08-18T21:30:00.000Z", event: "services-scanned" },
@@ -186,7 +211,7 @@ test("compatibility report excludes driver and vehicle identifiers by design", (
     assert.equal(serialized.includes(`"${forbidden}"`), false);
   }
   assert.match(report.privacy, /No driver name/);
-  assert.equal(report.schema, "tachocommand-field-test-v8");
+  assert.equal(report.schema, "tachocommand-field-test-v9");
   assert.equal(report.vehicleType, "bus");
   assert.equal(report.tachoBrand, "VDO");
   assert.equal(report.sessionDurationSeconds, 60);
@@ -198,6 +223,8 @@ test("compatibility report excludes driver and vehicle identifiers by design", (
   assert.equal(report.applicationProbe.ready, true);
   assert.equal(report.diagnosticSession.ready, true);
   assert.equal(report.remoteHmi.ready, true);
+  assert.equal(report.driverCardRead.ready, true);
+  assert.equal(report.driverCardRead.positiveCount, 2);
   assert.equal("rawBytes" in report.applicationProbe, false);
   assert.deepEqual(Object.keys(report.events[0]), ["at", "event"]);
 });

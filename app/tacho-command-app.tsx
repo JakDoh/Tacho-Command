@@ -25,7 +25,17 @@ type FieldTestProfile = {
 };
 type BleTestEvent = {
   at: string;
-  event: "connection-attempt" | "device-selected" | "gatt-connected" | "services-scanned" | "characteristics-scanned" | "indications-enabled" | "client-credit-write-fallback" | "client-credit-sent" | "server-credit-received" | "flow-control-rejected" | "flow-control-timeout" | "flow-control-error" | "tester-present-write-fallback" | "tester-present-sent" | "tester-present-response" | "tester-present-timeout" | "application-probe-error" | "diagnostic-session-sent" | "diagnostic-session-positive" | "diagnostic-session-negative" | "diagnostic-session-timeout" | "rhmi-open-sent" | "rhmi-open-accepted" | "rhmi-open-negative" | "rhmi-status-query-sent" | "rhmi-status-open" | "rhmi-status-closed" | "rhmi-timeout" | "rhmi-error" | "disconnected" | "cancelled" | "connection-error";
+  event: "connection-attempt" | "device-selected" | "gatt-connected" | "services-scanned" | "characteristics-scanned" | "indications-enabled" | "client-credit-write-fallback" | "client-credit-sent" | "server-credit-received" | "flow-control-rejected" | "flow-control-timeout" | "flow-control-error" | "tester-present-write-fallback" | "tester-present-sent" | "tester-present-response" | "tester-present-timeout" | "application-probe-error" | "diagnostic-session-sent" | "diagnostic-session-positive" | "diagnostic-session-negative" | "diagnostic-session-timeout" | "rhmi-open-sent" | "rhmi-open-accepted" | "rhmi-open-negative" | "rhmi-status-query-sent" | "rhmi-status-open" | "rhmi-status-closed" | "rhmi-timeout" | "rhmi-error" | "driver-card-read-sent" | "driver-card-read-positive" | "driver-card-read-negative" | "driver-card-read-timeout" | "disconnected" | "cancelled" | "connection-error";
+};
+
+type DriverCardReadResult = {
+  did: string;
+  name: string;
+  status: "positive" | "negative" | "timeout" | "unexpected";
+  value: number | null;
+  unit: "state" | "minutes";
+  activity: Activity | "unknown" | null;
+  negativeResponseCode: number | null;
 };
 
 type FlowControlState = "idle" | "arming" | "waiting" | "ready" | "rejected" | "timeout" | "error";
@@ -163,6 +173,7 @@ export default function TachoCommandApp() {
   const [remoteHmiPollCount, setRemoteHmiPollCount] = useState(0);
   const [remoteHmiRecoveryStatusQueried, setRemoteHmiRecoveryStatusQueried] = useState(false);
   const [remoteHmiError, setRemoteHmiError] = useState({ name: "none", message: "none" });
+  const [driverCardReadResults, setDriverCardReadResults] = useState<DriverCardReadResult[]>([]);
   const [fieldTestProfile, setFieldTestProfile] = useState<FieldTestProfile>({ vehicleType: "bus", tachoBrand: "vdo", tachoModel: "" });
   const [bleTestEvents, setBleTestEvents] = useState<BleTestEvent[]>([]);
   const [online, setOnline] = useState(true);
@@ -341,7 +352,7 @@ export default function TachoCommandApp() {
       return;
     }
     let linkEstablished = false;
-    let failureStage: "connection" | "flow-control" | "application-probe" | "diagnostic-session" | "remote-hmi" = "connection";
+    let failureStage: "connection" | "flow-control" | "application-probe" | "diagnostic-session" | "remote-hmi" | "driver-card-read" = "connection";
     try {
       setFlowControlState("idle");
       setDiagnosticsFifoIndications(false);
@@ -367,6 +378,7 @@ export default function TachoCommandApp() {
       setRemoteHmiPollCount(0);
       setRemoteHmiRecoveryStatusQueried(false);
       setRemoteHmiError({ name: "none", message: "none" });
+      setDriverCardReadResults([]);
       addBleTestEvent("connection-attempt");
       setDeviceState("connecting");
       const selected = await bluetooth.requestDevice({
@@ -579,146 +591,62 @@ export default function TachoCommandApp() {
                 ]);
               };
 
-              failureStage = "diagnostic-session";
-              setDiagnosticSessionState("waiting");
-              const diagnosticResponse = await exchangeUds([0x10, 0x01], "diagnostic-session-sent");
-              if (!diagnosticResponse) {
-                addBleTestEvent("diagnostic-session-timeout");
-                setDiagnosticSessionState("timeout");
-                setNotice("TesterPresent radi, ali DTCO nije odgovorio na zahtev za standardnu dijagnostičku sesiju. Remote HMI nije pokrenut.");
-                return;
-              }
-              const diagnosticHeaderValid = diagnosticResponse[0] === 1 && diagnosticResponse[1] === 1;
-              const diagnosticPositive = diagnosticHeaderValid && diagnosticResponse[2] === 0x50 && diagnosticResponse[3] === 0x01;
-              const diagnosticNegative = diagnosticHeaderValid && diagnosticResponse[2] === 0x7f && diagnosticResponse[3] === 0x10;
-              const diagnosticResponseType = diagnosticPositive ? "positive" : diagnosticNegative ? "negative" : "unexpected";
-              const diagnosticNegativeCode = diagnosticNegative ? diagnosticResponse[4] ?? null : null;
-              setDiagnosticSessionResponse({
-                packetHeaderValid: diagnosticHeaderValid,
-                responseType: diagnosticResponseType,
-                responseService: diagnosticResponse[2] ?? null,
-                responseSubFunction: diagnosticPositive ? diagnosticResponse[3] ?? null : null,
-                negativeResponseCode: diagnosticNegativeCode,
-              });
-              if (!diagnosticPositive) {
-                addBleTestEvent(diagnosticNegative ? "diagnostic-session-negative" : "diagnostic-session-timeout");
-                setDiagnosticSessionState(diagnosticNegative ? "negative" : "unexpected");
-                setNotice(diagnosticNegative
-                  ? `DTCO je odbio standardnu dijagnostičku sesiju (kod ${diagnosticNegativeCode ?? "?"}). Remote HMI nije pokrenut.`
-                  : "DTCO je vratio neočekivan odgovor na dijagnostičku sesiju. Remote HMI nije pokrenut.");
-                return;
-              }
-              addBleTestEvent("diagnostic-session-positive");
-              setDiagnosticSessionState("positive");
-
-              failureStage = "remote-hmi";
-              setRemoteHmiState("requesting");
-              const openResponse = await exchangeUds([0x31, 0x01, 0xf2, 0x11], "rhmi-open-sent");
-              if (!openResponse) {
-                addBleTestEvent("rhmi-timeout");
-                setRemoteHmiStartResponse("timeout");
-                setRemoteHmiState("requesting");
-                setNotice("F211 početni odgovor kasni; proveravam zvanični status sesije…");
-                await new Promise<void>((resolve) => window.setTimeout(resolve, 500));
-                setRemoteHmiPollCount(1);
-                setRemoteHmiRecoveryStatusQueried(true);
-                const recoveryStatus = await exchangeUds([0x31, 0x03, 0xf2, 0x11], "rhmi-status-query-sent");
-                const recoveryValid = Boolean(recoveryStatus)
-                  && recoveryStatus?.[0] === 1 && recoveryStatus?.[1] === 1
-                  && recoveryStatus?.[2] === 0x71 && recoveryStatus?.[3] === 0x03
-                  && recoveryStatus?.[4] === 0xf2 && recoveryStatus?.[5] === 0x11;
-                if (recoveryValid && recoveryStatus) {
-                  const statusCode = recoveryStatus[6] ?? null;
-                  setRemoteHmiStatusCode(statusCode);
-                  if (statusCode === 0x10) {
-                    addBleTestEvent("rhmi-status-open");
-                    setRemoteHmiState("open");
-                    setNotice("PASS: Remote HMI sesija je otvorena. Podaci još nisu očitani.");
-                  } else if (statusCode === 0x01 || statusCode === 0x00) {
-                    setRemoteHmiState("pending");
-                    setNotice("VDO čeka odluku. Potvrdi Remote HMI na tahografu samo dok vozilo stoji.");
-                  } else {
-                    addBleTestEvent("rhmi-status-closed");
-                    setRemoteHmiState(statusCode === 0x20 ? "rejected" : "blocked");
-                    setNotice(statusCode === 0x20
-                      ? "Remote HMI je odbijen na tahografu."
-                      : `Remote HMI nije dostupan (status ${statusCode ?? "?"}).`);
-                  }
-                } else {
-                  setRemoteHmiState("timeout");
-                  setNotice("Ni početni odgovor ni status Remote HMI sesije nisu stigli. Nijedan podatak nije očitan.");
+              failureStage = "driver-card-read";
+              const definitions = [
+                { did: 0xf903, name: "driver-working-state", unit: "state" as const },
+                { did: 0xf923, name: "continuous-driving-time", unit: "minutes" as const },
+                { did: 0xf925, name: "cumulative-break-time", unit: "minutes" as const },
+                { did: 0xf927, name: "current-activity-duration", unit: "minutes" as const },
+                { did: 0xf938, name: "two-week-driving-time", unit: "minutes" as const },
+                { did: 0xf99a, name: "current-daily-driving-time", unit: "minutes" as const },
+                { did: 0xf99b, name: "current-weekly-driving-time", unit: "minutes" as const },
+                { did: 0xf9ad, name: "remaining-current-driving-time", unit: "minutes" as const },
+                { did: 0xf9c2, name: "remaining-until-next-break-or-rest", unit: "minutes" as const },
+              ];
+              const readResults: DriverCardReadResult[] = [];
+              for (const definition of definitions) {
+                const didHigh = (definition.did >> 8) & 0xff;
+                const didLow = definition.did & 0xff;
+                const did = definition.did.toString(16).toUpperCase().padStart(4, "0");
+                const response = await exchangeUds([0x22, didHigh, didLow], "driver-card-read-sent");
+                if (!response) {
+                  addBleTestEvent("driver-card-read-timeout");
+                  readResults.push({ did, name: definition.name, status: "timeout", value: null, unit: definition.unit, activity: null, negativeResponseCode: null });
+                  if (readResults.length === 1) break;
+                  continue;
                 }
-              } else {
-                const openAccepted = openResponse[0] === 1 && openResponse[1] === 1
-                  && openResponse[2] === 0x71 && openResponse[3] === 0x01
-                  && openResponse[4] === 0xf2 && openResponse[5] === 0x11;
-                const openNegative = openResponse[0] === 1 && openResponse[1] === 1
-                  && openResponse[2] === 0x7f && openResponse[3] === 0x31;
-                if (!openAccepted) {
-                  addBleTestEvent("rhmi-open-negative");
-                  const code = openNegative ? openResponse[4] ?? null : null;
-                  setRemoteHmiStatusCode(code);
-                  setRemoteHmiStartResponse(openNegative ? "negative" : "unexpected");
-                  setRemoteHmiState(code === 0x21 ? "pending" : "blocked");
-                  setNotice(openNegative
-                    ? `VDO nije prihvatio otvaranje Remote HMI sesije (kod ${code ?? "?"}).`
-                    : "VDO je vratio neočekivan odgovor na zahtev za Remote HMI. Sirovi sadržaj nije sačuvan.");
+                const headerValid = response[0] === 1 && response[1] === 1;
+                const positiveRead = headerValid && response[2] === 0x62 && response[3] === didHigh && response[4] === didLow;
+                const negativeRead = headerValid && response[2] === 0x7f && response[3] === 0x22;
+                if (positiveRead) {
+                  const rawValue = definition.unit === "state"
+                    ? response[5] ?? 0xff
+                    : (response[5] ?? 0xff) | ((response[6] ?? 0xff) << 8);
+                  const unavailable = definition.unit === "state" ? rawValue === 0xff : rawValue >= 0xff00;
+                  const stateCode = definition.unit === "state" ? rawValue & 0x07 : null;
+                  const activityValue = stateCode === 0 ? "rest" : stateCode === 1 ? "available" : stateCode === 2 ? "work" : stateCode === 3 ? "drive" : "unknown";
+                  readResults.push({
+                    did,
+                    name: definition.name,
+                    status: "positive",
+                    value: unavailable ? null : rawValue,
+                    unit: definition.unit,
+                    activity: definition.unit === "state" ? activityValue : null,
+                    negativeResponseCode: null,
+                  });
+                  addBleTestEvent("driver-card-read-positive");
+                } else if (negativeRead) {
+                  readResults.push({ did, name: definition.name, status: "negative", value: null, unit: definition.unit, activity: null, negativeResponseCode: response[4] ?? null });
+                  addBleTestEvent("driver-card-read-negative");
                 } else {
-                  addBleTestEvent("rhmi-open-accepted");
-                  setRemoteHmiStartResponse("positive");
-                  setRemoteHmiState("pending");
-                  setNotice("Na VDO ekranu potvrdi Remote HMI samo ako vozilo stoji. Čekam tvoju odluku…");
-
-                  let terminalStateReached = false;
-                  for (let poll = 1; poll <= 12; poll += 1) {
-                    await new Promise<void>((resolve) => window.setTimeout(resolve, poll === 1 ? 800 : 2000));
-                    setRemoteHmiPollCount(poll);
-                    const statusResponse = await exchangeUds([0x31, 0x03, 0xf2, 0x11], "rhmi-status-query-sent");
-                    if (!statusResponse) {
-                      addBleTestEvent("rhmi-timeout");
-                      setRemoteHmiState("timeout");
-                      setNotice("VDO nije odgovorio na proveru statusa Remote HMI sesije.");
-                      terminalStateReached = true;
-                      break;
-                    }
-                    const validStatus = statusResponse[0] === 1 && statusResponse[1] === 1
-                      && statusResponse[2] === 0x71 && statusResponse[3] === 0x03
-                      && statusResponse[4] === 0xf2 && statusResponse[5] === 0x11;
-                    if (!validStatus) {
-                      addBleTestEvent("rhmi-status-closed");
-                      setRemoteHmiState("blocked");
-                      setNotice("VDO je vratio neočekivan format statusa Remote HMI sesije.");
-                      terminalStateReached = true;
-                      break;
-                    }
-                    const statusCode = statusResponse[6] ?? null;
-                    setRemoteHmiStatusCode(statusCode);
-                    if (statusCode === 0x10) {
-                      addBleTestEvent("rhmi-status-open");
-                      setRemoteHmiState("open");
-                      setNotice("PASS: Remote HMI sesija je otvorena uz potvrdu na tahografu. Podaci još nisu očitani.");
-                      terminalStateReached = true;
-                      break;
-                    }
-                    if (statusCode === 0x01 || statusCode === 0x00) {
-                      setRemoteHmiState("pending");
-                      continue;
-                    }
-                    addBleTestEvent("rhmi-status-closed");
-                    setRemoteHmiState(statusCode === 0x20 ? "rejected" : "blocked");
-                    setNotice(statusCode === 0x20
-                      ? "Remote HMI je odbijen na tahografu. Aplikacija neće nastaviti."
-                      : `Remote HMI nije otvoren (status ${statusCode ?? "?"}).`);
-                    terminalStateReached = true;
-                    break;
-                  }
-                  if (!terminalStateReached) {
-                    addBleTestEvent("rhmi-timeout");
-                    setNotice("Nije potvrđena Remote HMI sesija u predviđenom vremenu. Pokušaj može bezbedno da se ponovi.");
-                    setRemoteHmiState("timeout");
-                  }
+                  readResults.push({ did, name: definition.name, status: "unexpected", value: null, unit: definition.unit, activity: null, negativeResponseCode: null });
                 }
               }
+              setDriverCardReadResults(readResults);
+              const positiveReads = readResults.filter((entry) => entry.status === "positive").length;
+              setNotice(positiveReads > 0
+                ? `PASS: očitano je ${positiveReads} read-only polja sa vozačke kartice. Sačuvaj novi izveštaj.`
+                : "Tahograf nije vratio podatke kartice. Proveri da je kartica u slotu 1 i da je uključena saglasnost za ITS lične podatke.");
             }
           }
         }
@@ -755,6 +683,11 @@ export default function TachoCommandApp() {
         setNotice(`BLE transport radi, ali bezbedna UDS provera nije uspela (${safeError.name}). Tahografski podaci nisu traženi.`);
         return;
       }
+      if (failureStage === "driver-card-read") {
+        setDeviceState("linked");
+        setNotice(`BLE i UDS rade, ali read-only očitavanje kartice nije završeno (${safeError.name}).`);
+        return;
+      }
       if (flowControlFailure) {
         setFlowControlError({
           name: safeError.name,
@@ -772,7 +705,7 @@ export default function TachoCommandApp() {
     const firstEventAt = bleTestEvents[0]?.at;
     const report = buildCompatibilityReport({
       createdAt: new Date().toISOString(),
-      appVersion: "0.10-diagnostic-session-gate",
+      appVersion: "0.11-driver-card-read",
       locale,
       ...fieldTestProfile,
       deviceName: device?.name,
@@ -817,6 +750,10 @@ export default function TachoCommandApp() {
         recoveryStatusQueried: remoteHmiRecoveryStatusQueried,
         errorName: remoteHmiError.name,
         errorMessage: remoteHmiError.message,
+      },
+      driverCardRead: {
+        attempted: driverCardReadResults.length > 0,
+        results: driverCardReadResults,
       },
       connectionState: deviceState,
       sessionStartedAt: firstEventAt,
@@ -864,6 +801,7 @@ export default function TachoCommandApp() {
     setRemoteHmiPollCount(0);
     setRemoteHmiRecoveryStatusQueried(false);
     setRemoteHmiError({ name: "none", message: "none" });
+    setDriverCardReadResults([]);
     setDeviceState("idle");
     setNotice("BLE veza je bezbedno prekinuta.");
   };
@@ -1150,7 +1088,7 @@ export default function TachoCommandApp() {
                 <div><span>TRANSPORT</span><strong>{transportReady === true ? "4/4" : transportReady === false ? "NE" : "—"}</strong></div>
                 <div><span>HANDSHAKE</span><strong>{flowControlState === "ready" ? "DA" : flowControlState === "rejected" ? "ODBIJEN" : flowControlState === "error" || flowControlState === "timeout" ? "NE" : flowControlState === "idle" ? "—" : "…"}</strong></div>
                 <div><span>UDS PROBA</span><strong>{applicationProbeState === "positive" ? "DA" : applicationProbeState === "negative" ? "ODBIJEN" : applicationProbeState === "timeout" || applicationProbeState === "error" || applicationProbeState === "unexpected" ? "NE" : applicationProbeState === "idle" ? "—" : "…"}</strong></div>
-                <div><span>REMOTE HMI</span><strong>{remoteHmiState === "open" ? "DA" : remoteHmiState === "rejected" ? "ODBIJEN" : remoteHmiState === "blocked" || remoteHmiState === "timeout" || remoteHmiState === "error" ? "NE" : remoteHmiState === "idle" ? "—" : "…"}</strong></div>
+                <div><span>KARTICA</span><strong>{driverCardReadResults.some((entry) => entry.status === "positive") ? "DA" : driverCardReadResults.length > 0 ? "NE" : "—"}</strong></div>
               </div>
             )}
 
@@ -1217,42 +1155,15 @@ export default function TachoCommandApp() {
                                 : "Čeka se potvrđen transport; ne traži vozačke podatke."}</small>
                   </div>
                 </li>
-                <li className={diagnosticSessionState === "positive" ? "pass" : diagnosticSessionState === "negative" || diagnosticSessionState === "unexpected" || diagnosticSessionState === "timeout" || diagnosticSessionState === "error" ? "blocked" : "pending"}>
-                  <span>{diagnosticSessionState === "positive" ? "✓" : diagnosticSessionState === "negative" || diagnosticSessionState === "unexpected" || diagnosticSessionState === "timeout" || diagnosticSessionState === "error" ? "×" : "…"}</span>
+                <li className={driverCardReadResults.some((entry) => entry.status === "positive") ? "pass" : driverCardReadResults.length > 0 ? "blocked" : "pending"}>
+                  <span>{driverCardReadResults.some((entry) => entry.status === "positive") ? "✓" : driverCardReadResults.length > 0 ? "×" : "…"}</span>
                   <div>
-                    <strong>Standardna UDS sesija</strong>
-                    <small>{diagnosticSessionState === "positive"
-                      ? "DTCO je potvrdio standardnu dijagnostičku sesiju; Remote HMI proba može bezbedno da nastavi."
-                      : diagnosticSessionState === "negative"
-                        ? `DTCO je odbio sesiju${diagnosticSessionResponse.negativeResponseCode === null ? "" : ` (kod ${diagnosticSessionResponse.negativeResponseCode})`}; F211 nije poslat.`
-                        : diagnosticSessionState === "timeout"
-                          ? "TesterPresent radi, ali odgovor na zahtev za sesiju nije stigao; F211 nije poslat."
-                          : diagnosticSessionState === "unexpected"
-                            ? "Stigao je neočekivan format odgovora; F211 nije poslat."
-                            : diagnosticSessionState === "error"
-                              ? `Provera sesije nije uspela (${diagnosticSessionError.name}); F211 nije poslat.`
-                              : diagnosticSessionState === "waiting"
-                                ? "Čeka se potvrda standardne dijagnostičke sesije."
-                                : "Čeka se pozitivan TesterPresent odgovor."}</small>
-                  </div>
-                </li>
-                <li className={remoteHmiState === "open" ? "pass" : remoteHmiState === "rejected" || remoteHmiState === "blocked" || remoteHmiState === "timeout" || remoteHmiState === "error" ? "blocked" : "pending"}>
-                  <span>{remoteHmiState === "open" ? "✓" : remoteHmiState === "rejected" || remoteHmiState === "blocked" || remoteHmiState === "timeout" || remoteHmiState === "error" ? "×" : "…"}</span>
-                  <div>
-                    <strong>Remote HMI sesija F211</strong>
-                    <small>{remoteHmiState === "open"
-                      ? "Sesija je otvorena nakon potvrde korisnika na tahografu."
-                      : remoteHmiState === "pending" || remoteHmiState === "requesting"
-                        ? "Potvrdi Remote HMI na VDO ekranu samo dok vozilo stoji."
-                        : remoteHmiState === "rejected"
-                          ? "Korisnik je odbio Remote HMI na tahografu."
-                          : remoteHmiState === "blocked"
-                            ? `Tahograf nije otvorio sesiju${remoteHmiStatusCode === null ? "" : ` (status ${remoteHmiStatusCode})`}.`
-                            : remoteHmiState === "timeout"
-                              ? "Odluka ili odgovor nisu stigli u predviđenom vremenu."
-                              : remoteHmiState === "error"
-                                ? `Remote HMI proba nije uspela (${remoteHmiError.name}).`
-                                : "Čeka se potvrđen UDS kanal."}</small>
+                    <strong>Read-only podaci vozačke kartice</strong>
+                    <small>{driverCardReadResults.some((entry) => entry.status === "positive")
+                      ? `Tahograf je vratio ${driverCardReadResults.filter((entry) => entry.status === "positive").length} polja: aktivnost i vremena vozača.`
+                      : driverCardReadResults.length > 0
+                        ? "Podaci nisu dostupni. Proveri karticu u slotu 1 i saglasnost za ITS lične podatke."
+                        : "Čeka se pozitivan UDS kanal. Ne tražimo ime, broj kartice, VIN, registraciju ni lokaciju."}</small>
                   </div>
                 </li>
                 <li className="blocked"><span>×</span><div><strong>Lažni `.DDD` je uklonjen</strong><small>Aplikacija neće generisati simulirani fajl sa zvaničnom ekstenzijom.</small></div></li>
@@ -1308,7 +1219,7 @@ export default function TachoCommandApp() {
             </div>
 
             <div className="about-card">
-              <div><span>{t.version}</span><strong>0.10 Diagnostic Session Gate</strong></div>
+              <div><span>{t.version}</span><strong>0.11 Driver Card Read</strong></div>
               <div><span>Izvor podataka</span><strong>{demoMode ? "Demo" : "Ručni lokalni"}</strong></div>
               <div><span>Cloud nalog</span><strong>Nije potreban</strong></div>
             </div>
