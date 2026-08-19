@@ -157,6 +157,7 @@ export default function TachoCommandApp() {
   const [remoteHmiStartResponse, setRemoteHmiStartResponse] = useState("none");
   const [remoteHmiStatusCode, setRemoteHmiStatusCode] = useState<number | null>(null);
   const [remoteHmiPollCount, setRemoteHmiPollCount] = useState(0);
+  const [remoteHmiRecoveryStatusQueried, setRemoteHmiRecoveryStatusQueried] = useState(false);
   const [remoteHmiError, setRemoteHmiError] = useState({ name: "none", message: "none" });
   const [fieldTestProfile, setFieldTestProfile] = useState<FieldTestProfile>({ vehicleType: "bus", tachoBrand: "vdo", tachoModel: "" });
   const [bleTestEvents, setBleTestEvents] = useState<BleTestEvent[]>([]);
@@ -357,6 +358,7 @@ export default function TachoCommandApp() {
       setRemoteHmiStartResponse("none");
       setRemoteHmiStatusCode(null);
       setRemoteHmiPollCount(0);
+      setRemoteHmiRecoveryStatusQueried(false);
       setRemoteHmiError({ name: "none", message: "none" });
       addBleTestEvent("connection-attempt");
       setDeviceState("connecting");
@@ -575,9 +577,38 @@ export default function TachoCommandApp() {
               const openResponse = await exchangeUds([0x31, 0x01, 0xf2, 0x11], "rhmi-open-sent");
               if (!openResponse) {
                 addBleTestEvent("rhmi-timeout");
-                setRemoteHmiState("timeout");
                 setRemoteHmiStartResponse("timeout");
-                setNotice("Remote HMI zahtev je poslat, ali odgovor nije stigao. Nijedan podatak nije očitan.");
+                setRemoteHmiState("requesting");
+                setNotice("F211 početni odgovor kasni; proveravam zvanični status sesije…");
+                await new Promise<void>((resolve) => window.setTimeout(resolve, 500));
+                setRemoteHmiPollCount(1);
+                setRemoteHmiRecoveryStatusQueried(true);
+                const recoveryStatus = await exchangeUds([0x31, 0x03, 0xf2, 0x11], "rhmi-status-pending");
+                const recoveryValid = Boolean(recoveryStatus)
+                  && recoveryStatus?.[0] === 1 && recoveryStatus?.[1] === 1
+                  && recoveryStatus?.[2] === 0x71 && recoveryStatus?.[3] === 0x03
+                  && recoveryStatus?.[4] === 0xf2 && recoveryStatus?.[5] === 0x11;
+                if (recoveryValid && recoveryStatus) {
+                  const statusCode = recoveryStatus[6] ?? null;
+                  setRemoteHmiStatusCode(statusCode);
+                  if (statusCode === 0x10) {
+                    addBleTestEvent("rhmi-status-open");
+                    setRemoteHmiState("open");
+                    setNotice("PASS: Remote HMI sesija je otvorena. Podaci još nisu očitani.");
+                  } else if (statusCode === 0x01 || statusCode === 0x00) {
+                    setRemoteHmiState("pending");
+                    setNotice("VDO čeka odluku. Potvrdi Remote HMI na tahografu samo dok vozilo stoji.");
+                  } else {
+                    addBleTestEvent("rhmi-status-closed");
+                    setRemoteHmiState(statusCode === 0x20 ? "rejected" : "blocked");
+                    setNotice(statusCode === 0x20
+                      ? "Remote HMI je odbijen na tahografu."
+                      : `Remote HMI nije dostupan (status ${statusCode ?? "?"}).`);
+                  }
+                } else {
+                  setRemoteHmiState("timeout");
+                  setNotice("Ni početni odgovor ni status Remote HMI sesije nisu stigli. Nijedan podatak nije očitan.");
+                }
               } else {
                 const openAccepted = openResponse[0] === 1 && openResponse[1] === 1
                   && openResponse[2] === 0x71 && openResponse[3] === 0x01
@@ -695,7 +726,7 @@ export default function TachoCommandApp() {
     const firstEventAt = bleTestEvents[0]?.at;
     const report = buildCompatibilityReport({
       createdAt: new Date().toISOString(),
-      appVersion: "0.8-rhmi-session-probe",
+      appVersion: "0.9-rhmi-status-recovery",
       locale,
       ...fieldTestProfile,
       deviceName: device?.name,
@@ -730,6 +761,7 @@ export default function TachoCommandApp() {
         startResponse: remoteHmiStartResponse,
         statusCode: remoteHmiStatusCode,
         pollCount: remoteHmiPollCount,
+        recoveryStatusQueried: remoteHmiRecoveryStatusQueried,
         errorName: remoteHmiError.name,
         errorMessage: remoteHmiError.message,
       },
@@ -774,6 +806,7 @@ export default function TachoCommandApp() {
     setRemoteHmiStartResponse("none");
     setRemoteHmiStatusCode(null);
     setRemoteHmiPollCount(0);
+    setRemoteHmiRecoveryStatusQueried(false);
     setRemoteHmiError({ name: "none", message: "none" });
     setDeviceState("idle");
     setNotice("BLE veza je bezbedno prekinuta.");
@@ -1200,7 +1233,7 @@ export default function TachoCommandApp() {
             </div>
 
             <div className="about-card">
-              <div><span>{t.version}</span><strong>0.8 Remote HMI Session</strong></div>
+              <div><span>{t.version}</span><strong>0.9 RHMI Status Recovery</strong></div>
               <div><span>Izvor podataka</span><strong>{demoMode ? "Demo" : "Ručni lokalni"}</strong></div>
               <div><span>Cloud nalog</span><strong>Nije potreban</strong></div>
             </div>

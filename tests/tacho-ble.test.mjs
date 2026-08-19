@@ -102,6 +102,7 @@ test("classifies only status 0x10 as an open Remote HMI session", () => {
   assert.equal(open.statusName, "open");
   assert.equal(classifyRemoteHmi({ attempted: true, state: "pending", statusCode: 0x01 }).ready, false);
   assert.equal(classifyRemoteHmi({ attempted: true, state: "rejected", statusCode: 0x20 }).statusName, "user-rejected");
+  assert.equal(classifyRemoteHmi({ attempted: true, startResponse: "timeout", recoveryStatusQueried: true }).recoveryStatusQueried, true);
 });
 
 test("compatibility report excludes driver and vehicle identifiers by design", () => {
@@ -149,6 +150,7 @@ test("compatibility report excludes driver and vehicle identifiers by design", (
       state: "open",
       statusCode: 0x10,
       pollCount: 2,
+      recoveryStatusQueried: false,
     },
     events: [
       { at: "2026-08-18T21:29:00.000Z", event: "connection-attempt", secret: "removed" },
@@ -161,7 +163,7 @@ test("compatibility report excludes driver and vehicle identifiers by design", (
     assert.equal(serialized.includes(`"${forbidden}"`), false);
   }
   assert.match(report.privacy, /No driver name/);
-  assert.equal(report.schema, "tachocommand-field-test-v6");
+  assert.equal(report.schema, "tachocommand-field-test-v7");
   assert.equal(report.vehicleType, "bus");
   assert.equal(report.tachoBrand, "VDO");
   assert.equal(report.sessionDurationSeconds, 60);

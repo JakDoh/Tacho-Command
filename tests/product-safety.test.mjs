@@ -57,5 +57,6 @@ test("requests only published standard optional BLE services and keeps reports d
   ]);
   assert.match(appSource, /exchangeUds\(\[0x31, 0x01, 0xf2, 0x11\], "rhmi-open-sent"\)/);
   assert.match(appSource, /exchangeUds\(\[0x31, 0x03, 0xf2, 0x11\], "rhmi-status-pending"\)/);
+  assert.match(appSource, /setRemoteHmiRecoveryStatusQueried\(true\)/);
   assert.doesNotMatch(appSource, /0x22, 0xf1|ReadDataByIdentifier/i);
 });
