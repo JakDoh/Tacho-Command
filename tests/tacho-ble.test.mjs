@@ -130,6 +130,9 @@ test("sanitizes read-only driver-card values without identifiers or raw bytes", 
     results: [
       { did: "f903", name: "driver-working-state", status: "positive", value: 3, unit: "state", activity: "drive", rawBytes: [3] },
       { did: "F923", name: "continuous-driving-time", status: "positive", value: 222, unit: "minutes", cardNumber: "secret" },
+      { did: "F903", name: "driver-working-state", status: "timeout", observations: [
+        { byteLength: 5, packetHeaderValid: true, responseService: 0x7f, requestService: 0x22, negativeResponseCode: 0x31, rawBytes: [1, 1, 0x7f, 0x22, 0x31] },
+      ] },
     ],
   });
   assert.equal(result.ready, true);
@@ -140,6 +143,15 @@ test("sanitizes read-only driver-card values without identifiers or raw bytes", 
   assert.equal(result.results[1].value, 222);
   assert.equal("rawBytes" in result.results[0], false);
   assert.equal("cardNumber" in result.results[1], false);
+  assert.equal(result.results[2].observedPacketCount, 1);
+  assert.deepEqual(result.results[2].observations[0], {
+    byteLength: 5,
+    packetHeaderValid: true,
+    responseService: 0x7f,
+    requestService: 0x22,
+    negativeResponseCode: 0x31,
+  });
+  assert.equal("rawBytes" in result.results[2].observations[0], false);
 });
 
 test("compatibility report excludes driver and vehicle identifiers by design", () => {
@@ -215,7 +227,7 @@ test("compatibility report excludes driver and vehicle identifiers by design", (
     assert.equal(serialized.includes(`"${forbidden}"`), false);
   }
   assert.match(report.privacy, /No driver name/);
-  assert.equal(report.schema, "tachocommand-field-test-v11");
+  assert.equal(report.schema, "tachocommand-field-test-v12");
   assert.equal(report.vehicleType, "bus");
   assert.equal(report.tachoBrand, "VDO");
   assert.equal(report.sessionDurationSeconds, 60);
