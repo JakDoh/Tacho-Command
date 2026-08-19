@@ -25,7 +25,7 @@ type FieldTestProfile = {
 };
 type BleTestEvent = {
   at: string;
-  event: "connection-attempt" | "device-selected" | "gatt-connected" | "services-scanned" | "characteristics-scanned" | "indications-enabled" | "client-credit-write-fallback" | "client-credit-sent" | "server-credit-received" | "flow-control-rejected" | "flow-control-timeout" | "flow-control-error" | "tester-present-write-fallback" | "tester-present-sent" | "tester-present-response" | "tester-present-timeout" | "application-probe-error" | "diagnostic-session-sent" | "diagnostic-session-positive" | "diagnostic-session-negative" | "diagnostic-session-timeout" | "rhmi-open-sent" | "rhmi-open-accepted" | "rhmi-open-negative" | "rhmi-status-query-sent" | "rhmi-status-open" | "rhmi-status-closed" | "rhmi-timeout" | "rhmi-error" | "driver-card-read-sent" | "driver-card-read-positive" | "driver-card-read-negative" | "driver-card-read-timeout" | "disconnected" | "cancelled" | "connection-error";
+  event: "connection-attempt" | "device-selected" | "gatt-connected" | "services-scanned" | "characteristics-scanned" | "indications-enabled" | "client-credit-write-fallback" | "client-credit-sent" | "server-credit-received" | "flow-control-rejected" | "flow-control-timeout" | "flow-control-error" | "tester-present-write-fallback" | "tester-present-sent" | "tester-present-response" | "tester-present-timeout" | "application-probe-error" | "diagnostic-session-sent" | "diagnostic-session-positive" | "diagnostic-session-negative" | "diagnostic-session-timeout" | "diagnostic-session-optional-continue" | "rhmi-open-sent" | "rhmi-open-accepted" | "rhmi-open-negative" | "rhmi-status-query-sent" | "rhmi-status-open" | "rhmi-status-closed" | "rhmi-timeout" | "rhmi-error" | "driver-card-read-sent" | "driver-card-read-positive" | "driver-card-read-negative" | "driver-card-read-timeout" | "disconnected" | "cancelled" | "connection-error";
 };
 
 type DriverCardReadResult = {
@@ -174,6 +174,7 @@ export default function TachoCommandApp() {
   const [remoteHmiRecoveryStatusQueried, setRemoteHmiRecoveryStatusQueried] = useState(false);
   const [remoteHmiError, setRemoteHmiError] = useState({ name: "none", message: "none" });
   const [driverCardReadResults, setDriverCardReadResults] = useState<DriverCardReadResult[]>([]);
+  const [driverCardReadAttempted, setDriverCardReadAttempted] = useState(false);
   const [fieldTestProfile, setFieldTestProfile] = useState<FieldTestProfile>({ vehicleType: "bus", tachoBrand: "vdo", tachoModel: "" });
   const [bleTestEvents, setBleTestEvents] = useState<BleTestEvent[]>([]);
   const [online, setOnline] = useState(true);
@@ -379,6 +380,7 @@ export default function TachoCommandApp() {
       setRemoteHmiRecoveryStatusQueried(false);
       setRemoteHmiError({ name: "none", message: "none" });
       setDriverCardReadResults([]);
+      setDriverCardReadAttempted(false);
       addBleTestEvent("connection-attempt");
       setDeviceState("connecting");
       const selected = await bluetooth.requestDevice({
@@ -433,7 +435,7 @@ export default function TachoCommandApp() {
         if (!fifo || !credits) throw new Error("Diagnostics characteristics unavailable");
 
         let resolveServerCredit: ((value: number) => void) | null = null;
-        let resolveFifoPacket: ((value: number[]) => void) | null = null;
+        let fifoPacketHandler: ((value: number[]) => boolean) | null = null;
         const serverCredit = new Promise<number>((resolve) => { resolveServerCredit = resolve; });
         credits.addEventListener("characteristicvaluechanged", (event) => {
           const characteristic = event.target as BleGattCharacteristic | null;
@@ -453,10 +455,9 @@ export default function TachoCommandApp() {
         fifo.addEventListener("characteristicvaluechanged", (event) => {
           const characteristic = event.target as BleGattCharacteristic | null;
           const view = characteristic?.value;
-          if (!view?.byteLength || !resolveFifoPacket) return;
+          if (!view?.byteLength || !fifoPacketHandler) return;
           const bytes = Array.from(new Uint8Array(view.buffer, view.byteOffset, Math.min(view.byteLength, 16)));
-          resolveFifoPacket(bytes);
-          resolveFifoPacket = null;
+          if (fifoPacketHandler(bytes)) fifoPacketHandler = null;
         });
 
         await credits.startNotifications();
@@ -516,7 +517,9 @@ export default function TachoCommandApp() {
         } else if (received > 0) {
           failureStage = "application-probe";
           setApplicationProbeState("waiting");
-          const responsePacket = new Promise<number[]>((resolve) => { resolveFifoPacket = resolve; });
+          const responsePacket = new Promise<number[]>((resolve) => {
+            fifoPacketHandler = (value) => { resolve(value); return true; };
+          });
           const fifoCapabilities = {
             write: Boolean(fifo.properties?.write),
             writeWithoutResponse: Boolean(fifo.properties?.writeWithoutResponse),
@@ -579,48 +582,64 @@ export default function TachoCommandApp() {
                 : "Stigao je odgovor, ali format nije očekivani TesterPresent odgovor. Sirovi sadržaj nije sačuvan.");
 
             if (positive) {
-              const exchangeUds = async (payload: number[], sentEvent: BleTestEvent["event"]) => {
-                const response = new Promise<number[]>((resolve) => { resolveFifoPacket = resolve; });
+              const exchangeUds = async (payload: number[], sentEvent: BleTestEvent["event"], accepts: (packet: number[]) => boolean) => {
+                let handler: ((value: number[]) => boolean) | null = null;
+                const response = new Promise<number[]>((resolve) => {
+                  handler = (value) => {
+                    if (!accepts(value)) return false;
+                    resolve(value);
+                    return true;
+                  };
+                  fifoPacketHandler = handler;
+                });
                 await writeGattByMethod(credits, usedMethod, Uint8Array.of(1));
                 setClientCreditsGranted((current) => current + 1);
                 await writeGattByMethod(fifo, fifoMethod, Uint8Array.of(1, 1, ...payload));
                 addBleTestEvent(sentEvent);
-                return Promise.race<number[] | null>([
+                const result = await Promise.race<number[] | null>([
                   response,
                   new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 10000)),
                 ]);
+                if (fifoPacketHandler === handler) fifoPacketHandler = null;
+                return result;
               };
 
               failureStage = "diagnostic-session";
               setDiagnosticSessionState("waiting");
-              const sessionResponse = await exchangeUds([0x10, 0x01], "diagnostic-session-sent");
-              if (!sessionResponse) {
-                addBleTestEvent("diagnostic-session-timeout");
-                setDiagnosticSessionState("timeout");
-                setNotice("TesterPresent radi, ali podrazumevana dijagnostička sesija nije odgovorila u roku od 10 sekundi. Kartica nije čitana.");
-                return;
+              try {
+                const sessionResponse = await exchangeUds(
+                  [0x10, 0x01],
+                  "diagnostic-session-sent",
+                  (packet) => packet[0] === 1 && packet[1] === 1 && (packet[2] === 0x50 || (packet[2] === 0x7f && packet[3] === 0x10)),
+                );
+                if (!sessionResponse) {
+                  addBleTestEvent("diagnostic-session-timeout");
+                  setDiagnosticSessionState("timeout");
+                } else {
+                  const sessionHeaderValid = sessionResponse[0] === 1 && sessionResponse[1] === 1;
+                  const sessionPositive = sessionHeaderValid && sessionResponse[2] === 0x50 && sessionResponse[3] === 0x01;
+                  const sessionNegative = sessionHeaderValid && sessionResponse[2] === 0x7f && sessionResponse[3] === 0x10;
+                  const sessionResponseType = sessionPositive ? "positive" : sessionNegative ? "negative" : "unexpected";
+                  const sessionNegativeResponseCode = sessionNegative ? sessionResponse[4] ?? null : null;
+                  setDiagnosticSessionResponse({
+                    packetHeaderValid: sessionHeaderValid,
+                    responseType: sessionResponseType,
+                    responseService: sessionResponse[2] ?? null,
+                    responseSubFunction: sessionPositive ? sessionResponse[3] ?? null : null,
+                    negativeResponseCode: sessionNegativeResponseCode,
+                  });
+                  setDiagnosticSessionState(sessionResponseType);
+                  addBleTestEvent(sessionPositive ? "diagnostic-session-positive" : sessionNegative ? "diagnostic-session-negative" : "diagnostic-session-timeout");
+                }
+              } catch (error) {
+                const safeError = {
+                  name: error instanceof DOMException || error instanceof Error ? error.name : "UnknownError",
+                  message: error instanceof DOMException || error instanceof Error ? error.message.slice(0, 180) : "Unknown diagnostic-session error",
+                };
+                setDiagnosticSessionError(safeError);
+                setDiagnosticSessionState("error");
               }
-              const sessionHeaderValid = sessionResponse[0] === 1 && sessionResponse[1] === 1;
-              const sessionPositive = sessionHeaderValid && sessionResponse[2] === 0x50 && sessionResponse[3] === 0x01;
-              const sessionNegative = sessionHeaderValid && sessionResponse[2] === 0x7f && sessionResponse[3] === 0x10;
-              const sessionResponseType = sessionPositive ? "positive" : sessionNegative ? "negative" : "unexpected";
-              const sessionNegativeResponseCode = sessionNegative ? sessionResponse[4] ?? null : null;
-              setDiagnosticSessionResponse({
-                packetHeaderValid: sessionHeaderValid,
-                responseType: sessionResponseType,
-                responseService: sessionResponse[2] ?? null,
-                responseSubFunction: sessionPositive ? sessionResponse[3] ?? null : null,
-                negativeResponseCode: sessionNegativeResponseCode,
-              });
-              setDiagnosticSessionState(sessionResponseType);
-              if (!sessionPositive) {
-                addBleTestEvent(sessionNegative ? "diagnostic-session-negative" : "diagnostic-session-timeout");
-                setNotice(sessionNegative
-                  ? `Podrazumevana dijagnostička sesija je odbijena kodom ${sessionNegativeResponseCode ?? "?"}. Kartica nije čitana.`
-                  : "Odgovor dijagnostičke sesije nije prepoznat. Sirovi sadržaj nije sačuvan i kartica nije čitana.");
-                return;
-              }
-              addBleTestEvent("diagnostic-session-positive");
+              addBleTestEvent("diagnostic-session-optional-continue");
 
               failureStage = "driver-card-read";
               const definitions = [
@@ -631,7 +650,12 @@ export default function TachoCommandApp() {
                 const didHigh = (definition.did >> 8) & 0xff;
                 const didLow = definition.did & 0xff;
                 const did = definition.did.toString(16).toUpperCase().padStart(4, "0");
-                const response = await exchangeUds([0x22, didHigh, didLow], "driver-card-read-sent");
+                setDriverCardReadAttempted(true);
+                const response = await exchangeUds(
+                  [0x22, didHigh, didLow],
+                  "driver-card-read-sent",
+                  (packet) => packet[0] === 1 && packet[1] === 1 && ((packet[2] === 0x62 && packet[3] === didHigh && packet[4] === didLow) || (packet[2] === 0x7f && packet[3] === 0x22)),
+                );
                 if (!response) {
                   addBleTestEvent("driver-card-read-timeout");
                   readResults.push({ did, name: definition.name, status: "timeout", value: null, unit: definition.unit, activity: null, negativeResponseCode: null });
@@ -728,7 +752,7 @@ export default function TachoCommandApp() {
     const firstEventAt = bleTestEvents[0]?.at;
     const report = buildCompatibilityReport({
       createdAt: new Date().toISOString(),
-      appVersion: "0.12-diagnostic-session-read",
+      appVersion: "0.13-optional-session-card-read",
       locale,
       ...fieldTestProfile,
       deviceName: device?.name,
@@ -775,7 +799,7 @@ export default function TachoCommandApp() {
         errorMessage: remoteHmiError.message,
       },
       driverCardRead: {
-        attempted: driverCardReadResults.length > 0,
+        attempted: driverCardReadAttempted,
         results: driverCardReadResults,
       },
       connectionState: deviceState,
@@ -825,6 +849,7 @@ export default function TachoCommandApp() {
     setRemoteHmiRecoveryStatusQueried(false);
     setRemoteHmiError({ name: "none", message: "none" });
     setDriverCardReadResults([]);
+    setDriverCardReadAttempted(false);
     setDeviceState("idle");
     setNotice("BLE veza je bezbedno prekinuta.");
   };
@@ -1178,6 +1203,21 @@ export default function TachoCommandApp() {
                                 : "Čeka se potvrđen transport; ne traži vozačke podatke."}</small>
                   </div>
                 </li>
+                <li className={diagnosticSessionState === "positive" ? "pass" : diagnosticSessionState === "idle" || diagnosticSessionState === "waiting" ? "pending" : "pass"}>
+                  <span>{diagnosticSessionState === "positive" ? "✓" : diagnosticSessionState === "idle" || diagnosticSessionState === "waiting" ? "…" : "↪"}</span>
+                  <div>
+                    <strong>Opciona dijagnostička sesija</strong>
+                    <small>{diagnosticSessionState === "positive"
+                      ? "Sesija je potvrđena; read-only čitanje se nastavlja."
+                      : diagnosticSessionState === "timeout"
+                        ? "Tahograf nije odgovorio, ali ova sesija više ne blokira bezbedno read-only čitanje."
+                        : diagnosticSessionState === "negative"
+                          ? `Sesija je odbijena${diagnosticSessionResponse.negativeResponseCode === null ? "" : ` (kod ${diagnosticSessionResponse.negativeResponseCode})`}; čitanje se ipak pokušava u postojećoj sesiji.`
+                          : diagnosticSessionState === "error" || diagnosticSessionState === "unexpected"
+                            ? "Sesija nije potvrđena; čitanje se pokušava u već aktivnom UDS kanalu."
+                            : "Pokušava se samo kao pomoćni korak; nije uslov za čitanje kartice."}</small>
+                  </div>
+                </li>
                 <li className={driverCardReadResults.some((entry) => entry.status === "positive") ? "pass" : driverCardReadResults.length > 0 ? "blocked" : "pending"}>
                   <span>{driverCardReadResults.some((entry) => entry.status === "positive") ? "✓" : driverCardReadResults.length > 0 ? "×" : "…"}</span>
                   <div>
@@ -1242,7 +1282,7 @@ export default function TachoCommandApp() {
             </div>
 
             <div className="about-card">
-              <div><span>{t.version}</span><strong>0.12 Diagnostic Session Read</strong></div>
+              <div><span>{t.version}</span><strong>0.13 Optional Session Card Read</strong></div>
               <div><span>Izvor podataka</span><strong>{demoMode ? "Demo" : "Ručni lokalni"}</strong></div>
               <div><span>Cloud nalog</span><strong>Nije potreban</strong></div>
             </div>
