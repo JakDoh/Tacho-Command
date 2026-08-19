@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildCompatibilityReport,
+  classifyFlowControl,
   classifyTachoServices,
   classifyTachoTransport,
   TACHO_DIAGNOSTICS_CREDITS_UUID,
@@ -55,6 +56,21 @@ test("requires all four official FIFO and credits characteristics", () => {
   ]).transportReady, false);
 });
 
+test("accepts only a positive non-rejection server credit as a ready flow-control channel", () => {
+  const ready = classifyFlowControl({
+    attempted: true,
+    diagnosticsFifoIndications: true,
+    diagnosticsCreditsIndications: true,
+    clientCreditsGranted: 1,
+    serverCredits: [4],
+  });
+  assert.equal(ready.ready, true);
+  assert.equal(ready.rejected, false);
+  assert.deepEqual(ready.serverCreditsReceived, [4]);
+  assert.equal(classifyFlowControl({ attempted: true, serverCredits: [0xff] }).rejected, true);
+  assert.equal(classifyFlowControl({ attempted: true, serverCredits: [0] }).ready, false);
+});
+
 test("compatibility report excludes driver and vehicle identifiers by design", () => {
   const report = buildCompatibilityReport({
     createdAt: "2026-08-18T21:30:00.000Z",
@@ -74,6 +90,13 @@ test("compatibility report excludes driver and vehicle identifiers by design", (
     serviceCharacteristics: [
       { serviceUuid: TACHO_DOWNLOAD_SERVICE_UUID, characteristicUuids: [TACHO_DOWNLOAD_FIFO_UUID, TACHO_DOWNLOAD_CREDITS_UUID] },
     ],
+    flowControl: {
+      attempted: true,
+      diagnosticsFifoIndications: true,
+      diagnosticsCreditsIndications: true,
+      clientCreditsGranted: 1,
+      serverCredits: [2],
+    },
     events: [
       { at: "2026-08-18T21:29:00.000Z", event: "connection-attempt", secret: "removed" },
       { at: "2026-08-18T21:30:00.000Z", event: "services-scanned" },
@@ -85,12 +108,14 @@ test("compatibility report excludes driver and vehicle identifiers by design", (
     assert.equal(serialized.includes(`"${forbidden}"`), false);
   }
   assert.match(report.privacy, /No driver name/);
-  assert.equal(report.schema, "tachocommand-field-test-v2");
+  assert.equal(report.schema, "tachocommand-field-test-v3");
   assert.equal(report.vehicleType, "bus");
   assert.equal(report.tachoBrand, "VDO");
   assert.equal(report.sessionDurationSeconds, 60);
   assert.equal(report.events.length, 2);
   assert.equal(report.transportReady, false);
   assert.equal(report.transportChecks.downloadFifo, true);
+  assert.equal(report.flowControl.ready, true);
+  assert.deepEqual(report.flowControl.serverCreditsReceived, [2]);
   assert.deepEqual(Object.keys(report.events[0]), ["at", "event"]);
 });

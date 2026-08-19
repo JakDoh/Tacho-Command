@@ -46,4 +46,6 @@ test("requests only published standard optional BLE services and keeps reports d
   assert.match(bleSource, /fa213def-aef4-475c-bcea-0a8d69073efc/);
   assert.match(bleSource, /No driver name, card number, vehicle registration, location, or raw tachograph data/);
   assert.match(appSource, /optionalServices: TACHO_OPTIONAL_SERVICE_UUIDS/);
+  assert.match(appSource, /credits\.writeValueWithResponse\(Uint8Array\.of\(1\)\)/);
+  assert.doesNotMatch(appSource, /fifo\.writeValue/);
 });

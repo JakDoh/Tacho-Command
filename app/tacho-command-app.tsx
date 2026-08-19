@@ -8,6 +8,9 @@ import {
   buildCompatibilityReport,
   classifyTachoServices,
   classifyTachoTransport,
+  TACHO_DIAGNOSTICS_CREDITS_UUID,
+  TACHO_DIAGNOSTICS_FIFO_UUID,
+  TACHO_DIAGNOSTICS_SERVICE_UUID,
   TACHO_OPTIONAL_SERVICE_UUIDS,
 } from "../lib/tacho-ble.js";
 import AccessGate from "./access-gate";
@@ -22,8 +25,10 @@ type FieldTestProfile = {
 };
 type BleTestEvent = {
   at: string;
-  event: "connection-attempt" | "device-selected" | "gatt-connected" | "services-scanned" | "characteristics-scanned" | "disconnected" | "cancelled" | "connection-error";
+  event: "connection-attempt" | "device-selected" | "gatt-connected" | "services-scanned" | "characteristics-scanned" | "indications-enabled" | "client-credit-sent" | "server-credit-received" | "flow-control-rejected" | "flow-control-timeout" | "flow-control-error" | "disconnected" | "cancelled" | "connection-error";
 };
+
+type FlowControlState = "idle" | "arming" | "waiting" | "ready" | "rejected" | "timeout" | "error";
 
 type ActivityEvent = {
   id: string;
@@ -32,7 +37,13 @@ type ActivityEvent = {
   source: "demo" | "manual";
 };
 
-type BleGattCharacteristic = { uuid: string };
+type BleGattCharacteristic = {
+  uuid: string;
+  value?: DataView | null;
+  startNotifications: () => Promise<BleGattCharacteristic>;
+  writeValueWithResponse: (value: BufferSource) => Promise<void>;
+  addEventListener: (type: "characteristicvaluechanged", listener: (event: Event) => void) => void;
+};
 type BlePrimaryService = { uuid: string; getCharacteristics: () => Promise<BleGattCharacteristic[]> };
 type BleGattServer = {
   connected: boolean;
@@ -115,6 +126,11 @@ export default function TachoCommandApp() {
   const [detectedCharacteristics, setDetectedCharacteristics] = useState<Array<{ serviceUuid: string; characteristicUuids: string[] }>>([]);
   const [protocolServiceDetected, setProtocolServiceDetected] = useState<boolean | null>(null);
   const [transportReady, setTransportReady] = useState<boolean | null>(null);
+  const [flowControlState, setFlowControlState] = useState<FlowControlState>("idle");
+  const [diagnosticsFifoIndications, setDiagnosticsFifoIndications] = useState(false);
+  const [diagnosticsCreditsIndications, setDiagnosticsCreditsIndications] = useState(false);
+  const [clientCreditsGranted, setClientCreditsGranted] = useState(0);
+  const [serverCreditsReceived, setServerCreditsReceived] = useState<number[]>([]);
   const [fieldTestProfile, setFieldTestProfile] = useState<FieldTestProfile>({ vehicleType: "bus", tachoBrand: "vdo", tachoModel: "" });
   const [bleTestEvents, setBleTestEvents] = useState<BleTestEvent[]>([]);
   const [online, setOnline] = useState(true);
@@ -292,7 +308,13 @@ export default function TachoCommandApp() {
       setNotice("Web Bluetooth nije dostupan. Za test koristi ažurirani Chrome na Android telefonu preko HTTPS veze.");
       return;
     }
+    let linkEstablished = false;
     try {
+      setFlowControlState("idle");
+      setDiagnosticsFifoIndications(false);
+      setDiagnosticsCreditsIndications(false);
+      setClientCreditsGranted(0);
+      setServerCreditsReceived([]);
       addBleTestEvent("connection-attempt");
       setDeviceState("connecting");
       const selected = await bluetooth.requestDevice({
@@ -310,6 +332,7 @@ export default function TachoCommandApp() {
       addBleTestEvent("gatt-connected");
       let serviceUuids: string[] = [];
       let serviceCharacteristics: Array<{ serviceUuid: string; characteristicUuids: string[] }> = [];
+      let diagnosticsCharacteristics: BleGattCharacteristic[] = [];
       try {
         const services = await server.getPrimaryServices();
         serviceUuids = services.map((service) => service.uuid);
@@ -317,6 +340,7 @@ export default function TachoCommandApp() {
         serviceCharacteristics = await Promise.all(standardServices.map(async (service) => {
           try {
             const characteristics = await service.getCharacteristics();
+            if (service.uuid.toLowerCase() === TACHO_DIAGNOSTICS_SERVICE_UUID) diagnosticsCharacteristics = characteristics;
             return { serviceUuid: service.uuid, characteristicUuids: characteristics.map((characteristic) => characteristic.uuid) };
           } catch {
             return { serviceUuid: service.uuid, characteristicUuids: [] };
@@ -336,14 +360,64 @@ export default function TachoCommandApp() {
       setTransportReady(transport.transportReady);
       setDevice(selected);
       setDeviceState("linked");
-      setNotice(transport.transportReady
-        ? "Kompletan FIFO/Credits transport je pronađen. Podaci još nisu očitani niti menjani."
-        : classification.hasStandardTachoService ? t.protocolServiceDetected : t.protocolServiceMissing);
+      linkEstablished = true;
+      if (transport.transportReady) {
+        setFlowControlState("arming");
+        const fifo = diagnosticsCharacteristics.find((characteristic) => characteristic.uuid.toLowerCase() === TACHO_DIAGNOSTICS_FIFO_UUID);
+        const credits = diagnosticsCharacteristics.find((characteristic) => characteristic.uuid.toLowerCase() === TACHO_DIAGNOSTICS_CREDITS_UUID);
+        if (!fifo || !credits) throw new Error("Diagnostics characteristics unavailable");
+
+        let resolveServerCredit: ((value: number) => void) | null = null;
+        const serverCredit = new Promise<number>((resolve) => { resolveServerCredit = resolve; });
+        credits.addEventListener("characteristicvaluechanged", (event) => {
+          const characteristic = event.target as BleGattCharacteristic | null;
+          const value = characteristic?.value?.byteLength ? characteristic.value.getUint8(0) : null;
+          if (value === null) return;
+          setServerCreditsReceived((current) => [...current, value].slice(-20));
+          if (value === 0xff) {
+            addBleTestEvent("flow-control-rejected");
+            setFlowControlState("rejected");
+          } else {
+            addBleTestEvent("server-credit-received");
+            if (value > 0) setFlowControlState("ready");
+          }
+          resolveServerCredit?.(value);
+          resolveServerCredit = null;
+        });
+
+        await credits.startNotifications();
+        setDiagnosticsCreditsIndications(true);
+        await fifo.startNotifications();
+        setDiagnosticsFifoIndications(true);
+        addBleTestEvent("indications-enabled");
+        setFlowControlState("waiting");
+        await credits.writeValueWithResponse(Uint8Array.of(1));
+        setClientCreditsGranted(1);
+        addBleTestEvent("client-credit-sent");
+
+        const received = await Promise.race<number | null>([
+          serverCredit,
+          new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 6000)),
+        ]);
+        if (received === null) {
+          addBleTestEvent("flow-control-timeout");
+          setFlowControlState("timeout");
+          setNotice("Transport je pronađen, ali tahograf nije vratio kredit u roku od 6 sekundi. Podaci nisu traženi.");
+        } else if (received === 0xff) {
+          setNotice("Tahograf je odbio dijagnostički transport. Podaci nisu traženi niti menjani.");
+        } else if (received > 0) {
+          setNotice(`Dijagnostički transport je prihvaćen (${received} kredit${received === 1 ? "" : "a"}). Nijedan tahografski podatak još nije tražen.`);
+        }
+      } else {
+        setNotice(classification.hasStandardTachoService ? t.protocolServiceDetected : t.protocolServiceMissing);
+      }
     } catch (error) {
       const cancelled = error instanceof DOMException && error.name === "NotFoundError";
-      addBleTestEvent(cancelled ? "cancelled" : "connection-error");
-      setDeviceState(cancelled ? "idle" : "error");
-      setNotice(cancelled ? "Izbor uređaja je otkazan." : "BLE veza nije uspela. Aplikacija neće prikazati lažno povezivanje.");
+      const flowControlFailure = !cancelled && linkEstablished;
+      addBleTestEvent(cancelled ? "cancelled" : flowControlFailure ? "flow-control-error" : "connection-error");
+      if (flowControlFailure) setFlowControlState("error");
+      setDeviceState(cancelled ? "idle" : flowControlFailure ? "linked" : "error");
+      setNotice(cancelled ? "Izbor uređaja je otkazan." : flowControlFailure ? "BLE veza postoji, ali credit handshake nije uspeo. Podaci nisu traženi." : "BLE veza nije uspela. Aplikacija neće prikazati lažno povezivanje.");
     }
   };
 
@@ -351,13 +425,20 @@ export default function TachoCommandApp() {
     const firstEventAt = bleTestEvents[0]?.at;
     const report = buildCompatibilityReport({
       createdAt: new Date().toISOString(),
-      appVersion: "0.4-transport-probe",
+      appVersion: "0.5-credit-handshake",
       locale,
       ...fieldTestProfile,
       deviceName: device?.name,
       userAgent: navigator.userAgent,
       serviceUuids: detectedServiceUuids,
       serviceCharacteristics: detectedCharacteristics,
+      flowControl: {
+        attempted: flowControlState !== "idle",
+        diagnosticsFifoIndications,
+        diagnosticsCreditsIndications,
+        clientCreditsGranted,
+        serverCredits: serverCreditsReceived,
+      },
       connectionState: deviceState,
       sessionStartedAt: firstEventAt,
       sessionDurationSeconds: firstEventAt ? (Date.now() - new Date(firstEventAt).getTime()) / 1000 : 0,
@@ -380,6 +461,11 @@ export default function TachoCommandApp() {
     setDetectedCharacteristics([]);
     setProtocolServiceDetected(null);
     setTransportReady(null);
+    setFlowControlState("idle");
+    setDiagnosticsFifoIndications(false);
+    setDiagnosticsCreditsIndications(false);
+    setClientCreditsGranted(0);
+    setServerCreditsReceived([]);
     setDeviceState("idle");
     setNotice("BLE veza je bezbedno prekinuta.");
   };
@@ -664,6 +750,7 @@ export default function TachoCommandApp() {
                 <div><span>PREKIDI</span><strong>{bleTestEvents.filter((entry) => entry.event === "disconnected").length}</strong></div>
                 <div><span>EU SERVIS</span><strong>{protocolServiceDetected === true ? "DA" : protocolServiceDetected === false ? "NE" : "—"}</strong></div>
                 <div><span>TRANSPORT</span><strong>{transportReady === true ? "4/4" : transportReady === false ? "NE" : "—"}</strong></div>
+                <div><span>HANDSHAKE</span><strong>{flowControlState === "ready" ? "DA" : flowControlState === "rejected" ? "ODBIJEN" : flowControlState === "error" || flowControlState === "timeout" ? "NE" : flowControlState === "idle" ? "—" : "…"}</strong></div>
               </div>
             )}
 
@@ -688,10 +775,27 @@ export default function TachoCommandApp() {
                   <div>
                     <strong>FIFO/Credits karakteristike</strong>
                     <small>{transportReady === true
-                      ? "Pronađene su sve četiri standardne transportne karakteristike. Aplikacija još nije uključila indications niti slala kredite."
+                      ? "Pronađene su sve četiri standardne transportne karakteristike."
                       : transportReady === false
                         ? "Servis postoji, ali kompletan transportni skup nije vidljiv. Sačuvaj novi beta izveštaj."
                         : "Čeka se read-only provera karakteristika."}</small>
+                  </div>
+                </li>
+                <li className={flowControlState === "ready" ? "pass" : flowControlState === "rejected" || flowControlState === "error" || flowControlState === "timeout" ? "blocked" : "pending"}>
+                  <span>{flowControlState === "ready" ? "✓" : flowControlState === "rejected" || flowControlState === "error" || flowControlState === "timeout" ? "×" : "…"}</span>
+                  <div>
+                    <strong>Dijagnostički credit handshake</strong>
+                    <small>{flowControlState === "ready"
+                      ? `Tahograf je prihvatio transport i vratio kredit (${serverCreditsReceived.at(-1)}). Nijedan podatak još nije tražen.`
+                      : flowControlState === "rejected"
+                        ? "Tahograf je vratio 0xFF i odbio transport."
+                        : flowControlState === "timeout"
+                          ? "Indications su uključene, ali kredit nije stigao u roku od 6 sekundi."
+                          : flowControlState === "error"
+                            ? "Credit handshake nije uspeo; BLE veza može i dalje biti aktivna."
+                            : flowControlState === "arming" || flowControlState === "waiting"
+                              ? "U toku je standardna FIFO/Credits sekvenca."
+                              : "Čeka se kontrolisani test dok vozilo stoji."}</small>
                   </div>
                 </li>
                 <li className="blocked"><span>×</span><div><strong>Lažni `.DDD` je uklonjen</strong><small>Aplikacija neće generisati simulirani fajl sa zvaničnom ekstenzijom.</small></div></li>
@@ -747,7 +851,7 @@ export default function TachoCommandApp() {
             </div>
 
             <div className="about-card">
-              <div><span>{t.version}</span><strong>0.4 Transport Probe</strong></div>
+              <div><span>{t.version}</span><strong>0.5 Credit Handshake</strong></div>
               <div><span>Izvor podataka</span><strong>{demoMode ? "Demo" : "Ručni lokalni"}</strong></div>
               <div><span>Cloud nalog</span><strong>Nije potreban</strong></div>
             </div>
