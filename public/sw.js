@@ -1,4 +1,4 @@
-const CACHE_NAME = "tachocommand-shell-v11";
+const CACHE_NAME = "tachocommand-shell-v12";
 const CORE_ASSETS = ["/", "/app", "/manifest.webmanifest", "/favicon.svg"];
 
 self.addEventListener("install", (event) => {

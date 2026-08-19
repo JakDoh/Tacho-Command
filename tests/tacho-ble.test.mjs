@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildCompatibilityReport,
   classifyApplicationProbe,
+  classifyDiagnosticSession,
   classifyFlowControl,
   classifyRemoteHmi,
   classifyTachoServices,
@@ -95,6 +96,20 @@ test("classifies only a valid positive TesterPresent response as application-rea
   assert.equal(classifyApplicationProbe({ attempted: true, status: "negative", responseService: 0x7f, negativeResponseCode: 0x22 }).ready, false);
 });
 
+test("requires a positive default diagnostic session response before Remote HMI", () => {
+  const positive = classifyDiagnosticSession({
+    attempted: true,
+    status: "positive",
+    packetHeaderValid: true,
+    responseType: "positive",
+    responseService: 0x50,
+    responseSubFunction: 0x01,
+  });
+  assert.equal(positive.ready, true);
+  assert.equal(positive.request, "uds-default-diagnostic-session");
+  assert.equal(classifyDiagnosticSession({ attempted: true, status: "negative", responseService: 0x7f, negativeResponseCode: 0x22 }).ready, false);
+});
+
 test("classifies only status 0x10 as an open Remote HMI session", () => {
   const open = classifyRemoteHmi({ attempted: true, startResponse: "positive", state: "open", statusCode: 0x10, pollCount: 2 });
   assert.equal(open.ready, true);
@@ -144,6 +159,14 @@ test("compatibility report excludes driver and vehicle identifiers by design", (
       responseType: "positive",
       responseService: 0x7e,
     },
+    diagnosticSession: {
+      attempted: true,
+      status: "positive",
+      packetHeaderValid: true,
+      responseType: "positive",
+      responseService: 0x50,
+      responseSubFunction: 0x01,
+    },
     remoteHmi: {
       attempted: true,
       startResponse: "positive",
@@ -163,7 +186,7 @@ test("compatibility report excludes driver and vehicle identifiers by design", (
     assert.equal(serialized.includes(`"${forbidden}"`), false);
   }
   assert.match(report.privacy, /No driver name/);
-  assert.equal(report.schema, "tachocommand-field-test-v7");
+  assert.equal(report.schema, "tachocommand-field-test-v8");
   assert.equal(report.vehicleType, "bus");
   assert.equal(report.tachoBrand, "VDO");
   assert.equal(report.sessionDurationSeconds, 60);
@@ -173,6 +196,7 @@ test("compatibility report excludes driver and vehicle identifiers by design", (
   assert.equal(report.flowControl.ready, true);
   assert.deepEqual(report.flowControl.serverCreditsReceived, [2]);
   assert.equal(report.applicationProbe.ready, true);
+  assert.equal(report.diagnosticSession.ready, true);
   assert.equal(report.remoteHmi.ready, true);
   assert.equal("rawBytes" in report.applicationProbe, false);
   assert.deepEqual(Object.keys(report.events[0]), ["at", "event"]);
