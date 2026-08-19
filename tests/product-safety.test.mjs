@@ -44,7 +44,7 @@ test("requests only published standard optional BLE services and keeps reports d
   const bleSource = await readFile(new URL("../lib/tacho-ble.js", import.meta.url), "utf8");
   assert.match(bleSource, /eef90782-55dd-4388-b80b-695aba7a69b5/);
   assert.match(bleSource, /fa213def-aef4-475c-bcea-0a8d69073efc/);
-  assert.match(bleSource, /No driver name, card number, vehicle registration, location, or raw tachograph data/);
+  assert.match(bleSource, /No driver name, card number, VIN, vehicle registration, location, or raw tachograph bytes/);
   assert.match(appSource, /optionalServices: TACHO_OPTIONAL_SERVICE_UUIDS/);
   assert.match(appSource, /const creditValue = Uint8Array\.of\(1\)/);
   assert.match(appSource, /credits\.writeValueWithResponse\(creditValue\)/);
@@ -55,9 +55,10 @@ test("requests only published standard optional BLE services and keeps reports d
     "fifo.writeValueWithoutResponse(testerPresentPacket)",
     "fifo.writeValue(testerPresentPacket)",
   ]);
-  assert.match(appSource, /exchangeUds\(\[0x10, 0x01\], "diagnostic-session-sent"\)/);
-  assert.match(appSource, /exchangeUds\(\[0x31, 0x01, 0xf2, 0x11\], "rhmi-open-sent"\)/);
-  assert.match(appSource, /exchangeUds\(\[0x31, 0x03, 0xf2, 0x11\], "rhmi-status-query-sent"\)/);
-  assert.match(appSource, /setRemoteHmiRecoveryStatusQueried\(true\)/);
-  assert.doesNotMatch(appSource, /0x22, 0xf1|ReadDataByIdentifier/i);
+  assert.match(appSource, /exchangeUds\(\[0x22, didHigh, didLow\], "driver-card-read-sent"\)/);
+  assert.doesNotMatch(appSource, /exchangeUds\(\[0x10, 0x01\]/);
+  assert.doesNotMatch(appSource, /exchangeUds\(\[0x31, 0x01, 0xf2, 0x11\]/);
+  assert.match(appSource, /did: 0xf903, name: "driver-working-state"/);
+  assert.match(appSource, /did: 0xf923, name: "continuous-driving-time"/);
+  assert.doesNotMatch(appSource, /did: 0xf190|did: 0xf97e|did: 0xf931/);
 });
