@@ -55,5 +55,7 @@ test("requests only published standard optional BLE services and keeps reports d
     "fifo.writeValueWithoutResponse(testerPresentPacket)",
     "fifo.writeValue(testerPresentPacket)",
   ]);
+  assert.match(appSource, /exchangeUds\(\[0x31, 0x01, 0xf2, 0x11\], "rhmi-open-sent"\)/);
+  assert.match(appSource, /exchangeUds\(\[0x31, 0x03, 0xf2, 0x11\], "rhmi-status-pending"\)/);
   assert.doesNotMatch(appSource, /0x22, 0xf1|ReadDataByIdentifier/i);
 });
