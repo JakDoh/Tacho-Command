@@ -25,11 +25,12 @@ type FieldTestProfile = {
 };
 type BleTestEvent = {
   at: string;
-  event: "connection-attempt" | "device-selected" | "gatt-connected" | "services-scanned" | "characteristics-scanned" | "indications-enabled" | "client-credit-write-fallback" | "client-credit-sent" | "server-credit-received" | "flow-control-rejected" | "flow-control-timeout" | "flow-control-error" | "tester-present-write-fallback" | "tester-present-sent" | "tester-present-response" | "tester-present-timeout" | "application-probe-error" | "disconnected" | "cancelled" | "connection-error";
+  event: "connection-attempt" | "device-selected" | "gatt-connected" | "services-scanned" | "characteristics-scanned" | "indications-enabled" | "client-credit-write-fallback" | "client-credit-sent" | "server-credit-received" | "flow-control-rejected" | "flow-control-timeout" | "flow-control-error" | "tester-present-write-fallback" | "tester-present-sent" | "tester-present-response" | "tester-present-timeout" | "application-probe-error" | "rhmi-open-sent" | "rhmi-open-accepted" | "rhmi-open-negative" | "rhmi-status-pending" | "rhmi-status-open" | "rhmi-status-closed" | "rhmi-timeout" | "rhmi-error" | "disconnected" | "cancelled" | "connection-error";
 };
 
 type FlowControlState = "idle" | "arming" | "waiting" | "ready" | "rejected" | "timeout" | "error";
 type ApplicationProbeState = "idle" | "waiting" | "positive" | "negative" | "unexpected" | "timeout" | "error";
+type RemoteHmiState = "idle" | "requesting" | "pending" | "open" | "rejected" | "blocked" | "timeout" | "error";
 
 type ActivityEvent = {
   id: string;
@@ -73,6 +74,13 @@ const HOUR = 60 * MINUTE;
 const CONTINUOUS_LIMIT = 4 * HOUR + 30 * MINUTE;
 const DAILY_LIMIT = 9 * HOUR;
 const SHIFT_REFERENCE = 13 * HOUR;
+
+async function writeGattByMethod(characteristic: BleGattCharacteristic, method: string, value: Uint8Array) {
+  if (method === "with-response" && characteristic.writeValueWithResponse) return characteristic.writeValueWithResponse(value);
+  if (method === "without-response" && characteristic.writeValueWithoutResponse) return characteristic.writeValueWithoutResponse(value);
+  if (method === "legacy-auto" && characteristic.writeValue) return characteristic.writeValue(value);
+  throw new DOMException("Previously verified GATT write method is unavailable", "NotSupportedError");
+}
 
 const formatClock = (totalSeconds: number) => {
   const safe = Math.max(0, Math.floor(totalSeconds));
@@ -145,6 +153,11 @@ export default function TachoCommandApp() {
   const [fifoWriteMethod, setFifoWriteMethod] = useState("not-used");
   const [applicationProbeResponse, setApplicationProbeResponse] = useState({ packetHeaderValid: false, responseType: "none", responseService: null as number | null, negativeResponseCode: null as number | null });
   const [applicationProbeError, setApplicationProbeError] = useState({ name: "none", message: "none" });
+  const [remoteHmiState, setRemoteHmiState] = useState<RemoteHmiState>("idle");
+  const [remoteHmiStartResponse, setRemoteHmiStartResponse] = useState("none");
+  const [remoteHmiStatusCode, setRemoteHmiStatusCode] = useState<number | null>(null);
+  const [remoteHmiPollCount, setRemoteHmiPollCount] = useState(0);
+  const [remoteHmiError, setRemoteHmiError] = useState({ name: "none", message: "none" });
   const [fieldTestProfile, setFieldTestProfile] = useState<FieldTestProfile>({ vehicleType: "bus", tachoBrand: "vdo", tachoModel: "" });
   const [bleTestEvents, setBleTestEvents] = useState<BleTestEvent[]>([]);
   const [online, setOnline] = useState(true);
@@ -323,7 +336,7 @@ export default function TachoCommandApp() {
       return;
     }
     let linkEstablished = false;
-    let failureStage: "connection" | "flow-control" | "application-probe" = "connection";
+    let failureStage: "connection" | "flow-control" | "application-probe" | "remote-hmi" = "connection";
     try {
       setFlowControlState("idle");
       setDiagnosticsFifoIndications(false);
@@ -340,6 +353,11 @@ export default function TachoCommandApp() {
       setFifoWriteMethod("not-used");
       setApplicationProbeResponse({ packetHeaderValid: false, responseType: "none", responseService: null, negativeResponseCode: null });
       setApplicationProbeError({ name: "none", message: "none" });
+      setRemoteHmiState("idle");
+      setRemoteHmiStartResponse("none");
+      setRemoteHmiStatusCode(null);
+      setRemoteHmiPollCount(0);
+      setRemoteHmiError({ name: "none", message: "none" });
       addBleTestEvent("connection-attempt");
       setDeviceState("connecting");
       const selected = await bluetooth.requestDevice({
@@ -538,6 +556,100 @@ export default function TachoCommandApp() {
               : negative
                 ? `Transport radi, ali je UDS provera odbijena kodom ${negativeResponseCode ?? "?"}.`
                 : "Stigao je odgovor, ali format nije očekivani TesterPresent odgovor. Sirovi sadržaj nije sačuvan.");
+
+            if (positive) {
+              failureStage = "remote-hmi";
+              setRemoteHmiState("requesting");
+              const exchangeUds = async (payload: number[], sentEvent: BleTestEvent["event"]) => {
+                const response = new Promise<number[]>((resolve) => { resolveFifoPacket = resolve; });
+                await writeGattByMethod(credits, usedMethod, Uint8Array.of(1));
+                setClientCreditsGranted((current) => current + 1);
+                await writeGattByMethod(fifo, fifoMethod, Uint8Array.of(1, 1, ...payload));
+                addBleTestEvent(sentEvent);
+                return Promise.race<number[] | null>([
+                  response,
+                  new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 6000)),
+                ]);
+              };
+
+              const openResponse = await exchangeUds([0x31, 0x01, 0xf2, 0x11], "rhmi-open-sent");
+              if (!openResponse) {
+                addBleTestEvent("rhmi-timeout");
+                setRemoteHmiState("timeout");
+                setRemoteHmiStartResponse("timeout");
+                setNotice("Remote HMI zahtev je poslat, ali odgovor nije stigao. Nijedan podatak nije očitan.");
+              } else {
+                const openAccepted = openResponse[0] === 1 && openResponse[1] === 1
+                  && openResponse[2] === 0x71 && openResponse[3] === 0x01
+                  && openResponse[4] === 0xf2 && openResponse[5] === 0x11;
+                const openNegative = openResponse[0] === 1 && openResponse[1] === 1
+                  && openResponse[2] === 0x7f && openResponse[3] === 0x31;
+                if (!openAccepted) {
+                  addBleTestEvent("rhmi-open-negative");
+                  const code = openNegative ? openResponse[4] ?? null : null;
+                  setRemoteHmiStatusCode(code);
+                  setRemoteHmiStartResponse(openNegative ? "negative" : "unexpected");
+                  setRemoteHmiState(code === 0x21 ? "pending" : "blocked");
+                  setNotice(openNegative
+                    ? `VDO nije prihvatio otvaranje Remote HMI sesije (kod ${code ?? "?"}).`
+                    : "VDO je vratio neočekivan odgovor na zahtev za Remote HMI. Sirovi sadržaj nije sačuvan.");
+                } else {
+                  addBleTestEvent("rhmi-open-accepted");
+                  setRemoteHmiStartResponse("positive");
+                  setRemoteHmiState("pending");
+                  setNotice("Na VDO ekranu potvrdi Remote HMI samo ako vozilo stoji. Čekam tvoju odluku…");
+
+                  let terminalStateReached = false;
+                  for (let poll = 1; poll <= 12; poll += 1) {
+                    await new Promise<void>((resolve) => window.setTimeout(resolve, poll === 1 ? 800 : 2000));
+                    setRemoteHmiPollCount(poll);
+                    const statusResponse = await exchangeUds([0x31, 0x03, 0xf2, 0x11], "rhmi-status-pending");
+                    if (!statusResponse) {
+                      addBleTestEvent("rhmi-timeout");
+                      setRemoteHmiState("timeout");
+                      setNotice("VDO nije odgovorio na proveru statusa Remote HMI sesije.");
+                      terminalStateReached = true;
+                      break;
+                    }
+                    const validStatus = statusResponse[0] === 1 && statusResponse[1] === 1
+                      && statusResponse[2] === 0x71 && statusResponse[3] === 0x03
+                      && statusResponse[4] === 0xf2 && statusResponse[5] === 0x11;
+                    if (!validStatus) {
+                      addBleTestEvent("rhmi-status-closed");
+                      setRemoteHmiState("blocked");
+                      setNotice("VDO je vratio neočekivan format statusa Remote HMI sesije.");
+                      terminalStateReached = true;
+                      break;
+                    }
+                    const statusCode = statusResponse[6] ?? null;
+                    setRemoteHmiStatusCode(statusCode);
+                    if (statusCode === 0x10) {
+                      addBleTestEvent("rhmi-status-open");
+                      setRemoteHmiState("open");
+                      setNotice("PASS: Remote HMI sesija je otvorena uz potvrdu na tahografu. Podaci još nisu očitani.");
+                      terminalStateReached = true;
+                      break;
+                    }
+                    if (statusCode === 0x01 || statusCode === 0x00) {
+                      setRemoteHmiState("pending");
+                      continue;
+                    }
+                    addBleTestEvent("rhmi-status-closed");
+                    setRemoteHmiState(statusCode === 0x20 ? "rejected" : "blocked");
+                    setNotice(statusCode === 0x20
+                      ? "Remote HMI je odbijen na tahografu. Aplikacija neće nastaviti."
+                      : `Remote HMI nije otvoren (status ${statusCode ?? "?"}).`);
+                    terminalStateReached = true;
+                    break;
+                  }
+                  if (!terminalStateReached) {
+                    addBleTestEvent("rhmi-timeout");
+                    setNotice("Nije potvrđena Remote HMI sesija u predviđenom vremenu. Pokušaj može bezbedno da se ponovi.");
+                    setRemoteHmiState("timeout");
+                  }
+                }
+              }
+            }
           }
         }
       } else {
@@ -550,6 +662,14 @@ export default function TachoCommandApp() {
         name: error instanceof DOMException || error instanceof Error ? error.name : "UnknownError",
         message: error instanceof DOMException || error instanceof Error ? error.message.slice(0, 180) : "Unknown BLE write error",
       };
+      if (failureStage === "remote-hmi") {
+        setRemoteHmiError(safeError);
+        setRemoteHmiState("error");
+        addBleTestEvent("rhmi-error");
+        setDeviceState("linked");
+        setNotice(`BLE i UDS rade, ali Remote HMI sesija nije otvorena (${safeError.name}). Nijedan podatak nije očitan.`);
+        return;
+      }
       if (failureStage === "application-probe") {
         setApplicationProbeError(safeError);
         setApplicationProbeState("error");
@@ -575,7 +695,7 @@ export default function TachoCommandApp() {
     const firstEventAt = bleTestEvents[0]?.at;
     const report = buildCompatibilityReport({
       createdAt: new Date().toISOString(),
-      appVersion: "0.7-uds-presence-probe",
+      appVersion: "0.8-rhmi-session-probe",
       locale,
       ...fieldTestProfile,
       deviceName: device?.name,
@@ -603,6 +723,15 @@ export default function TachoCommandApp() {
         ...applicationProbeResponse,
         errorName: applicationProbeError.name,
         errorMessage: applicationProbeError.message,
+      },
+      remoteHmi: {
+        attempted: remoteHmiState !== "idle",
+        state: remoteHmiState,
+        startResponse: remoteHmiStartResponse,
+        statusCode: remoteHmiStatusCode,
+        pollCount: remoteHmiPollCount,
+        errorName: remoteHmiError.name,
+        errorMessage: remoteHmiError.message,
       },
       connectionState: deviceState,
       sessionStartedAt: firstEventAt,
@@ -641,6 +770,11 @@ export default function TachoCommandApp() {
     setFifoWriteMethod("not-used");
     setApplicationProbeResponse({ packetHeaderValid: false, responseType: "none", responseService: null, negativeResponseCode: null });
     setApplicationProbeError({ name: "none", message: "none" });
+    setRemoteHmiState("idle");
+    setRemoteHmiStartResponse("none");
+    setRemoteHmiStatusCode(null);
+    setRemoteHmiPollCount(0);
+    setRemoteHmiError({ name: "none", message: "none" });
     setDeviceState("idle");
     setNotice("BLE veza je bezbedno prekinuta.");
   };
@@ -927,6 +1061,7 @@ export default function TachoCommandApp() {
                 <div><span>TRANSPORT</span><strong>{transportReady === true ? "4/4" : transportReady === false ? "NE" : "—"}</strong></div>
                 <div><span>HANDSHAKE</span><strong>{flowControlState === "ready" ? "DA" : flowControlState === "rejected" ? "ODBIJEN" : flowControlState === "error" || flowControlState === "timeout" ? "NE" : flowControlState === "idle" ? "—" : "…"}</strong></div>
                 <div><span>UDS PROBA</span><strong>{applicationProbeState === "positive" ? "DA" : applicationProbeState === "negative" ? "ODBIJEN" : applicationProbeState === "timeout" || applicationProbeState === "error" || applicationProbeState === "unexpected" ? "NE" : applicationProbeState === "idle" ? "—" : "…"}</strong></div>
+                <div><span>REMOTE HMI</span><strong>{remoteHmiState === "open" ? "DA" : remoteHmiState === "rejected" ? "ODBIJEN" : remoteHmiState === "blocked" || remoteHmiState === "timeout" || remoteHmiState === "error" ? "NE" : remoteHmiState === "idle" ? "—" : "…"}</strong></div>
               </div>
             )}
 
@@ -993,6 +1128,25 @@ export default function TachoCommandApp() {
                                 : "Čeka se potvrđen transport; ne traži vozačke podatke."}</small>
                   </div>
                 </li>
+                <li className={remoteHmiState === "open" ? "pass" : remoteHmiState === "rejected" || remoteHmiState === "blocked" || remoteHmiState === "timeout" || remoteHmiState === "error" ? "blocked" : "pending"}>
+                  <span>{remoteHmiState === "open" ? "✓" : remoteHmiState === "rejected" || remoteHmiState === "blocked" || remoteHmiState === "timeout" || remoteHmiState === "error" ? "×" : "…"}</span>
+                  <div>
+                    <strong>Remote HMI sesija F211</strong>
+                    <small>{remoteHmiState === "open"
+                      ? "Sesija je otvorena nakon potvrde korisnika na tahografu."
+                      : remoteHmiState === "pending" || remoteHmiState === "requesting"
+                        ? "Potvrdi Remote HMI na VDO ekranu samo dok vozilo stoji."
+                        : remoteHmiState === "rejected"
+                          ? "Korisnik je odbio Remote HMI na tahografu."
+                          : remoteHmiState === "blocked"
+                            ? `Tahograf nije otvorio sesiju${remoteHmiStatusCode === null ? "" : ` (status ${remoteHmiStatusCode})`}.`
+                            : remoteHmiState === "timeout"
+                              ? "Odluka ili odgovor nisu stigli u predviđenom vremenu."
+                              : remoteHmiState === "error"
+                                ? `Remote HMI proba nije uspela (${remoteHmiError.name}).`
+                                : "Čeka se potvrđen UDS kanal."}</small>
+                  </div>
+                </li>
                 <li className="blocked"><span>×</span><div><strong>Lažni `.DDD` je uklonjen</strong><small>Aplikacija neće generisati simulirani fajl sa zvaničnom ekstenzijom.</small></div></li>
               </ul>
             </div>
@@ -1046,7 +1200,7 @@ export default function TachoCommandApp() {
             </div>
 
             <div className="about-card">
-              <div><span>{t.version}</span><strong>0.7 UDS Presence Probe</strong></div>
+              <div><span>{t.version}</span><strong>0.8 Remote HMI Session</strong></div>
               <div><span>Izvor podataka</span><strong>{demoMode ? "Demo" : "Ručni lokalni"}</strong></div>
               <div><span>Cloud nalog</span><strong>Nije potreban</strong></div>
             </div>
