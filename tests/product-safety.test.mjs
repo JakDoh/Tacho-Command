@@ -55,9 +55,11 @@ test("requests only published standard optional BLE services and keeps reports d
     "fifo.writeValueWithoutResponse(testerPresentPacket)",
     "fifo.writeValue(testerPresentPacket)",
   ]);
-  assert.match(appSource, /exchangeUds\(\s*\[0x22, didHigh, didLow\],\s*"driver-card-read-sent"/);
+  assert.match(appSource, /exchangeUds\(\s*\[0x10, 0x7e\],\s*"diagnostic-session-sent"/);
+  assert.match(appSource, /exchangeUds\(\s*\[0x22, didHigh, didLow\],\s*"driver-card-read-sent",\s*"driver-card-read-packet-observed"/);
   assert.doesNotMatch(appSource, /exchangeUds\(\s*\[0x10, 0x01\]/);
-  assert.match(appSource, /diagnostic-session-skipped/);
+  assert.doesNotMatch(appSource, /diagnostic-session-skipped/);
+  assert.match(appSource, /diagnostic-session-packet-observed/);
   assert.match(appSource, /driver-card-read-packet-observed/);
   assert.match(appSource, /observations: exchange\.observations/);
   assert.match(appSource, /new Uint8Array\(view\.buffer, view\.byteOffset, view\.byteLength\)/);

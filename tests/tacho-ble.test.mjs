@@ -97,21 +97,21 @@ test("classifies only a valid positive TesterPresent response as application-rea
   assert.equal(classifyApplicationProbe({ attempted: true, status: "negative", responseService: 0x7f, negativeResponseCode: 0x22 }).ready, false);
 });
 
-test("records the default diagnostic session without making it a card-read gate", () => {
+test("records the remote diagnostic session as the card-read gate", () => {
   const positive = classifyDiagnosticSession({
     attempted: true,
     status: "positive",
     packetHeaderValid: true,
     responseType: "positive",
     responseService: 0x50,
-    responseSubFunction: 0x01,
+    responseSubFunction: 0x7e,
   });
   assert.equal(positive.ready, true);
-  assert.equal(positive.requiredForDriverCardRead, false);
-  assert.equal(positive.request, "uds-default-diagnostic-session");
+  assert.equal(positive.requiredForDriverCardRead, true);
+  assert.equal(positive.request, "uds-remote-diagnostic-session");
   const timeout = classifyDiagnosticSession({ attempted: true, status: "timeout" });
   assert.equal(timeout.ready, false);
-  assert.equal(timeout.requiredForDriverCardRead, false);
+  assert.equal(timeout.requiredForDriverCardRead, true);
 });
 
 test("classifies only status 0x10 as an open Remote HMI session", () => {
@@ -199,7 +199,7 @@ test("compatibility report excludes driver and vehicle identifiers by design", (
       packetHeaderValid: true,
       responseType: "positive",
       responseService: 0x50,
-      responseSubFunction: 0x01,
+      responseSubFunction: 0x7e,
     },
     remoteHmi: {
       attempted: true,
@@ -227,7 +227,7 @@ test("compatibility report excludes driver and vehicle identifiers by design", (
     assert.equal(serialized.includes(`"${forbidden}"`), false);
   }
   assert.match(report.privacy, /No driver name/);
-  assert.equal(report.schema, "tachocommand-field-test-v12");
+  assert.equal(report.schema, "tachocommand-field-test-v13");
   assert.equal(report.vehicleType, "bus");
   assert.equal(report.tachoBrand, "VDO");
   assert.equal(report.sessionDurationSeconds, 60);
