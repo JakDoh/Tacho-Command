@@ -97,7 +97,7 @@ test("classifies only a valid positive TesterPresent response as application-rea
   assert.equal(classifyApplicationProbe({ attempted: true, status: "negative", responseService: 0x7f, negativeResponseCode: 0x22 }).ready, false);
 });
 
-test("requires a positive default diagnostic session response before Remote HMI", () => {
+test("records the default diagnostic session without making it a card-read gate", () => {
   const positive = classifyDiagnosticSession({
     attempted: true,
     status: "positive",
@@ -107,8 +107,11 @@ test("requires a positive default diagnostic session response before Remote HMI"
     responseSubFunction: 0x01,
   });
   assert.equal(positive.ready, true);
+  assert.equal(positive.requiredForDriverCardRead, false);
   assert.equal(positive.request, "uds-default-diagnostic-session");
-  assert.equal(classifyDiagnosticSession({ attempted: true, status: "negative", responseService: 0x7f, negativeResponseCode: 0x22 }).ready, false);
+  const timeout = classifyDiagnosticSession({ attempted: true, status: "timeout" });
+  assert.equal(timeout.ready, false);
+  assert.equal(timeout.requiredForDriverCardRead, false);
 });
 
 test("classifies only status 0x10 as an open Remote HMI session", () => {
@@ -212,7 +215,7 @@ test("compatibility report excludes driver and vehicle identifiers by design", (
     assert.equal(serialized.includes(`"${forbidden}"`), false);
   }
   assert.match(report.privacy, /No driver name/);
-  assert.equal(report.schema, "tachocommand-field-test-v10");
+  assert.equal(report.schema, "tachocommand-field-test-v11");
   assert.equal(report.vehicleType, "bus");
   assert.equal(report.tachoBrand, "VDO");
   assert.equal(report.sessionDurationSeconds, 60);
