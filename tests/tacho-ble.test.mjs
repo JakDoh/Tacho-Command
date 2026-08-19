@@ -63,10 +63,16 @@ test("accepts only a positive non-rejection server credit as a ready flow-contro
     diagnosticsCreditsIndications: true,
     clientCreditsGranted: 1,
     serverCredits: [4],
+    creditWriteCapabilities: { write: true, writeWithoutResponse: true },
+    creditWriteAttempts: ["with-response", "without-response"],
+    creditWriteMethod: "without-response",
   });
   assert.equal(ready.ready, true);
   assert.equal(ready.rejected, false);
   assert.deepEqual(ready.serverCreditsReceived, [4]);
+  assert.equal(ready.creditWriteCapabilities.writeWithoutResponse, true);
+  assert.deepEqual(ready.creditWriteAttempts, ["with-response", "without-response"]);
+  assert.equal(ready.creditWriteMethod, "without-response");
   assert.equal(classifyFlowControl({ attempted: true, serverCredits: [0xff] }).rejected, true);
   assert.equal(classifyFlowControl({ attempted: true, serverCredits: [0] }).ready, false);
 });
@@ -96,6 +102,9 @@ test("compatibility report excludes driver and vehicle identifiers by design", (
       diagnosticsCreditsIndications: true,
       clientCreditsGranted: 1,
       serverCredits: [2],
+      creditWriteCapabilities: { write: true, writeWithoutResponse: false },
+      creditWriteAttempts: ["with-response"],
+      creditWriteMethod: "with-response",
     },
     events: [
       { at: "2026-08-18T21:29:00.000Z", event: "connection-attempt", secret: "removed" },
@@ -108,7 +117,7 @@ test("compatibility report excludes driver and vehicle identifiers by design", (
     assert.equal(serialized.includes(`"${forbidden}"`), false);
   }
   assert.match(report.privacy, /No driver name/);
-  assert.equal(report.schema, "tachocommand-field-test-v3");
+  assert.equal(report.schema, "tachocommand-field-test-v4");
   assert.equal(report.vehicleType, "bus");
   assert.equal(report.tachoBrand, "VDO");
   assert.equal(report.sessionDurationSeconds, 60);
