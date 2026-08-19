@@ -25,7 +25,7 @@ type FieldTestProfile = {
 };
 type BleTestEvent = {
   at: string;
-  event: "connection-attempt" | "device-selected" | "gatt-connected" | "services-scanned" | "characteristics-scanned" | "indications-enabled" | "client-credit-sent" | "server-credit-received" | "flow-control-rejected" | "flow-control-timeout" | "flow-control-error" | "disconnected" | "cancelled" | "connection-error";
+  event: "connection-attempt" | "device-selected" | "gatt-connected" | "services-scanned" | "characteristics-scanned" | "indications-enabled" | "client-credit-write-fallback" | "client-credit-sent" | "server-credit-received" | "flow-control-rejected" | "flow-control-timeout" | "flow-control-error" | "disconnected" | "cancelled" | "connection-error";
 };
 
 type FlowControlState = "idle" | "arming" | "waiting" | "ready" | "rejected" | "timeout" | "error";
@@ -40,8 +40,11 @@ type ActivityEvent = {
 type BleGattCharacteristic = {
   uuid: string;
   value?: DataView | null;
+  properties?: { write?: boolean; writeWithoutResponse?: boolean; indicate?: boolean; notify?: boolean };
   startNotifications: () => Promise<BleGattCharacteristic>;
-  writeValueWithResponse: (value: BufferSource) => Promise<void>;
+  writeValue?: (value: BufferSource) => Promise<void>;
+  writeValueWithResponse?: (value: BufferSource) => Promise<void>;
+  writeValueWithoutResponse?: (value: BufferSource) => Promise<void>;
   addEventListener: (type: "characteristicvaluechanged", listener: (event: Event) => void) => void;
 };
 type BlePrimaryService = { uuid: string; getCharacteristics: () => Promise<BleGattCharacteristic[]> };
@@ -131,6 +134,10 @@ export default function TachoCommandApp() {
   const [diagnosticsCreditsIndications, setDiagnosticsCreditsIndications] = useState(false);
   const [clientCreditsGranted, setClientCreditsGranted] = useState(0);
   const [serverCreditsReceived, setServerCreditsReceived] = useState<number[]>([]);
+  const [creditWriteCapabilities, setCreditWriteCapabilities] = useState({ write: false, writeWithoutResponse: false });
+  const [creditWriteAttempts, setCreditWriteAttempts] = useState<string[]>([]);
+  const [creditWriteMethod, setCreditWriteMethod] = useState("not-used");
+  const [flowControlError, setFlowControlError] = useState({ name: "none", message: "none" });
   const [fieldTestProfile, setFieldTestProfile] = useState<FieldTestProfile>({ vehicleType: "bus", tachoBrand: "vdo", tachoModel: "" });
   const [bleTestEvents, setBleTestEvents] = useState<BleTestEvent[]>([]);
   const [online, setOnline] = useState(true);
@@ -315,6 +322,10 @@ export default function TachoCommandApp() {
       setDiagnosticsCreditsIndications(false);
       setClientCreditsGranted(0);
       setServerCreditsReceived([]);
+      setCreditWriteCapabilities({ write: false, writeWithoutResponse: false });
+      setCreditWriteAttempts([]);
+      setCreditWriteMethod("not-used");
+      setFlowControlError({ name: "none", message: "none" });
       addBleTestEvent("connection-attempt");
       setDeviceState("connecting");
       const selected = await bluetooth.requestDevice({
@@ -391,7 +402,41 @@ export default function TachoCommandApp() {
         setDiagnosticsFifoIndications(true);
         addBleTestEvent("indications-enabled");
         setFlowControlState("waiting");
-        await credits.writeValueWithResponse(Uint8Array.of(1));
+        const capabilities = {
+          write: Boolean(credits.properties?.write),
+          writeWithoutResponse: Boolean(credits.properties?.writeWithoutResponse),
+        };
+        setCreditWriteCapabilities(capabilities);
+        const creditValue = Uint8Array.of(1);
+        const attempts: string[] = [];
+        let usedMethod = "not-used";
+        let firstError: unknown = null;
+
+        if (capabilities.write && credits.writeValueWithResponse) {
+          attempts.push("with-response");
+          setCreditWriteAttempts([...attempts]);
+          try {
+            await credits.writeValueWithResponse(creditValue);
+            usedMethod = "with-response";
+          } catch (error) {
+            firstError = error;
+          }
+        }
+        if (usedMethod === "not-used" && capabilities.writeWithoutResponse && credits.writeValueWithoutResponse) {
+          if (firstError) addBleTestEvent("client-credit-write-fallback");
+          attempts.push("without-response");
+          setCreditWriteAttempts([...attempts]);
+          await credits.writeValueWithoutResponse(creditValue);
+          usedMethod = "without-response";
+        }
+        if (usedMethod === "not-used" && !firstError && credits.writeValue) {
+          attempts.push("legacy-auto");
+          setCreditWriteAttempts([...attempts]);
+          await credits.writeValue(creditValue);
+          usedMethod = "legacy-auto";
+        }
+        if (usedMethod === "not-used") throw firstError ?? new DOMException("Credit characteristic does not expose a supported write method", "NotSupportedError");
+        setCreditWriteMethod(usedMethod);
         setClientCreditsGranted(1);
         addBleTestEvent("client-credit-sent");
 
@@ -414,6 +459,12 @@ export default function TachoCommandApp() {
     } catch (error) {
       const cancelled = error instanceof DOMException && error.name === "NotFoundError";
       const flowControlFailure = !cancelled && linkEstablished;
+      if (flowControlFailure) {
+        setFlowControlError({
+          name: error instanceof DOMException || error instanceof Error ? error.name : "UnknownError",
+          message: error instanceof DOMException || error instanceof Error ? error.message.slice(0, 180) : "Unknown BLE write error",
+        });
+      }
       addBleTestEvent(cancelled ? "cancelled" : flowControlFailure ? "flow-control-error" : "connection-error");
       if (flowControlFailure) setFlowControlState("error");
       setDeviceState(cancelled ? "idle" : flowControlFailure ? "linked" : "error");
@@ -425,7 +476,7 @@ export default function TachoCommandApp() {
     const firstEventAt = bleTestEvents[0]?.at;
     const report = buildCompatibilityReport({
       createdAt: new Date().toISOString(),
-      appVersion: "0.5-credit-handshake",
+      appVersion: "0.6-adaptive-credit-write",
       locale,
       ...fieldTestProfile,
       deviceName: device?.name,
@@ -438,6 +489,11 @@ export default function TachoCommandApp() {
         diagnosticsCreditsIndications,
         clientCreditsGranted,
         serverCredits: serverCreditsReceived,
+        creditWriteCapabilities,
+        creditWriteAttempts,
+        creditWriteMethod,
+        errorName: flowControlError.name,
+        errorMessage: flowControlError.message,
       },
       connectionState: deviceState,
       sessionStartedAt: firstEventAt,
@@ -466,6 +522,10 @@ export default function TachoCommandApp() {
     setDiagnosticsCreditsIndications(false);
     setClientCreditsGranted(0);
     setServerCreditsReceived([]);
+    setCreditWriteCapabilities({ write: false, writeWithoutResponse: false });
+    setCreditWriteAttempts([]);
+    setCreditWriteMethod("not-used");
+    setFlowControlError({ name: "none", message: "none" });
     setDeviceState("idle");
     setNotice("BLE veza je bezbedno prekinuta.");
   };
@@ -791,8 +851,8 @@ export default function TachoCommandApp() {
                         ? "Tahograf je vratio 0xFF i odbio transport."
                         : flowControlState === "timeout"
                           ? "Indications su uključene, ali kredit nije stigao u roku od 6 sekundi."
-                          : flowControlState === "error"
-                            ? "Credit handshake nije uspeo; BLE veza može i dalje biti aktivna."
+                      : flowControlState === "error"
+                            ? `Credit handshake nije uspeo (${flowControlError.name}); BLE veza može i dalje biti aktivna.`
                             : flowControlState === "arming" || flowControlState === "waiting"
                               ? "U toku je standardna FIFO/Credits sekvenca."
                               : "Čeka se kontrolisani test dok vozilo stoji."}</small>
@@ -851,7 +911,7 @@ export default function TachoCommandApp() {
             </div>
 
             <div className="about-card">
-              <div><span>{t.version}</span><strong>0.5 Credit Handshake</strong></div>
+              <div><span>{t.version}</span><strong>0.6 Adaptive Credit</strong></div>
               <div><span>Izvor podataka</span><strong>{demoMode ? "Demo" : "Ručni lokalni"}</strong></div>
               <div><span>Cloud nalog</span><strong>Nije potreban</strong></div>
             </div>
