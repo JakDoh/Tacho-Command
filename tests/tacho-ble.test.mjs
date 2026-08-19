@@ -132,6 +132,7 @@ test("sanitizes read-only driver-card values without identifiers or raw bytes", 
   assert.equal(result.ready, true);
   assert.equal(result.readOnly, true);
   assert.equal(result.positiveCount, 2);
+  assert.equal(result.consentStatus, "not-observable-by-web-app");
   assert.equal(result.results[0].did, "F903");
   assert.equal(result.results[1].value, 222);
   assert.equal("rawBytes" in result.results[0], false);
@@ -211,7 +212,7 @@ test("compatibility report excludes driver and vehicle identifiers by design", (
     assert.equal(serialized.includes(`"${forbidden}"`), false);
   }
   assert.match(report.privacy, /No driver name/);
-  assert.equal(report.schema, "tachocommand-field-test-v9");
+  assert.equal(report.schema, "tachocommand-field-test-v10");
   assert.equal(report.vehicleType, "bus");
   assert.equal(report.tachoBrand, "VDO");
   assert.equal(report.sessionDurationSeconds, 60);

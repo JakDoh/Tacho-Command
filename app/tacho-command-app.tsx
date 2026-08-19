@@ -587,21 +587,44 @@ export default function TachoCommandApp() {
                 addBleTestEvent(sentEvent);
                 return Promise.race<number[] | null>([
                   response,
-                  new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 6000)),
+                  new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 10000)),
                 ]);
               };
+
+              failureStage = "diagnostic-session";
+              setDiagnosticSessionState("waiting");
+              const sessionResponse = await exchangeUds([0x10, 0x01], "diagnostic-session-sent");
+              if (!sessionResponse) {
+                addBleTestEvent("diagnostic-session-timeout");
+                setDiagnosticSessionState("timeout");
+                setNotice("TesterPresent radi, ali podrazumevana dijagnostička sesija nije odgovorila u roku od 10 sekundi. Kartica nije čitana.");
+                return;
+              }
+              const sessionHeaderValid = sessionResponse[0] === 1 && sessionResponse[1] === 1;
+              const sessionPositive = sessionHeaderValid && sessionResponse[2] === 0x50 && sessionResponse[3] === 0x01;
+              const sessionNegative = sessionHeaderValid && sessionResponse[2] === 0x7f && sessionResponse[3] === 0x10;
+              const sessionResponseType = sessionPositive ? "positive" : sessionNegative ? "negative" : "unexpected";
+              const sessionNegativeResponseCode = sessionNegative ? sessionResponse[4] ?? null : null;
+              setDiagnosticSessionResponse({
+                packetHeaderValid: sessionHeaderValid,
+                responseType: sessionResponseType,
+                responseService: sessionResponse[2] ?? null,
+                responseSubFunction: sessionPositive ? sessionResponse[3] ?? null : null,
+                negativeResponseCode: sessionNegativeResponseCode,
+              });
+              setDiagnosticSessionState(sessionResponseType);
+              if (!sessionPositive) {
+                addBleTestEvent(sessionNegative ? "diagnostic-session-negative" : "diagnostic-session-timeout");
+                setNotice(sessionNegative
+                  ? `Podrazumevana dijagnostička sesija je odbijena kodom ${sessionNegativeResponseCode ?? "?"}. Kartica nije čitana.`
+                  : "Odgovor dijagnostičke sesije nije prepoznat. Sirovi sadržaj nije sačuvan i kartica nije čitana.");
+                return;
+              }
+              addBleTestEvent("diagnostic-session-positive");
 
               failureStage = "driver-card-read";
               const definitions = [
                 { did: 0xf903, name: "driver-working-state", unit: "state" as const },
-                { did: 0xf923, name: "continuous-driving-time", unit: "minutes" as const },
-                { did: 0xf925, name: "cumulative-break-time", unit: "minutes" as const },
-                { did: 0xf927, name: "current-activity-duration", unit: "minutes" as const },
-                { did: 0xf938, name: "two-week-driving-time", unit: "minutes" as const },
-                { did: 0xf99a, name: "current-daily-driving-time", unit: "minutes" as const },
-                { did: 0xf99b, name: "current-weekly-driving-time", unit: "minutes" as const },
-                { did: 0xf9ad, name: "remaining-current-driving-time", unit: "minutes" as const },
-                { did: 0xf9c2, name: "remaining-until-next-break-or-rest", unit: "minutes" as const },
               ];
               const readResults: DriverCardReadResult[] = [];
               for (const definition of definitions) {
@@ -705,7 +728,7 @@ export default function TachoCommandApp() {
     const firstEventAt = bleTestEvents[0]?.at;
     const report = buildCompatibilityReport({
       createdAt: new Date().toISOString(),
-      appVersion: "0.11-driver-card-read",
+      appVersion: "0.12-diagnostic-session-read",
       locale,
       ...fieldTestProfile,
       deviceName: device?.name,
@@ -1219,7 +1242,7 @@ export default function TachoCommandApp() {
             </div>
 
             <div className="about-card">
-              <div><span>{t.version}</span><strong>0.11 Driver Card Read</strong></div>
+              <div><span>{t.version}</span><strong>0.12 Diagnostic Session Read</strong></div>
               <div><span>Izvor podataka</span><strong>{demoMode ? "Demo" : "Ručni lokalni"}</strong></div>
               <div><span>Cloud nalog</span><strong>Nije potreban</strong></div>
             </div>
