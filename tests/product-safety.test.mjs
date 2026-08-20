@@ -30,7 +30,7 @@ test("is installable as a portrait standalone PWA", () => {
   assert.equal(manifest.short_name, "TachoCommand");
   assert.equal(manifest.display, "standalone");
   assert.equal(manifest.orientation, "portrait-primary");
-  assert.equal(manifest.start_url, "/app");
+  assert.equal(manifest.start_url, "/field-test");
   assert.ok(manifest.icons.length > 0);
 });
 
