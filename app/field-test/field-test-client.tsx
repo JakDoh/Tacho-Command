@@ -25,7 +25,7 @@ type BleDevice = { name?: string; gatt?: { connect: () => Promise<BleServer> } }
 
 type Result = { step: string; status: string; detail?: string };
 
-const APP_VERSION = "0.17-rhmi-f211-flow-control";
+const APP_VERSION = "0.18-rhmi-f211-credit-sequence";
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
 export default function FieldTestClient() {
@@ -92,8 +92,8 @@ export default function FieldTestClient() {
       add("Flow control", "PASS", `server credit ${granted}`);
       add("Transport", "PASS", "Diagnostics FIFO + Credits + handshake");
 
-      const exchange = async (payload: readonly number[], accepts: (packet: number[]) => boolean, timeout = 5000) => {
-        await write(credits, [1]);
+      const exchange = async (payload: readonly number[], accepts: (packet: number[]) => boolean, timeout = 5000, grantResponseCredit = true) => {
+        if (grantResponseCredit) await write(credits, [1]);
         const response = new Promise<number[]>((resolve) => {
           fifoWaiter = (packet) => {
             if (!accepts(packet)) return false;
@@ -111,6 +111,7 @@ export default function FieldTestClient() {
         [0x3e, 0x00],
         (packet) => packet[0] === 1 && packet[1] === 1 && (packet[2] === 0x7e || (packet[2] === 0x7f && packet[3] === 0x3e)),
         6000,
+        false,
       );
       if (!tester) {
         add("TesterPresent", "TIMEOUT", "Nije primljen 0x7E/0x7F odgovor");
