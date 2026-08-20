@@ -19,15 +19,50 @@ interface ExecutionContext {
   passThroughOnException(): void;
 }
 
-// Image security config. SVG sources with .svg extension auto-skip the
-// optimization endpoint on the client side (served directly, no proxy).
-// To route SVGs through the optimizer (with security headers), set
-// dangerouslyAllowSVG: true in next.config.js and uncomment below:
-// const imageConfig: ImageConfig = { dangerouslyAllowSVG: true };
+const LEGACY_APP_RECOVERY_HTML = `<!doctype html>
+<html lang="sr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#08111f">
+<title>TachoCommand update</title>
+<style>html,body{margin:0;min-height:100%;background:#07101d;color:#f5f7fb;font-family:system-ui,-apple-system,sans-serif}main{min-height:100dvh;display:grid;place-items:center;padding:24px;text-align:center}h1{margin:0 0 8px}p{opacity:.8}</style>
+</head>
+<body><main><div><h1>TachoCommand</h1><p>Osvježavam aplikaciju…</p></div></main>
+<script>
+(async()=>{
+  try {
+    if ('caches' in self) {
+      const keys=await caches.keys();
+      await Promise.all(keys.filter(k=>k.startsWith('tachocommand-shell-')).map(k=>caches.delete(k)));
+    }
+    if ('serviceWorker' in navigator) {
+      const regs=await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r=>r.unregister()));
+    }
+  } catch(e) {}
+  location.replace('/field-test?recovered=016&ts='+Date.now());
+})();
+</script></body></html>`;
 
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    // Legacy PWA installs use /app as their start_url. Return a dependency-free
+    // recovery document here so a stale cache-first JS bundle cannot block cleanup.
+    if (url.pathname === "/app" && request.method === "GET") {
+      return new Response(LEGACY_APP_RECOVERY_HTML, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+          "Pragma": "no-cache",
+          "Expires": "0",
+          "Clear-Site-Data": '"cache"',
+        },
+      });
+    }
 
     if (url.pathname === "/sw.js" || url.pathname === "/manifest.webmanifest") {
       const assetResponse = await env.ASSETS.fetch(request);
