@@ -1,9 +1,9 @@
 {
-  "name": "TachoCommand — vozački cockpit",
+  "name": "TachoCommand — RHMI Field Test 0.16",
   "short_name": "TachoCommand",
-  "description": "Mobilni pomoćnik za pregled vožnje, pauza i rada.",
+  "description": "Teren test BLE transporta i Remote HMI F211 na VDO DTCO.",
   "id": "/app",
-  "start_url": "/app",
+  "start_url": "/field-test",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",

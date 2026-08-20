@@ -1,5 +1,5 @@
-import TachoCommandApp from "../tacho-command-app";
+import { redirect } from "next/navigation";
 
 export default function DriverAppPage() {
-  return <TachoCommandApp />;
+  redirect("/field-test");
 }
