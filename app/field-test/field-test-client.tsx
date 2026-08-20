@@ -12,8 +12,9 @@ import { buildOpenRhmiStartRequest, buildOpenRhmiStatusRequest, classifyOpenRhmi
 type BleCharacteristic = {
   uuid: string;
   value?: DataView | null;
-  properties?: { writeWithoutResponse?: boolean };
+  properties?: { write?: boolean; writeWithoutResponse?: boolean };
   startNotifications: () => Promise<BleCharacteristic>;
+  writeValueWithResponse?: (value: BufferSource) => Promise<void>;
   writeValueWithoutResponse?: (value: BufferSource) => Promise<void>;
   writeValue?: (value: BufferSource) => Promise<void>;
   addEventListener: (type: "characteristicvaluechanged", listener: (event: Event) => void) => void;
@@ -24,7 +25,7 @@ type BleDevice = { name?: string; gatt?: { connect: () => Promise<BleServer> } }
 
 type Result = { step: string; status: string; detail?: string };
 
-const APP_VERSION = "0.16-rhmi-f211";
+const APP_VERSION = "0.17-rhmi-f211-flow-control";
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
 export default function FieldTestClient() {
@@ -52,16 +53,21 @@ export default function FieldTestClient() {
       const fifo = chars.find((item) => item.uuid.toLowerCase() === TACHO_DIAGNOSTICS_FIFO_UUID);
       const credits = chars.find((item) => item.uuid.toLowerCase() === TACHO_DIAGNOSTICS_CREDITS_UUID);
       if (!fifo || !credits) throw new Error("FIFO/Credits nisu pronađeni");
-      add("Transport", "PASS", "Diagnostics FIFO + Credits");
-
-      let fifoWaiter: ((bytes: number[]) => void) | null = null;
+      let fifoWaiter: ((bytes: number[]) => boolean) | null = null;
       fifo.addEventListener("characteristicvaluechanged", (event) => {
         const view = (event.target as BleCharacteristic | null)?.value;
         if (!view?.byteLength || !fifoWaiter) return;
         const bytes = Array.from(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
-        const resolve = fifoWaiter;
-        fifoWaiter = null;
-        resolve(bytes);
+        if (fifoWaiter(bytes)) fifoWaiter = null;
+      });
+
+      let creditWaiter: ((credit: number) => void) | null = null;
+      credits.addEventListener("characteristicvaluechanged", (event) => {
+        const view = (event.target as BleCharacteristic | null)?.value;
+        if (!view?.byteLength || !creditWaiter) return;
+        const resolve = creditWaiter;
+        creditWaiter = null;
+        resolve(view.getUint8(0));
       });
       await credits.startNotifications();
       await fifo.startNotifications();
@@ -69,24 +75,58 @@ export default function FieldTestClient() {
 
       const write = async (characteristic: BleCharacteristic, bytes: number[]) => {
         const value = Uint8Array.from(bytes);
-        if (characteristic.writeValueWithoutResponse) return characteristic.writeValueWithoutResponse(value);
+        if (characteristic.properties?.write && characteristic.writeValueWithResponse) return characteristic.writeValueWithResponse(value);
+        if (characteristic.properties?.writeWithoutResponse && characteristic.writeValueWithoutResponse) return characteristic.writeValueWithoutResponse(value);
         if (characteristic.writeValue) return characteristic.writeValue(value);
+        if (characteristic.writeValueWithResponse) return characteristic.writeValueWithResponse(value);
+        if (characteristic.writeValueWithoutResponse) return characteristic.writeValueWithoutResponse(value);
         throw new Error("Write metoda nije dostupna");
       };
-      const exchange = async (payload: readonly number[], timeout = 5000) => {
+
+      const serverCredit = new Promise<number>((resolve) => { creditWaiter = resolve; });
+      await write(credits, [1]);
+      const granted = await Promise.race([serverCredit, sleep(4000).then(() => null)]);
+      creditWaiter = null;
+      if (granted === null) throw new Error("Server credit nije stigao");
+      if (granted === 0xff) throw new Error("DTCO je odbio flow control");
+      add("Flow control", "PASS", `server credit ${granted}`);
+      add("Transport", "PASS", "Diagnostics FIFO + Credits + handshake");
+
+      const exchange = async (payload: readonly number[], accepts: (packet: number[]) => boolean, timeout = 5000) => {
         await write(credits, [1]);
-        const response = new Promise<number[]>((resolve) => { fifoWaiter = resolve; });
+        const response = new Promise<number[]>((resolve) => {
+          fifoWaiter = (packet) => {
+            if (!accepts(packet)) return false;
+            resolve(packet);
+            return true;
+          };
+        });
         await write(fifo, [1, 1, ...payload]);
         const packet = await Promise.race([response, sleep(timeout).then(() => null)]);
         fifoWaiter = null;
         return packet;
       };
 
-      const tester = await exchange([0x3e, 0x00]);
-      if (!tester || tester[0] !== 1 || tester[1] !== 1 || tester[2] !== 0x7e) throw new Error("TesterPresent nije potvrđen");
+      const tester = await exchange(
+        [0x3e, 0x00],
+        (packet) => packet[0] === 1 && packet[1] === 1 && (packet[2] === 0x7e || (packet[2] === 0x7f && packet[3] === 0x3e)),
+        6000,
+      );
+      if (!tester) {
+        add("TesterPresent", "TIMEOUT", "Nije primljen 0x7E/0x7F odgovor");
+        return;
+      }
+      if (tester[2] === 0x7f) {
+        add("TesterPresent", "NEGATIVE", `NRC ${tester[4] ?? "?"}`);
+        return;
+      }
       add("TesterPresent", "PASS", "positive 0x7E");
 
-      const start = await exchange(buildOpenRhmiStartRequest(), 10000);
+      const start = await exchange(
+        buildOpenRhmiStartRequest(),
+        (packet) => packet[0] === 1 && packet[1] === 1 && (packet[2] === 0x71 || (packet[2] === 0x7f && packet[3] === 0x31)),
+        10000,
+      );
       if (!start) {
         add("F211 start", "TIMEOUT", "31 01 F2 11");
         return;
@@ -97,7 +137,11 @@ export default function FieldTestClient() {
 
       for (let poll = 1; poll <= 10; poll += 1) {
         await sleep(poll === 1 ? 250 : 1000);
-        const status = await exchange(buildOpenRhmiStatusRequest(), 5000);
+        const status = await exchange(
+          buildOpenRhmiStatusRequest(),
+          (packet) => packet[0] === 1 && packet[1] === 1 && (packet[2] === 0x71 || (packet[2] === 0x7f && packet[3] === 0x31)),
+          5000,
+        );
         if (!status) {
           add(`F211 status #${poll}`, "TIMEOUT");
           continue;
@@ -120,7 +164,7 @@ export default function FieldTestClient() {
   };
 
   const copy = async () => {
-    await navigator.clipboard.writeText(JSON.stringify({ schema: "tachocommand-rhmi-field-test-v1", appVersion: APP_VERSION, createdAt: new Date().toISOString(), deviceName, results, privacy: "No driver data, VIN, registration, location, card number, or raw tachograph packets are retained." }, null, 2));
+    await navigator.clipboard.writeText(JSON.stringify({ schema: "tachocommand-rhmi-field-test-v2", appVersion: APP_VERSION, createdAt: new Date().toISOString(), deviceName, results, privacy: "No driver data, VIN, registration, location, card number, or raw tachograph packets are retained." }, null, 2));
   };
 
   return (
