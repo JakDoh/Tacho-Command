@@ -24,6 +24,7 @@ type BleDevice = { name?: string; gatt?: { connect: () => Promise<BleServer> } }
 
 type Result = { step: string; status: string; detail?: string };
 
+const APP_VERSION = "0.16-rhmi-f211";
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
 export default function FieldTestClient() {
@@ -119,12 +120,13 @@ export default function FieldTestClient() {
   };
 
   const copy = async () => {
-    await navigator.clipboard.writeText(JSON.stringify({ schema: "tachocommand-rhmi-field-test-v1", createdAt: new Date().toISOString(), deviceName, results, privacy: "No driver data, VIN, registration, location, card number, or raw tachograph packets are retained." }, null, 2));
+    await navigator.clipboard.writeText(JSON.stringify({ schema: "tachocommand-rhmi-field-test-v1", appVersion: APP_VERSION, createdAt: new Date().toISOString(), deviceName, results, privacy: "No driver data, VIN, registration, location, card number, or raw tachograph packets are retained." }, null, 2));
   };
 
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: 24, fontFamily: "system-ui, sans-serif" }}>
       <h1>TachoCommand — RHMI Field Test</h1>
+      <p><strong>Verzija:</strong> {APP_VERSION}</p>
       <p>Izolovani test. Ne čita karticu i ne šalje 0x10 0x7E. Testira samo BLE transport, TesterPresent i Remote HMI F211.</p>
       <p><strong>Uređaj:</strong> {deviceName}</p>
       <button type="button" onClick={run} disabled={running} style={{ padding: "12px 18px", marginRight: 12 }}>{running ? "Test u toku…" : "Pokreni RHMI test"}</button>
