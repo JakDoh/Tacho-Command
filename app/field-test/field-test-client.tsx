@@ -7,7 +7,7 @@ import {
   TACHO_DOWNLOAD_SERVICE_UUID,
   TACHO_OPTIONAL_SERVICE_UUIDS,
 } from "../../lib/tacho-ble.js";
-import { DDP_START_COMMUNICATION_REQUEST, DDP_STOP_COMMUNICATION_REQUEST, classifyDdpPacket } from "../../lib/tacho-download.js";
+import { DDP_START_COMMUNICATION_REQUEST, DDP_START_DIAGNOSTIC_SESSION_REQUEST, classifyDdpPacket } from "../../lib/tacho-download.js";
 
 type BleCharacteristic = {
   uuid: string;
@@ -25,7 +25,7 @@ type BleDevice = { name?: string; gatt?: { connect: () => Promise<BleServer> } }
 
 type Result = { step: string; status: string; detail?: string };
 
-const APP_VERSION = "0.20-ddp-session-probe";
+const APP_VERSION = "0.21-ddp-diagnostic-session";
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
 export default function FieldTestClient() {
@@ -122,10 +122,19 @@ export default function FieldTestClient() {
       }
       add("DDP StartCommunication", "PASS", "positive SID 0xC1; key bytes EA 8F");
 
-      const closed = await exchange(DDP_STOP_COMMUNICATION_REQUEST, 0x82, true);
-      if (!closed) add("DDP StopCommunication", "TIMEOUT", "SID 0x82");
-      else if (closed.negative) add("DDP StopCommunication", "NEGATIVE", `NRC ${closed.negativeResponseCode ?? "?"}`);
-      else add("DDP StopCommunication", "PASS", "positive SID 0xC2");
+      const diagnostic = await exchange(DDP_START_DIAGNOSTIC_SESSION_REQUEST, 0x10, true);
+      if (!diagnostic) {
+        add("DDP StartDiagnosticSession", "TIMEOUT", "SID 0x10, session 0x81");
+        return;
+      }
+      if (diagnostic.negative) {
+        add("DDP StartDiagnosticSession", "NEGATIVE", `NRC ${diagnostic.negativeResponseCode ?? "?"}`);
+        return;
+      }
+      add("DDP StartDiagnosticSession", "PASS", "positive SID 0x50; session 0x81");
+
+      await write(credits, [0xff]);
+      add("Transport disconnect", "PASS", "credit 0xFF; bez dodatnog DDP zahteva");
     } catch (error) {
       add("Greška", "FAIL", error instanceof Error ? `${error.name}: ${error.message}` : "Unknown error");
     } finally {
