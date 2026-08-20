@@ -2,12 +2,11 @@
 
 import { useState } from "react";
 import {
-  TACHO_DIAGNOSTICS_CREDITS_UUID,
-  TACHO_DIAGNOSTICS_FIFO_UUID,
-  TACHO_DIAGNOSTICS_SERVICE_UUID,
+  TACHO_DOWNLOAD_CREDITS_UUID,
+  TACHO_DOWNLOAD_FIFO_UUID,
+  TACHO_DOWNLOAD_SERVICE_UUID,
   TACHO_OPTIONAL_SERVICE_UUIDS,
 } from "../../lib/tacho-ble.js";
-import { buildOpenRhmiStartRequest, buildOpenRhmiStatusRequest, classifyOpenRhmiPacket, describeRhmiStatus } from "../../lib/tacho-rhmi.js";
 
 type BleCharacteristic = {
   uuid: string;
@@ -25,7 +24,7 @@ type BleDevice = { name?: string; gatt?: { connect: () => Promise<BleServer> } }
 
 type Result = { step: string; status: string; detail?: string };
 
-const APP_VERSION = "0.18-rhmi-f211-credit-sequence";
+const APP_VERSION = "0.19-download-transport-probe";
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
 export default function FieldTestClient() {
@@ -47,19 +46,14 @@ export default function FieldTestClient() {
       if (!device.gatt) throw new Error("GATT nije dostupan");
       const server = await device.gatt.connect();
       const services = await server.getPrimaryServices();
-      const diagnostics = services.find((service) => service.uuid.toLowerCase() === TACHO_DIAGNOSTICS_SERVICE_UUID);
-      if (!diagnostics) throw new Error("Diagnostics servis nije pronađen");
-      const chars = await diagnostics.getCharacteristics();
-      const fifo = chars.find((item) => item.uuid.toLowerCase() === TACHO_DIAGNOSTICS_FIFO_UUID);
-      const credits = chars.find((item) => item.uuid.toLowerCase() === TACHO_DIAGNOSTICS_CREDITS_UUID);
-      if (!fifo || !credits) throw new Error("FIFO/Credits nisu pronađeni");
-      let fifoWaiter: ((bytes: number[]) => boolean) | null = null;
-      fifo.addEventListener("characteristicvaluechanged", (event) => {
-        const view = (event.target as BleCharacteristic | null)?.value;
-        if (!view?.byteLength || !fifoWaiter) return;
-        const bytes = Array.from(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
-        if (fifoWaiter(bytes)) fifoWaiter = null;
-      });
+      const download = services.find((service) => service.uuid.toLowerCase() === TACHO_DOWNLOAD_SERVICE_UUID);
+      if (!download) throw new Error("Download servis nije pronađen");
+      add("Download servis", "PASS", "standardni Smart Tacho 2 UUID");
+      const chars = await download.getCharacteristics();
+      const fifo = chars.find((item) => item.uuid.toLowerCase() === TACHO_DOWNLOAD_FIFO_UUID);
+      const credits = chars.find((item) => item.uuid.toLowerCase() === TACHO_DOWNLOAD_CREDITS_UUID);
+      if (!fifo || !credits) throw new Error("Download FIFO/Credits nisu pronađeni");
+      add("Download karakteristike", "PASS", "FIFO + Credits");
 
       let creditWaiter: ((credit: number) => void) | null = null;
       credits.addEventListener("characteristicvaluechanged", (event) => {
@@ -90,73 +84,7 @@ export default function FieldTestClient() {
       if (granted === null) throw new Error("Server credit nije stigao");
       if (granted === 0xff) throw new Error("DTCO je odbio flow control");
       add("Flow control", "PASS", `server credit ${granted}`);
-      add("Transport", "PASS", "Diagnostics FIFO + Credits + handshake");
-
-      const exchange = async (payload: readonly number[], accepts: (packet: number[]) => boolean, timeout = 5000, grantResponseCredit = true) => {
-        if (grantResponseCredit) await write(credits, [1]);
-        const response = new Promise<number[]>((resolve) => {
-          fifoWaiter = (packet) => {
-            if (!accepts(packet)) return false;
-            resolve(packet);
-            return true;
-          };
-        });
-        await write(fifo, [1, 1, ...payload]);
-        const packet = await Promise.race([response, sleep(timeout).then(() => null)]);
-        fifoWaiter = null;
-        return packet;
-      };
-
-      const tester = await exchange(
-        [0x3e, 0x00],
-        (packet) => packet[0] === 1 && packet[1] === 1 && (packet[2] === 0x7e || (packet[2] === 0x7f && packet[3] === 0x3e)),
-        6000,
-        false,
-      );
-      if (!tester) {
-        add("TesterPresent", "TIMEOUT", "Nije primljen 0x7E/0x7F odgovor");
-        return;
-      }
-      if (tester[2] === 0x7f) {
-        add("TesterPresent", "NEGATIVE", `NRC ${tester[4] ?? "?"}`);
-        return;
-      }
-      add("TesterPresent", "PASS", "positive 0x7E");
-
-      const start = await exchange(
-        buildOpenRhmiStartRequest(),
-        (packet) => packet[0] === 1 && packet[1] === 1 && (packet[2] === 0x71 || (packet[2] === 0x7f && packet[3] === 0x31)),
-        10000,
-      );
-      if (!start) {
-        add("F211 start", "TIMEOUT", "31 01 F2 11");
-        return;
-      }
-      const startInfo = classifyOpenRhmiPacket(start);
-      add("F211 start", startInfo.responseType === "start-positive" ? "PASS" : startInfo.responseType.toUpperCase(), startInfo.negativeResponseCode === null ? startInfo.responseType : `NRC ${startInfo.negativeResponseCode}`);
-      if (startInfo.responseType === "negative") return;
-
-      for (let poll = 1; poll <= 10; poll += 1) {
-        await sleep(poll === 1 ? 250 : 1000);
-        const status = await exchange(
-          buildOpenRhmiStatusRequest(),
-          (packet) => packet[0] === 1 && packet[1] === 1 && (packet[2] === 0x71 || (packet[2] === 0x7f && packet[3] === 0x31)),
-          5000,
-        );
-        if (!status) {
-          add(`F211 status #${poll}`, "TIMEOUT");
-          continue;
-        }
-        const info = classifyOpenRhmiPacket(status);
-        if (info.responseType === "status-positive") {
-          const name = describeRhmiStatus(info.statusCode);
-          add(`F211 status #${poll}`, "PASS", `${info.statusCode === null ? "?" : `0x${info.statusCode.toString(16).padStart(2, "0")}`} ${name}`);
-          if (name === "open" || name === "user-rejected" || name === "local-hmi-in-use" || name === "conditions-not-met") break;
-        } else {
-          add(`F211 status #${poll}`, info.responseType.toUpperCase(), info.negativeResponseCode === null ? info.responseType : `NRC ${info.negativeResponseCode}`);
-          break;
-        }
-      }
+      add("Download transport", "READY", "Handshake potvrđen; aplikacioni zahtev nije poslat");
     } catch (error) {
       add("Greška", "FAIL", error instanceof Error ? `${error.name}: ${error.message}` : "Unknown error");
     } finally {
@@ -165,16 +93,16 @@ export default function FieldTestClient() {
   };
 
   const copy = async () => {
-    await navigator.clipboard.writeText(JSON.stringify({ schema: "tachocommand-rhmi-field-test-v2", appVersion: APP_VERSION, createdAt: new Date().toISOString(), deviceName, results, privacy: "No driver data, VIN, registration, location, card number, or raw tachograph packets are retained." }, null, 2));
+    await navigator.clipboard.writeText(JSON.stringify({ schema: "tachocommand-download-field-test-v1", appVersion: APP_VERSION, createdAt: new Date().toISOString(), deviceName, results, privacy: "No driver data, VIN, registration, location, card number, or raw tachograph packets are requested or retained." }, null, 2));
   };
 
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: 24, fontFamily: "system-ui, sans-serif" }}>
-      <h1>TachoCommand — RHMI Field Test</h1>
+      <h1>TachoCommand — Download Transport Test</h1>
       <p><strong>Verzija:</strong> {APP_VERSION}</p>
-      <p>Izolovani test. Ne čita karticu i ne šalje 0x10 0x7E. Testira samo BLE transport, TesterPresent i Remote HMI F211.</p>
+      <p>Izolovani read-only korak. Potvrđuje standardni Download FIFO/Credits kanal bez slanja download komande i bez čitanja podataka kartice.</p>
       <p><strong>Uređaj:</strong> {deviceName}</p>
-      <button type="button" onClick={run} disabled={running} style={{ padding: "12px 18px", marginRight: 12 }}>{running ? "Test u toku…" : "Pokreni RHMI test"}</button>
+      <button type="button" onClick={run} disabled={running} style={{ padding: "12px 18px", marginRight: 12 }}>{running ? "Test u toku…" : "Proveri Download kanal"}</button>
       <button type="button" onClick={copy} disabled={results.length === 0} style={{ padding: "12px 18px" }}>Kopiraj rezultat</button>
       <div style={{ marginTop: 24 }}>
         {results.map((result, index) => <div key={`${result.step}-${index}`} style={{ padding: "12px 0", borderBottom: "1px solid #ccc" }}><strong>{result.step}: {result.status}</strong>{result.detail ? <div>{result.detail}</div> : null}</div>)}
