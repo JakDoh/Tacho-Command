@@ -13,6 +13,9 @@ import {
   classifyDdpPacket,
   createDdpSession,
   getDdpTeardownMessages,
+  createItsMessageAssembler,
+  parseDdpMessage,
+  pushItsPacket,
 } from "../lib/tacho-download.js";
 
 test("builds the Appendix 7 DDP open and close messages with checksums", () => {
@@ -70,4 +73,30 @@ test("classifies only addressed and checksum-valid DDP responses", () => {
   const negative = classifyDdpPacket([1, 1, 0x80, 0xf0, 0xee, 0x03, 0x7f, 0x81, 0x22, 0x83], 0x81);
   assert.equal(negative.negative, true);
   assert.equal(negative.negativeResponseCode, 0x22);
+});
+
+test("reassembles ordered multi-packet ITS messages", () => {
+  const assembler = createItsMessageAssembler();
+  assert.equal(pushItsPacket(assembler, [3, 1, 0x80, 0xf0]).status, "pending");
+  assert.equal(pushItsPacket(assembler, [0, 2, 0xee, 0x03]).status, "pending");
+  const result = pushItsPacket(assembler, [0, 3, 0xc1, 0xea, 0x8f, 0x9b]);
+  assert.equal(result.status, "complete");
+  assert.deepEqual(result.message, [0x80, 0xf0, 0xee, 0x03, 0xc1, 0xea, 0x8f, 0x9b]);
+  assert.equal(parseDdpMessage(result.message).sid, 0xc1);
+});
+
+test("rejects out-of-order ITS packets and resets the assembler", () => {
+  const assembler = createItsMessageAssembler();
+  pushItsPacket(assembler, [3, 1, 0x80]);
+  const result = pushItsPacket(assembler, [0, 3, 0xf0]);
+  assert.equal(result.status, "invalid");
+  assert.equal(result.reason, "out-of-order");
+  assert.equal(assembler.expectedPackets, 0);
+});
+
+test("rejects DDP messages with invalid length, checksum, or address", () => {
+  assert.equal(parseDdpMessage([0x80, 0xf0, 0xee, 0x03, 0xc1, 0xea, 0x8f, 0x9b]).valid, true);
+  assert.equal(parseDdpMessage([0x80, 0xf0, 0xee, 0x02, 0xc1, 0xea, 0x8f, 0x9b]).reason, "length-mismatch");
+  assert.equal(parseDdpMessage([0x80, 0xf0, 0xee, 0x03, 0xc1, 0xea, 0x8f, 0]).reason, "checksum");
+  assert.equal(parseDdpMessage([0x80, 0xee, 0xf0, 0x03, 0xc1, 0xea, 0x8f, 0x9b]).reason, "address");
 });
