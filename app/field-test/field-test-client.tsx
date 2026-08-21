@@ -7,7 +7,8 @@ import {
   TACHO_DOWNLOAD_SERVICE_UUID,
   TACHO_OPTIONAL_SERVICE_UUIDS,
 } from "../../lib/tacho-ble.js";
-import { DDP_START_COMMUNICATION_REQUEST, DDP_START_DIAGNOSTIC_SESSION_REQUEST, classifyDdpPacket } from "../../lib/tacho-download.js";
+import { createBleDdpTransport } from "../../lib/tacho-download-ble.js";
+import { runDdpCardDownload } from "../../lib/tacho-download-runner.js";
 
 type BleCharacteristic = {
   uuid: string;
@@ -25,18 +26,19 @@ type BleDevice = { name?: string; gatt?: { connect: () => Promise<BleServer> } }
 
 type Result = { step: string; status: string; detail?: string };
 
-const APP_VERSION = "0.21-ddp-diagnostic-session";
-const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+const APP_VERSION = "0.22-complete-card-download-rc";
 
 export default function FieldTestClient() {
   const [running, setRunning] = useState(false);
   const [deviceName, setDeviceName] = useState("—");
   const [results, setResults] = useState<Result[]>([]);
+  const [cardFile, setCardFile] = useState<Uint8Array<ArrayBuffer> | null>(null);
 
   const add = (step: string, status: string, detail?: string) => setResults((current) => [...current, { step, status, detail }]);
 
   const run = async () => {
     setResults([]);
+    setCardFile(null);
     setRunning(true);
     try {
       const bluetooth = (navigator as Navigator & { bluetooth?: { requestDevice: (options: { acceptAllDevices: boolean; optionalServices: readonly string[] }) => Promise<BleDevice> } }).bluetooth;
@@ -56,26 +58,6 @@ export default function FieldTestClient() {
       if (!fifo || !credits) throw new Error("Download FIFO/Credits nisu pronađeni");
       add("Download karakteristike", "PASS", "FIFO + Credits");
 
-      let fifoWaiter: ((packet: number[]) => boolean) | null = null;
-      fifo.addEventListener("characteristicvaluechanged", (event) => {
-        const view = (event.target as BleCharacteristic | null)?.value;
-        if (!view?.byteLength || !fifoWaiter) return;
-        const packet = Array.from(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
-        if (fifoWaiter(packet)) fifoWaiter = null;
-      });
-
-      let creditWaiter: ((credit: number) => void) | null = null;
-      credits.addEventListener("characteristicvaluechanged", (event) => {
-        const view = (event.target as BleCharacteristic | null)?.value;
-        if (!view?.byteLength || !creditWaiter) return;
-        const resolve = creditWaiter;
-        creditWaiter = null;
-        resolve(view.getUint8(0));
-      });
-      await credits.startNotifications();
-      await fifo.startNotifications();
-      add("Indications", "PASS");
-
       const write = async (characteristic: BleCharacteristic, bytes: number[]) => {
         const value = Uint8Array.from(bytes);
         if (characteristic.properties?.write && characteristic.writeValueWithResponse) return characteristic.writeValueWithResponse(value);
@@ -86,55 +68,27 @@ export default function FieldTestClient() {
         throw new Error("Write metoda nije dostupna");
       };
 
-      const serverCredit = new Promise<number>((resolve) => { creditWaiter = resolve; });
-      await write(credits, [1]);
-      const granted = await Promise.race([serverCredit, sleep(4000).then(() => null)]);
-      creditWaiter = null;
-      if (granted === null) throw new Error("Server credit nije stigao");
-      if (granted === 0xff) throw new Error("DTCO je odbio flow control");
-      add("Flow control", "PASS", `server credit ${granted}`);
-      add("Download transport", "READY", "Handshake potvrđen");
-
-      const exchange = async (message: readonly number[], requestSid: number, grantResponseCredit: boolean) => {
-        if (grantResponseCredit) await write(credits, [1]);
-        const response = new Promise<number[]>((resolve) => {
-          fifoWaiter = (packet) => {
-            const info = classifyDdpPacket(packet, requestSid);
-            if (!info.positive && !info.negative) return false;
-            resolve(packet);
-            return true;
-          };
-        });
-        await write(fifo, [1, 1, ...message]);
-        const packet = await Promise.race([response, sleep(6000).then(() => null)]);
-        fifoWaiter = null;
-        return packet ? classifyDdpPacket(packet, requestSid) : null;
-      };
-
-      const opened = await exchange(DDP_START_COMMUNICATION_REQUEST, 0x81, false);
-      if (!opened) {
-        add("DDP StartCommunication", "TIMEOUT", "SID 0x81");
-        return;
+      const transport = createBleDdpTransport({ fifo, credits, write, receiveWindow: 8 });
+      try {
+        await transport.start();
+        add("Indications", "PASS");
+        add("Flow control", "PASS", `server credit ${transport.ledger.serverCredits}`);
+        const result = await runDdpCardDownload(transport);
+        if (result.status === "complete" && result.cardData) {
+          const data = Uint8Array.from(result.cardData);
+          const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", data))).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+          setCardFile(data);
+          add("Kompletan download kartice", "PASS", `${data.byteLength} bajtova; SHA-256 ${digest}`);
+          add("RequestTransferExit", result.teardown.transferExitConfirmed ? "PASS" : "FAIL", "positive SID 0x77");
+          add("StopCommunication", result.teardown.stopConfirmed ? "PASS" : "FAIL", "positive SID 0xC2");
+        } else {
+          add("Kompletan download kartice", "FAIL", `${result.failure?.phase ?? "unknown"}: ${result.failure?.code ?? "unknown"}`);
+          add("Kontrolisano zatvaranje", result.teardown.stopConfirmed ? "PASS" : "INCOMPLETE", `TransferExit ${result.teardown.transferExitConfirmed ? "potvrđen" : "nepotvrđen"}; StopCommunication ${result.teardown.stopConfirmed ? "potvrđen" : "nepotvrđen"}`);
+        }
+      } catch (error) {
+        await transport.disconnect();
+        throw error;
       }
-      if (opened.negative) {
-        add("DDP StartCommunication", "NEGATIVE", `NRC ${opened.negativeResponseCode ?? "?"}`);
-        return;
-      }
-      add("DDP StartCommunication", "PASS", "positive SID 0xC1; key bytes EA 8F");
-
-      const diagnostic = await exchange(DDP_START_DIAGNOSTIC_SESSION_REQUEST, 0x10, true);
-      if (!diagnostic) {
-        add("DDP StartDiagnosticSession", "TIMEOUT", "SID 0x10, session 0x81");
-        return;
-      }
-      if (diagnostic.negative) {
-        add("DDP StartDiagnosticSession", "NEGATIVE", `NRC ${diagnostic.negativeResponseCode ?? "?"}`);
-        return;
-      }
-      add("DDP StartDiagnosticSession", "PASS", "positive SID 0x50; session 0x81");
-
-      await write(credits, [0xff]);
-      add("Transport disconnect", "PASS", "credit 0xFF; bez dodatnog DDP zahteva");
     } catch (error) {
       add("Greška", "FAIL", error instanceof Error ? `${error.name}: ${error.message}` : "Unknown error");
     } finally {
@@ -143,17 +97,28 @@ export default function FieldTestClient() {
   };
 
   const copy = async () => {
-    await navigator.clipboard.writeText(JSON.stringify({ schema: "tachocommand-download-field-test-v2", appVersion: APP_VERSION, createdAt: new Date().toISOString(), deviceName, results, privacy: "No driver data, VIN, registration, location, card number, or raw tachograph packets are requested or retained." }, null, 2));
+    await navigator.clipboard.writeText(JSON.stringify({ schema: "tachocommand-download-field-test-v3", appVersion: APP_VERSION, createdAt: new Date().toISOString(), deviceName, results, privacy: "The copied report contains no driver identity, card number, VIN, registration, location, or raw tachograph packets. Card bytes remain only in local browser memory until saved or the page is closed." }, null, 2));
+  };
+
+  const saveCard = () => {
+    if (!cardFile) return;
+    const url = URL.createObjectURL(new Blob([cardFile], { type: "application/octet-stream" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `tachocommand-card-${new Date().toISOString().replace(/[:.]/g, "-")}.ddd`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: 24, fontFamily: "system-ui, sans-serif" }}>
       <h1>TachoCommand — Download Transport Test</h1>
       <p><strong>Verzija:</strong> {APP_VERSION}</p>
-      <p>Izolovani read-only korak. Otvara i uredno zatvara dokumentovanu DDP komunikacionu sesiju bez zahteva za kartične podatke.</p>
+      <p>Razvojni read-only test kompletnog preuzimanja kartice iz slota 1. Vozilo mora stajati. Sesija se uvek zatvara kroz RequestTransferExit i StopCommunication.</p>
       <p><strong>Uređaj:</strong> {deviceName}</p>
       <button type="button" onClick={run} disabled={running} style={{ padding: "12px 18px", marginRight: 12 }}>{running ? "Test u toku…" : "Proveri DDP sesiju"}</button>
       <button type="button" onClick={copy} disabled={results.length === 0} style={{ padding: "12px 18px" }}>Kopiraj rezultat</button>
+      <button type="button" onClick={saveCard} disabled={!cardFile} style={{ padding: "12px 18px", marginLeft: 12 }}>Sačuvaj kartični fajl</button>
       <div style={{ marginTop: 24 }}>
         {results.map((result, index) => <div key={`${result.step}-${index}`} style={{ padding: "12px 0", borderBottom: "1px solid #ccc" }}><strong>{result.step}: {result.status}</strong>{result.detail ? <div>{result.detail}</div> : null}</div>)}
       </div>

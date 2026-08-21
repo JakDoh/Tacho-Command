@@ -7,6 +7,7 @@ const i18nSource = await readFile(new URL("../lib/i18n.js", import.meta.url), "u
 const truthfulSource = `${appSource}\n${i18nSource}`;
 const manifest = JSON.parse(await readFile(new URL("../public/manifest.webmanifest", import.meta.url), "utf8"));
 const serviceWorker = await readFile(new URL("../public/sw.js", import.meta.url), "utf8");
+const fieldTestSource = await readFile(new URL("../app/field-test/field-test-client.tsx", import.meta.url), "utf8");
 
 test("never ships the previous fake payment, licence, or DDD implementation", () => {
   for (const forbidden of [
@@ -37,14 +38,14 @@ test("is installable as a portrait standalone PWA", () => {
 test("offline cache is same-origin and keeps a navigation fallback", () => {
   assert.match(serviceWorker, /url\.origin !== self\.location\.origin/);
   assert.match(serviceWorker, /request\.mode === "navigate"/);
-  assert.match(serviceWorker, /caches\.match\(url\.pathname === "\/app" \? "\/app" : "\/"\)/);
+  assert.match(serviceWorker, /cached \|\| caches\.match\("\/field-test"\)/);
 });
 
 test("requests only published standard optional BLE services and keeps reports data-minimal", async () => {
   const bleSource = await readFile(new URL("../lib/tacho-ble.js", import.meta.url), "utf8");
   assert.match(bleSource, /eef90782-55dd-4388-b80b-695aba7a69b5/);
   assert.match(bleSource, /fa213def-aef4-475c-bcea-0a8d69073efc/);
-  assert.match(bleSource, /No driver name, card number, VIN, vehicle registration, location, or raw tachograph bytes/);
+  assert.match(bleSource, /No driver name, card number, VIN, vehicle registration, or location/);
   assert.match(appSource, /optionalServices: TACHO_OPTIONAL_SERVICE_UUIDS/);
   assert.match(appSource, /const creditValue = Uint8Array\.of\(1\)/);
   assert.match(appSource, /credits\.writeValueWithResponse\(creditValue\)/);
@@ -55,17 +56,28 @@ test("requests only published standard optional BLE services and keeps reports d
     "fifo.writeValueWithoutResponse(testerPresentPacket)",
     "fifo.writeValue(testerPresentPacket)",
   ]);
-  assert.match(appSource, /exchangeUds\(\s*\[0x10, 0x7e\],\s*"diagnostic-session-sent"/);
-  assert.match(appSource, /exchangeUds\(\s*\[0x22, didHigh, didLow\],\s*"driver-card-read-sent",\s*"driver-card-read-packet-observed"/);
+  assert.doesNotMatch(appSource, /exchangeUds\(\s*\[0x10, 0x7e\]/);
+  assert.match(appSource, /exchangeUds\(\s*\[0x22, didHigh, didLow\],\s*"direct-vdo-read-sent",\s*"direct-vdo-read-packet-observed"/);
   assert.doesNotMatch(appSource, /exchangeUds\(\s*\[0x10, 0x01\]/);
   assert.doesNotMatch(appSource, /diagnostic-session-skipped/);
-  assert.match(appSource, /diagnostic-session-packet-observed/);
-  assert.match(appSource, /driver-card-read-packet-observed/);
+  assert.match(appSource, /direct-vdo-read-packet-observed/);
   assert.match(appSource, /observations: exchange\.observations/);
   assert.match(appSource, /new Uint8Array\(view\.buffer, view\.byteOffset, view\.byteLength\)/);
-  assert.match(appSource, /setDriverCardReadAttempted\(true\)/);
+  assert.match(appSource, /setDirectVdoReadAttempted\(true\)/);
   assert.doesNotMatch(appSource, /exchangeUds\(\[0x31, 0x01, 0xf2, 0x11\]/);
+  assert.match(appSource, /did: 0xfd8d, name: "vdo-counter-1"/);
+  assert.match(appSource, /did: 0xfd8f, name: "vdo-counter-2"/);
   assert.match(appSource, /did: 0xf903, name: "driver-working-state"/);
+  assert.match(appSource, /did: 0xf904, name: "co-driver-working-state"/);
   assert.doesNotMatch(appSource, /did: 0xf923, name: "continuous-driving-time"/);
   assert.doesNotMatch(appSource, /did: 0xf190|did: 0xf97e|did: 0xf931/);
+});
+
+test("field candidate uses the gated DDP runner and exposes card bytes only through an explicit local save", () => {
+  assert.match(fieldTestSource, /createBleDdpTransport/);
+  assert.match(fieldTestSource, /runDdpCardDownload\(transport\)/);
+  assert.match(fieldTestSource, /result\.teardown\.transferExitConfirmed/);
+  assert.match(fieldTestSource, /result\.teardown\.stopConfirmed/);
+  assert.match(fieldTestSource, /URL\.createObjectURL\(new Blob/);
+  assert.doesNotMatch(fieldTestSource, /localStorage|sessionStorage|fetch\([^)]*cardFile/);
 });
