@@ -111,3 +111,33 @@ test("peer credit 0xFF closes pending receives without echoing a disconnect", as
   await context.transport.disconnect();
   assert.equal(context.writes.some((entry) => entry.bytes[0] === 0xff), false);
 });
+
+test("gattserverdisconnected event aborts pending receives and closes transport", async () => {
+  class MockDevice {
+    listeners = [];
+    addEventListener(type, listener) { if (type === "gattserverdisconnected") this.listeners.push(listener); }
+    disconnect() { for (const listener of this.listeners) listener(); }
+  }
+  const fifo = new MockCharacteristic();
+  const credits = new MockCharacteristic();
+  const device = new MockDevice();
+  const writes = [];
+  const transport = createBleDdpTransport({
+    device,
+    fifo,
+    credits,
+    receiveWindow: 2,
+    mtuPayload: 4,
+    creditTimeoutMs: 20,
+    async write(characteristic, bytes) { writes.push({ characteristic, bytes: [...bytes] }); },
+  });
+  const starting = transport.start();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  credits.emit([1]);
+  await starting;
+  const receiving = transport.receive(50);
+  device.disconnect();
+  assert.equal(await receiving, null);
+  assert.equal(transport.ledger.closed, true);
+  assert.equal(transport.ledger.failure, "gatt-disconnected");
+});

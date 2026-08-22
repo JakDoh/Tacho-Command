@@ -45,7 +45,7 @@ test("requests only published standard optional BLE services and keeps reports d
   const bleSource = await readFile(new URL("../lib/tacho-ble.js", import.meta.url), "utf8");
   assert.match(bleSource, /eef90782-55dd-4388-b80b-695aba7a69b5/);
   assert.match(bleSource, /fa213def-aef4-475c-bcea-0a8d69073efc/);
-  assert.match(bleSource, /No driver name, card number, VIN, vehicle registration, or location/);
+  assert.match(bleSource, /No driver name, card number, VIN, vehicle registration, location/);
   assert.match(appSource, /optionalServices: TACHO_OPTIONAL_SERVICE_UUIDS/);
   assert.match(appSource, /const creditValue = Uint8Array\.of\(1\)/);
   assert.match(appSource, /credits\.writeValueWithResponse\(creditValue\)/);
@@ -56,19 +56,17 @@ test("requests only published standard optional BLE services and keeps reports d
     "fifo.writeValueWithoutResponse(testerPresentPacket)",
     "fifo.writeValue(testerPresentPacket)",
   ]);
-  assert.doesNotMatch(appSource, /exchangeUds\(\s*\[0x10, 0x7e\]/);
-  assert.match(appSource, /exchangeUds\(\s*\[0x22, didHigh, didLow\],\s*"direct-vdo-read-sent",\s*"direct-vdo-read-packet-observed"/);
+  assert.match(appSource, /exchangeUds\(\s*\[0x10, 0x7e\],\s*"diagnostic-session-sent"/);
+  assert.match(appSource, /exchangeUds\(\s*\[0x22, didHigh, didLow\],\s*"driver-card-read-sent",\s*"driver-card-read-packet-observed"/);
   assert.doesNotMatch(appSource, /exchangeUds\(\s*\[0x10, 0x01\]/);
   assert.doesNotMatch(appSource, /diagnostic-session-skipped/);
-  assert.match(appSource, /direct-vdo-read-packet-observed/);
+  assert.match(appSource, /diagnostic-session-packet-observed/);
+  assert.match(appSource, /driver-card-read-packet-observed/);
   assert.match(appSource, /observations: exchange\.observations/);
   assert.match(appSource, /new Uint8Array\(view\.buffer, view\.byteOffset, view\.byteLength\)/);
-  assert.match(appSource, /setDirectVdoReadAttempted\(true\)/);
+  assert.match(appSource, /setDriverCardReadAttempted\(true\)/);
   assert.doesNotMatch(appSource, /exchangeUds\(\[0x31, 0x01, 0xf2, 0x11\]/);
-  assert.match(appSource, /did: 0xfd8d, name: "vdo-counter-1"/);
-  assert.match(appSource, /did: 0xfd8f, name: "vdo-counter-2"/);
   assert.match(appSource, /did: 0xf903, name: "driver-working-state"/);
-  assert.match(appSource, /did: 0xf904, name: "co-driver-working-state"/);
   assert.doesNotMatch(appSource, /did: 0xf923, name: "continuous-driving-time"/);
   assert.doesNotMatch(appSource, /did: 0xf190|did: 0xf97e|did: 0xf931/);
 });
@@ -79,5 +77,9 @@ test("field candidate uses the gated DDP runner and exposes card bytes only thro
   assert.match(fieldTestSource, /result\.teardown\.transferExitConfirmed/);
   assert.match(fieldTestSource, /result\.teardown\.stopConfirmed/);
   assert.match(fieldTestSource, /URL\.createObjectURL\(new Blob/);
+  assert.doesNotMatch(fieldTestSource, /\.download\s*=\s*`[^`]*\.ddd`/);
+  assert.match(fieldTestSource, /NOT A VALID \.DDD/);
+  assert.match(fieldTestSource, /NOT_VALIDATED/);
+  assert.match(fieldTestSource, /devModeArmed/);
   assert.doesNotMatch(fieldTestSource, /localStorage|sessionStorage|fetch\([^)]*cardFile/);
 });

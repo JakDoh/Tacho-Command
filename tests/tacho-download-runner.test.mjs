@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  DDP_REQUEST_DOWNLOAD_INTERFACE_VERSION,
   DDP_REQUEST_DRIVER_CARD_SLOT_1,
-  DDP_REQUEST_OVERVIEW,
+  DDP_REQUEST_GEN2V2_OVERVIEW,
   DDP_REQUEST_TRANSFER_EXIT,
   DDP_REQUEST_UPLOAD,
   DDP_START_COMMUNICATION_REQUEST,
@@ -21,6 +22,8 @@ const positive = {
   start: frame([0xc1, 0xea, 0x8f]),
   diagnostic: frame([0x50, 0x81]),
   upload: frame([0x75, 0x00, 0xff]),
+  interfaceVersion: frame([0x76, 0x00, 0x00, 0x01, 0x02, 0x02]),
+  overview: frame([0x76, 0x31, 0x00, 0x01, 0x11, 0x22]),
   exit: frame([0x77]),
   stop: frame([0xc2]),
 };
@@ -42,14 +45,15 @@ const successResponses = () => [
   positive.start,
   positive.diagnostic,
   positive.upload,
-  frame([0x76, 0x01, 0x00, 0x01, 0x01]),
+  positive.interfaceVersion,
+  positive.overview,
   frame([0x76, 0x06, 0x00, 0x01, ...new Array(251).fill(0x44)]),
   frame([0x76, 0x06, 0x00, 0x02, 0xaa, 0xbb]),
   positive.exit,
   positive.stop,
 ];
 
-test("runs the complete card download and confirms the ordered close", async () => {
+test("runs the complete Gen2v2 card download and confirms the ordered close", async () => {
   const transport = createTransport(successResponses());
   const result = await runDdpCardDownload(transport, { p3Ms: 0 });
   assert.equal(result.status, "complete");
@@ -60,7 +64,9 @@ test("runs the complete card download and confirms the ordered close", async () 
     DDP_START_COMMUNICATION_REQUEST,
     DDP_START_DIAGNOSTIC_SESSION_REQUEST,
     DDP_REQUEST_UPLOAD,
-    DDP_REQUEST_OVERVIEW,
+    DDP_REQUEST_DOWNLOAD_INTERFACE_VERSION,
+    buildDdpSubMessageAck(2),
+    DDP_REQUEST_GEN2V2_OVERVIEW,
     buildDdpSubMessageAck(2),
     DDP_REQUEST_DRIVER_CARD_SLOT_1,
     buildDdpSubMessageAck(2),
@@ -68,6 +74,33 @@ test("runs the complete card download and confirms the ordered close", async () 
     DDP_REQUEST_TRANSFER_EXIT,
     DDP_STOP_COMMUNICATION_REQUEST,
   ]);
+});
+
+test("rejects unsupported interface version and executes teardown", async () => {
+  const transport = createTransport([
+    positive.start,
+    positive.diagnostic,
+    positive.upload,
+    frame([0x76, 0x00, 0x00, 0x01, 0x01, 0x00]), // Gen1 version 01.00
+    positive.exit,
+    positive.stop,
+  ]);
+  const result = await runDdpCardDownload(transport, { p2Ms: 0, p3Ms: 0 });
+  assert.equal(result.status, "failed");
+  assert.equal(result.failure.phase, "download-interface-version");
+  assert.equal(result.failure.code, "unsupported-interface-version");
+  assert.deepEqual(result.teardown, { transferExitConfirmed: true, stopConfirmed: true });
+});
+
+test("rejects positive StartCommunication response with invalid parameters", async () => {
+  const transport = createTransport([
+    frame([0xc1, 0x00, 0x00]), // missing EA 8F
+    positive.stop,
+  ]);
+  const result = await runDdpCardDownload(transport, { p2Ms: 0, p3Ms: 0 });
+  assert.equal(result.status, "failed");
+  assert.equal(result.failure.phase, "start-communication");
+  assert.equal(result.failure.code, "invalid-response-parameters");
 });
 
 test("continues after response-pending without retransmitting the active request", async () => {
@@ -79,34 +112,39 @@ test("continues after response-pending without retransmitting the active request
   assert.equal(transport.sent.filter((message) => message === DDP_REQUEST_UPLOAD || JSON.stringify(message) === JSON.stringify(DDP_REQUEST_UPLOAD)).length, 1);
 });
 
-test("retries a timed-out request at most three transmissions", async () => {
-  const transport = createTransport([]);
-  const result = await runDdpCardDownload(transport, { p2Ms: 0, p3Ms: 0 });
-  assert.equal(result.status, "failed");
-  assert.equal(result.failure.phase, "start-communication");
-  assert.equal(transport.sent.length, 3);
-  assert.equal(transport.disconnected, true);
-});
-
-test("after card-transfer timeout it attempts TransferExit then StopCommunication", async () => {
+test("does not blindly retransmit driver-card request on initial timeout", async () => {
   const transport = createTransport([
     positive.start,
     positive.diagnostic,
     positive.upload,
-    frame([0x76, 0x01, 0x00, 0x01, 0x01]),
-    null,
-    null,
-    null,
+    positive.interfaceVersion,
+    positive.overview,
+    null, // timeout on initial card read
+    positive.exit,
+    positive.stop,
+  ]);
+  const result = await runDdpCardDownload(transport, { cardTimeoutMs: 1, p2Ms: 0, p3Ms: 0 });
+  assert.equal(result.status, "failed");
+  assert.equal(result.failure.phase, "driver-card-slot-1");
+  assert.equal(transport.sent.filter((m) => JSON.stringify(m) === JSON.stringify(DDP_REQUEST_DRIVER_CARD_SLOT_1)).length, 1);
+  assert.deepEqual(result.teardown, { transferExitConfirmed: true, stopConfirmed: true });
+});
+
+test("after card-transfer error it attempts TransferExit then StopCommunication", async () => {
+  const transport = createTransport([
+    positive.start,
+    positive.diagnostic,
+    positive.upload,
+    positive.interfaceVersion,
+    positive.overview,
+    frame([0x7f, 0x36, 0x22]), // negative response on card read
     positive.exit,
     positive.stop,
   ]);
   const result = await runDdpCardDownload(transport, { p2Ms: 0, pendingMs: 0, p3Ms: 0 });
   assert.equal(result.status, "failed");
   assert.equal(result.failure.phase, "driver-card-slot-1");
-  assert.deepEqual(transport.sent.slice(-5), [
-    DDP_REQUEST_DRIVER_CARD_SLOT_1,
-    DDP_REQUEST_DRIVER_CARD_SLOT_1,
-    DDP_REQUEST_DRIVER_CARD_SLOT_1,
+  assert.deepEqual(transport.sent.slice(-2), [
     DDP_REQUEST_TRANSFER_EXIT,
     DDP_STOP_COMMUNICATION_REQUEST,
   ]);
@@ -118,7 +156,8 @@ test("still sends StopCommunication when TransferExit never answers", async () =
     positive.start,
     positive.diagnostic,
     positive.upload,
-    frame([0x76, 0x01, 0x00, 0x01, 0x01]),
+    positive.interfaceVersion,
+    positive.overview,
     frame([0x7f, 0x36, 0x31]),
     null,
     null,

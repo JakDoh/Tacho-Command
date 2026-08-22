@@ -1,6 +1,8 @@
 export const DDP_START_COMMUNICATION_REQUEST: readonly number[];
 export const DDP_START_DIAGNOSTIC_SESSION_REQUEST: readonly number[];
 export const DDP_REQUEST_UPLOAD: readonly number[];
+export const DDP_REQUEST_DOWNLOAD_INTERFACE_VERSION: readonly number[];
+export const DDP_REQUEST_GEN2V2_OVERVIEW: readonly number[];
 export const DDP_REQUEST_OVERVIEW: readonly number[];
 export const DDP_REQUEST_DRIVER_CARD_SLOT_1: readonly number[];
 export const DDP_REQUEST_TRANSFER_EXIT: readonly number[];

@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   DDP_PHASES,
+  DDP_REQUEST_DOWNLOAD_INTERFACE_VERSION,
   DDP_REQUEST_DRIVER_CARD_SLOT_1,
+  DDP_REQUEST_GEN2V2_OVERVIEW,
   DDP_REQUEST_OVERVIEW,
   DDP_REQUEST_TRANSFER_EXIT,
   DDP_REQUEST_UPLOAD,
@@ -40,36 +42,53 @@ test("builds the Appendix 7 DDP open and close messages with checksums", () => {
   assert.deepEqual(DDP_STOP_COMMUNICATION_REQUEST, [0x80, 0xee, 0xf0, 0x01, 0x82, 0xe1]);
 });
 
-test("builds the complete bounded Appendix 7 card-download request sequence", () => {
+test("builds the complete bounded Appendix 7 Gen2v2 card-download request sequence", () => {
   assert.deepEqual(DDP_REQUEST_UPLOAD, [0x80, 0xee, 0xf0, 0x0a, 0x35, 0, 0, 0, 0, 0, 0xff, 0xff, 0xff, 0xff, 0x99]);
-  assert.deepEqual(DDP_REQUEST_OVERVIEW, [0x80, 0xee, 0xf0, 0x02, 0x36, 0x01, 0x97]);
+  assert.deepEqual(DDP_REQUEST_DOWNLOAD_INTERFACE_VERSION, [0x80, 0xee, 0xf0, 0x02, 0x36, 0x00, 0x96]);
+  assert.deepEqual(DDP_REQUEST_GEN2V2_OVERVIEW, [0x80, 0xee, 0xf0, 0x02, 0x36, 0x31, 0xc7]);
+  assert.equal(DDP_REQUEST_OVERVIEW, DDP_REQUEST_GEN2V2_OVERVIEW);
   assert.deepEqual(DDP_REQUEST_DRIVER_CARD_SLOT_1, [0x80, 0xee, 0xf0, 0x03, 0x36, 0x06, 0x01, 0x9e]);
   assert.deepEqual(DDP_REQUEST_TRANSFER_EXIT, [0x80, 0xee, 0xf0, 0x01, 0x37, 0x96]);
 });
 
-test("advances only through the complete ordered DDP session", () => {
+test("advances only through the complete ordered 8-step Gen2v2 DDP session", () => {
   let session = createDdpSession();
   const positives = [
-    { type: "positive", sid: 0xc1 },
-    { type: "positive", sid: 0x50 },
-    { type: "positive", sid: 0x75 },
-    { type: "positive", sid: 0x76, trep: 0x01 },
-    { type: "positive", sid: 0x76, trep: 0x06 },
+    { type: "positive", sid: 0xc1, data: [0xc1, 0xea, 0x8f] },
+    { type: "positive", sid: 0x50, data: [0x50, 0x81] },
+    { type: "positive", sid: 0x75, data: [0x75, 0x00, 0xff] },
+    { type: "positive", sid: 0x76, trep: 0x00, data: [0x76, 0x00, 0x00, 0x01, 0x02, 0x02] },
+    { type: "positive", sid: 0x76, trep: 0x31, complete: true },
+    { type: "positive", sid: 0x76, trep: 0x06, complete: true },
     { type: "positive", sid: 0x77 },
     { type: "positive", sid: 0xc2 },
   ];
   for (const event of positives) session = advanceDdpSession(session, event);
   assert.equal(session.status, "complete");
   assert.equal(session.phaseIndex, DDP_PHASES.length);
+  assert.equal(DDP_PHASES.length, 8);
+});
+
+test("rejects Gen1 overview 0x01 and wrong interface versions in Gen2v2 session", () => {
+  let session = createDdpSession();
+  session = { ...session, phaseIndex: 3 }; // download-interface-version phase
+  // wrong interface version 0x01 0x00 should not advance
+  const badVersion = advanceDdpSession(session, { type: "positive", sid: 0x76, trep: 0x00, data: [0x76, 0x00, 0x00, 0x01, 0x01, 0x00] });
+  assert.equal(badVersion.phaseIndex, 3);
+
+  session = { ...session, phaseIndex: 4 }; // gen2v2-overview phase
+  // Gen1 overview 0x01 should not advance gen2v2-overview
+  const badOverview = advanceDdpSession(session, { type: "positive", sid: 0x76, trep: 0x01, complete: true });
+  assert.equal(badOverview.phaseIndex, 4);
 });
 
 test("does not leave a transfer phase before its final sub-message", () => {
   let session = createDdpSession();
-  session = { ...session, phaseIndex: 3 };
-  session = advanceDdpSession(session, { type: "positive", sid: 0x76, trep: 0x01, complete: false });
-  assert.equal(session.phaseIndex, 3);
-  session = advanceDdpSession(session, { type: "positive", sid: 0x76, trep: 0x01, complete: true });
+  session = { ...session, phaseIndex: 4 }; // gen2v2-overview
+  session = advanceDdpSession(session, { type: "positive", sid: 0x76, trep: 0x31, complete: false });
   assert.equal(session.phaseIndex, 4);
+  session = advanceDdpSession(session, { type: "positive", sid: 0x76, trep: 0x31, complete: true });
+  assert.equal(session.phaseIndex, 5);
 });
 
 test("requires an ordered teardown after timeout and never pretends completion", () => {
@@ -79,7 +98,7 @@ test("requires an ordered teardown after timeout and never pretends completion",
   session = advanceDdpSession(session, { type: "positive", sid: 0x75 });
   session = advanceDdpSession(session, { type: "timeout" });
   assert.equal(session.status, "teardown-required");
-  assert.equal(session.failure.phase, "request-overview");
+  assert.equal(session.failure.phase, "download-interface-version");
   assert.deepEqual(getDdpTeardownMessages(session), [DDP_REQUEST_TRANSFER_EXIT, DDP_STOP_COMMUNICATION_REQUEST]);
 });
 
@@ -271,4 +290,17 @@ test("teardown retries each request three times and still attempts StopCommunica
   for (let attempt = 0; attempt < 3; attempt += 1) teardown = advanceDdpTeardown(teardown, { type: "timeout" });
   assert.equal(teardown.status, "failed");
   assert.equal(teardown.stopConfirmed, false);
+});
+
+test("assembles a transfer greater than 1 MB without memory issues or counter errors", () => {
+  const assembler = createDdpTransferAssembler(0x06);
+  const totalBlocks = 4200; // 4200 * 251 bytes = 1,054,200 bytes (> 1 MB)
+  for (let block = 1; block <= totalBlocks; block += 1) {
+    const chunk = new Array(251).fill(block & 0xff);
+    const result = pushDdpSubMessage(assembler, frame([0x76, 0x06, (block >>> 8) & 0xff, block & 0xff, ...chunk]));
+    assert.equal(result.status, "pending");
+  }
+  const finalResult = pushDdpSubMessage(assembler, frame([0x76, 0x06, ((totalBlocks + 1) >>> 8) & 0xff, (totalBlocks + 1) & 0xff, 0xaa, 0xbb]));
+  assert.equal(finalResult.status, "complete");
+  assert.equal(finalResult.payload.length, totalBlocks * 251 + 2);
 });

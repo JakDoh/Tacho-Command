@@ -9,7 +9,7 @@ test("public root is a truthful closed-beta landing and /app recovers into the f
   assert.match(landing, /ZATVORENA BETA/);
   assert.match(landing, /Kupovina se otvara nakon bete/);
   assert.match(landing, /tahograf ostaje zvanični izvor/i);
-  assert.match(appPage, /window\\.location\\.replace\\(\\`\\/field-test/);
+  assert.match(appPage, /window\.location\.replace\(`\/field-test/);
 });
 
 test("landing offers three languages and never claims iPhone support", () => {

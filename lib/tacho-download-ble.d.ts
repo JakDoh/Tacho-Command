@@ -5,6 +5,10 @@ type BleCharacteristic = {
 };
 
 export function createBleDdpTransport(input: {
+  device?: {
+    addEventListener?(type: string, listener: () => void): void;
+    removeEventListener?(type: string, listener: () => void): void;
+  };
   fifo: BleCharacteristic;
   credits: BleCharacteristic;
   write(characteristic: BleCharacteristic, bytes: number[]): Promise<void>;
