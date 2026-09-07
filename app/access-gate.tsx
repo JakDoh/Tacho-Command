@@ -65,7 +65,7 @@ export default function AccessGate({ children }: { children: ReactNode }) {
       cacheAccess(next);
       setShowActivation(false);
     } catch {
-      setMessage("Demo trenutno nije dostupan. Pokušaj ponovo.");
+      setMessage("Demo v současné době není k dispozici. Zkuste to prosím znovu.");
     } finally {
       setBusy(false);
     }
@@ -84,14 +84,14 @@ export default function AccessGate({ children }: { children: ReactNode }) {
       });
       const next = await response.json() as AccessStatus;
       if (!response.ok || next.status !== "licensed") {
-        setMessage("Kod nije važeći. Proveri slova i brojeve pa pokušaj ponovo.");
+        setMessage("Kód není platný. Zkontrolujte písmena a číslice a zkuste to znovu.");
         return;
       }
       setAccess(next);
       cacheAccess(next);
       setShowActivation(false);
     } catch {
-      setMessage("Aktivacija trenutno nije dostupna. Pokušaj ponovo.");
+      setMessage("Aktivace v současné době není k dispozici. Zkuste to prosím znovu.");
     } finally {
       setBusy(false);
     }
@@ -108,26 +108,26 @@ export default function AccessGate({ children }: { children: ReactNode }) {
     return (
       <>
         <div className="access-ribbon">
-          <span><i />{access.status === "licensed" ? "BETA LICENCA" : `DEMO • ${remaining}`}</span>
+          <span><i />{access.status === "licensed" ? "BETA LICENCE" : `DEMO • ${remaining}`}</span>
           <div className="access-ribbon-actions">
             {access.status === "active" && (
-              <button type="button" onClick={() => { setMessage(""); setShowActivation(true); }}>Aktiviraj kod</button>
+              <button type="button" onClick={() => { setMessage(""); setShowActivation(true); }}>Aktivovat kód</button>
             )}
-            <Link href="/">Sajt</Link>
+            <Link href="/">Web</Link>
           </div>
         </div>
         {showActivation && access.status === "active" && (
           <div className="access-activation-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) setShowActivation(false); }}>
             <section className="access-card access-activation-card" role="dialog" aria-modal="true" aria-labelledby="active-code-title">
-              <button className="access-close" type="button" aria-label="Zatvori" onClick={() => setShowActivation(false)}>×</button>
-              <span className="beta-badge"><i />BETA LICENCA</span>
-              <h1 id="active-code-title">Aktiviraj puni beta pristup.</h1>
-              <p>Demo neće biti prekinut ako pogrešiš kod. Nakon uspešne aktivacije aplikacija ostaje otključana na ovom telefonu.</p>
+              <button className="access-close" type="button" aria-label="Zavřít" onClick={() => setShowActivation(false)}>×</button>
+              <span className="beta-badge"><i />BETA LICENCE</span>
+              <h1 id="active-code-title">Aktivujte plný beta přístup.</h1>
+              <p>Demo nebude přerušeno, pokud zadáte chybný kód. Po úspěšné aktivaci zůstane aplikace odemčena na tomto telefonu.</p>
               <form className="activation-form" onSubmit={activate}>
-                <label htmlFor="beta-code-active">BETA AKTIVACIONI KOD</label>
+                <label htmlFor="beta-code-active">BETA AKTIVAČNÍ KÓD</label>
                 <div>
                   <input id="beta-code-active" name="code" autoComplete="off" autoCapitalize="characters" placeholder="TCB-XXXX-XXXX-XXXXX-XXXXX" required autoFocus />
-                  <button type="submit" disabled={busy}>{busy ? "…" : "Aktiviraj"}</button>
+                  <button type="submit" disabled={busy}>{busy ? "…" : "Aktivovat"}</button>
                 </div>
               </form>
               {message && <p className="access-error" role="alert">{message}</p>}
@@ -147,43 +147,43 @@ export default function AccessGate({ children }: { children: ReactNode }) {
         <strong>Tacho<span>Command</span></strong>
       </Link>
       <section className="access-card">
-        <span className="beta-badge"><i />CLOSED BETA • ANDROID</span>
+        <span className="beta-badge"><i />UZAVŘENÁ BETA • ANDROID</span>
         <h1>{
-          access.status === "expired" ? "Tvoj demo je završen." :
-          access.status === "unavailable" ? "Provera pristupa nije dostupna." :
-          access.status === "loading" ? "Proveravam pristup…" :
-          "Spreman za prvu smenu?"
+          access.status === "expired" ? "Vaše demo skončilo." :
+          access.status === "unavailable" ? "Ověření přístupu není k dispozici." :
+          access.status === "loading" ? "Ověřuji přístup…" :
+          "Připraven na první směnu?"
         }</h1>
         <p>{
           access.status === "expired"
-            ? "Hvala na testiranju. Ako si član beta grupe, unesi kod koji si dobio."
+            ? "Děkujeme za testování. Pokud jste členem beta skupiny, zadejte kód, který jste obdrželi."
             : access.status === "unavailable"
-              ? "Veza sa beta servisom trenutno nije dostupna. Aktivna aplikacija nastavlja offline samo kada je pristup ranije potvrđen."
+              ? "Spojení s beta službou momentálně není k dispozici. Aktivní aplikace pokračuje offline, pouze pokud byl přístup dříve potvrzen."
               : access.status === "loading"
-                ? "Potvrđujem demo ili beta licencu bez prikupljanja ličnih podataka."
-                : "Pokreni besplatni demo od 72 sata ili unesi beta kod koji si dobio od TachoCommand tima."
+                ? "Ověřuji demo nebo beta licenci bez shromažďování osobních údajů."
+                : "Spusťte bezplatné 72hodinové demo nebo zadejte beta kód, který jste obdrželi od týmu TachoCommand."
         }</p>
 
         {access.status === "not_started" && (
           <button className="landing-primary access-start" type="button" onClick={startTrial} disabled={busy}>
-            {busy ? "Pokrećem…" : "Pokreni 3-dnevni demo"}
+            {busy ? "Spouštím…" : "Spustit 3denní demo"}
           </button>
         )}
 
         {access.status !== "loading" && (
           <form className="activation-form" onSubmit={activate}>
-            <label htmlFor="beta-code">BETA AKTIVACIONI KOD</label>
+            <label htmlFor="beta-code">BETA AKTIVAČNÍ KÓD</label>
             <div>
               <input id="beta-code" name="code" autoComplete="off" autoCapitalize="characters" placeholder="TCB-XXXX-XXXX-XXXXX-XXXXX" required />
-              <button type="submit" disabled={busy}>{busy ? "…" : "Aktiviraj"}</button>
+              <button type="submit" disabled={busy}>{busy ? "…" : "Aktivovat"}</button>
             </div>
           </form>
         )}
 
         {message && <p className="access-error" role="alert">{message}</p>}
-        <div className="access-truth"><span>!</span><p>TachoCommand je pomoćni beta-alat. Tokom testa svako vreme proveri na zvaničnom tahografu.</p></div>
+        <div className="access-truth"><span>!</span><p>TachoCommand je pomocný beta nástroj. Během testování každou hodnotu zkontrolujte na oficiálním tachografu.</p></div>
       </section>
-      <Link className="legal-back" href="/">← Nazad na početnu</Link>
+      <Link className="legal-back" href="/">← Zpět na úvod</Link>
     </main>
   );
 }
