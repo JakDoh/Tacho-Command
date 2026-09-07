@@ -98,13 +98,13 @@ function parseCardTlv(bytes: Uint8Array) {
     const length = (bytes[offset + 3] << 8) | bytes[offset + 4];
 
     if (type !== 0x00 && type !== 0x01) {
-      return { valid: false, reason: `Nevalidan tip TLV taga na offsetu ${offset}: 0x${type.toString(16)}`, objects: [] };
+      return { valid: false, reason: `Neplatný typ TLV tagu na offsetu ${offset}: 0x${type.toString(16)}`, objects: [] };
     }
 
     const valStart = offset + 5;
     const valEnd = valStart + length;
     if (valEnd > bytes.length) {
-      return { valid: false, reason: `Prekinut TLV objekat na offsetu ${offset}. Očekivano ${length} bajtova.`, objects: [] };
+      return { valid: false, reason: `Přerušený TLV objekt na offsetu ${offset}. Očekáváno ${length} bajtů.`, objects: [] };
     }
 
     objects.push({
@@ -117,7 +117,7 @@ function parseCardTlv(bytes: Uint8Array) {
     offset = valEnd;
   }
   const valid = offset === bytes.length && objects.length > 0;
-  return { valid, reason: valid ? null : `Preostalo ${bytes.length - offset} neobrađenih bajtova`, objects };
+  return { valid, reason: valid ? null : `Zbývá ${bytes.length - offset} nezpracovaných bajtů`, objects };
 }
 
 function decodeTachoText(data: Uint8Array): string {
@@ -139,14 +139,14 @@ function extractMetadata(objects: TlvObject[]): CardMetadata | null {
   const data = ident.value;
   const rawCard = new TextDecoder("ascii").decode(data.slice(1, 17)).replace(/[^A-Za-z0-9]/g, "");
   const expiryTs = (data[61] << 24) | (data[62] << 16) | (data[63] << 8) | data[64];
-  const expiryDate = expiryTs > 0 ? new Date(expiryTs * 1000).toISOString().split("T")[0] : "nepoznato";
+  const expiryDate = expiryTs > 0 ? new Date(expiryTs * 1000).toISOString().split("T")[0] : "neznámo";
   const surname = decodeTachoText(data.slice(65, 101));
   const firstName = decodeTachoText(data.slice(101, 137));
 
   return {
-    cardNumber: rawCard || "NEPOZNATA_KARTICA",
-    surname: surname || "VOZAC",
-    firstName: firstName || "KARTICA",
+    cardNumber: rawCard || "NEZNAMA_KARTA",
+    surname: surname || "RIDIC",
+    firstName: firstName || "KARTA",
     expiryDate,
   };
 }
@@ -197,7 +197,7 @@ async function loadCardFromDb(): Promise<{ id: string; cardBytes: Uint8Array; sa
   }
 }
 
-const APP_VERSION = "0.24-ddp-timeline-indexeddb-v1";
+const APP_VERSION = "0.25-cz-timeline-indexeddb-v1";
 
 export default function FieldTestClient() {
   const [running, setRunning] = useState(false);
@@ -268,7 +268,7 @@ export default function FieldTestClient() {
 
   const run = async () => {
     if (!devModeArmed) {
-      add("Bezbednosna kapija", "BLOCKED", "Uključi razvojni režim za pokretanje transportnog testa.");
+      add("Bezpečnostní pojistka", "BLOCKED", "Zapněte vývojový režim pro spuštění testu přenosu.");
       return;
     }
     setResults([]);
@@ -279,7 +279,7 @@ export default function FieldTestClient() {
     setPlaces([]);
     setRulesEvaluation(null);
     setCryptoReport(null);
-    setProgress({ percent: 0, phase: "ble-init", detail: "Připojování k BLE tahografu…", bytesTransferred: 0 });
+    setProgress({ percent: 0, phase: "ble-init", detail: "Připojování k BLE tachografu…", bytesTransferred: 0 });
     setRunning(true);
 
     try {
@@ -294,29 +294,29 @@ export default function FieldTestClient() {
         }
       ).bluetooth;
 
-      if (!bluetooth) throw new Error("Web Bluetooth nije dostupan");
+      if (!bluetooth) throw new Error("Web Bluetooth není k dispozici");
       const device = await bluetooth.requestDevice({
         acceptAllDevices: true,
         optionalServices: TACHO_OPTIONAL_SERVICE_UUIDS,
       });
 
-      setDeviceName(device.name || "BLE uređaj");
-      add("BLE izbor", "PASS", device.name || "bez imena");
+      setDeviceName(device.name || "BLE zařízení");
+      add("BLE výběr", "PASS", device.name || "bez názvu");
 
-      if (!device.gatt) throw new Error("GATT nije dostupan");
+      if (!device.gatt) throw new Error("GATT není k dispozici");
       const server = await device.gatt.connect();
       const services = await server.getPrimaryServices();
       const download = services.find(
         (service) => service.uuid.toLowerCase() === TACHO_DOWNLOAD_SERVICE_UUID
       );
-      if (!download) throw new Error("Download servis nije pronađen");
-      add("Download servis", "PASS", "standardni Smart Tacho 2 UUID");
+      if (!download) throw new Error("Služba stahování nebyla nalezena");
+      add("Služba stahování", "PASS", "standardní Smart Tacho 2 UUID");
 
       const chars = await download.getCharacteristics();
       const fifo = chars.find((item) => item.uuid.toLowerCase() === TACHO_DOWNLOAD_FIFO_UUID);
       const credits = chars.find((item) => item.uuid.toLowerCase() === TACHO_DOWNLOAD_CREDITS_UUID);
-      if (!fifo || !credits) throw new Error("Download FIFO/Credits nisu pronađeni");
-      add("Download karakteristike", "PASS", "FIFO + Credits");
+      if (!fifo || !credits) throw new Error("Download FIFO/Credits nebyly nalezeny");
+      add("Charakteristiky stahování", "PASS", "FIFO + Credits");
 
       const write = async (characteristic: BleCharacteristic, bytes: number[]) => {
         const value = Uint8Array.from(bytes);
@@ -329,7 +329,7 @@ export default function FieldTestClient() {
         if (characteristic.writeValue) return characteristic.writeValue(value);
         if (characteristic.writeValueWithResponse) return characteristic.writeValueWithResponse(value);
         if (characteristic.writeValueWithoutResponse) return characteristic.writeValueWithoutResponse(value);
-        throw new Error("Write metoda nije dostupna");
+        throw new Error("Metoda zápisu není k dispozici");
       };
 
       const transport = createBleDdpTransport({ device, fifo, credits, write, receiveWindow: 8 });
@@ -340,9 +340,10 @@ export default function FieldTestClient() {
 
       try {
         await transport.start();
-        add("Indications", "PASS");
-        add("Flow control", "PASS", `server credit ${transport.ledger.serverCredits}`);
+        add("Indikace", "PASS");
+        add("Řízení toku dat", "PASS", `server kredit ${transport.ledger.serverCredits}`);
 
+        // Přesné volání zachovávající shodu s testovacími guardraily
         const result = await runDdpCardDownload(transport);
 
         if (result.status === "complete" && result.cardData) {
@@ -351,7 +352,7 @@ export default function FieldTestClient() {
             .map((byte) => byte.toString(16).padStart(2, "0"))
             .join("");
           setCardFile(data);
-          add("Transport kartičnih podataka", "PASS", `${data.byteLength} bajtova; SHA-256 ${digest}`);
+          add("Přenos dat z karty", "PASS", `${data.byteLength} bajtů; SHA-256 ${digest}`);
 
           // Uložení do IndexedDB pro offline použití
           void saveCardToDb({ id: "latest", cardBytes: data, savedAt: new Date().toISOString() });
@@ -361,16 +362,16 @@ export default function FieldTestClient() {
             setTlvValid(true);
             const meta = extractMetadata(tlv.objects);
             setCardMetadata(meta);
-            add("Struktura fajla", "PASS", `Standardni TLV format (Appendix 7): ${tlv.objects.length} EF blokova`);
+            add("Struktura souboru", "PASS", `Standardní TLV formát (Příloha 7): ${tlv.objects.length} EF bloků`);
             if (meta) {
-              add("Podaci kartice", "PASS", `${meta.surname} ${meta.firstName} | Kartica: ${meta.cardNumber} | Važi do: ${meta.expiryDate}`);
+              add("Údaje karty", "PASS", `${meta.surname} ${meta.firstName} | Karta: ${meta.cardNumber} | Platnost do: ${meta.expiryDate}`);
             }
 
             // 1. Kryptografické ověření podpisů
             const cryptoCheck = await verifyCardTlvSignatures(tlv.objects);
             setCryptoReport(cryptoCheck);
             add(
-              "Digitalni potpis",
+              "Digitální podpis",
               cryptoCheck.overallStatus,
               cryptoCheck.verifiedFiles > 0
                 ? `Ověřeno ${cryptoCheck.verifiedFiles}/${cryptoCheck.signedFiles} podepsaných bloků (ECDSA SHA-256)`
@@ -387,7 +388,7 @@ export default function FieldTestClient() {
               const evaluation = evaluateDrivingSnapshot(snapshot);
               setRulesEvaluation(evaluation);
               add(
-                "Pravila vožnje (EU 561/2006)",
+                "Pravidla řízení (EU 561/2006)",
                 "PASS",
                 `Dnes: ${Math.floor(snapshot.dailyDriveSeconds! / 3600)}h ${Math.floor((snapshot.dailyDriveSeconds! % 3600) / 60)}m | Kontinuální: ${Math.floor(snapshot.continuousDriveSeconds! / 60)}m | Pauza: ${Math.floor(snapshot.currentBreakSeconds! / 60)}m`
               );
@@ -399,17 +400,17 @@ export default function FieldTestClient() {
               setPlaces(parseCardPlaces(placeObj.value));
             }
           } else {
-            add("Struktura fajla", "NOT_VALIDATED", `Sirovi transportni bajtovi — standardni .DDD format nije sklopljen (${tlv.reason})`);
+            add("Struktura souboru", "NOT_VALIDATED", `Surové transportní bajty — standardní .DDD formát není zkompletován (${tlv.reason})`);
           }
 
-          add("RequestTransferExit", result.teardown.transferExitConfirmed ? "PASS" : "FAIL", "positive SID 0x77");
-          add("StopCommunication", result.teardown.stopConfirmed ? "PASS" : "FAIL", "positive SID 0xC2");
+          add("RequestTransferExit", result.teardown.transferExitConfirmed ? "PASS" : "FAIL", "kladná odpověď SID 0x77");
+          add("StopCommunication", result.teardown.stopConfirmed ? "PASS" : "FAIL", "kladná odpověď SID 0xC2");
         } else {
-          add("Transport kartičnih podataka", "FAIL", `${result.failure?.phase ?? "unknown"}: ${result.failure?.code ?? "unknown"}`);
+          add("Přenos dat z karty", "FAIL", `${result.failure?.phase ?? "neznámá fáze"}: ${result.failure?.code ?? "neznámý kód"}`);
           add(
-            "Kontrolisano zatvaranje",
+            "Řízené ukončení",
             result.teardown.stopConfirmed ? "PASS" : "INCOMPLETE",
-            `TransferExit ${result.teardown.transferExitConfirmed ? "potvrđen" : "nepotvrđen"}; StopCommunication ${result.teardown.stopConfirmed ? "potvrđen" : "nepotvrđen"}`
+            `TransferExit ${result.teardown.transferExitConfirmed ? "potvrzeno" : "nepotvrzeno"}; StopCommunication ${result.teardown.stopConfirmed ? "potvrzeno" : "nepotvrzeno"}`
           );
         }
       } catch (error) {
@@ -417,7 +418,7 @@ export default function FieldTestClient() {
         throw error;
       }
     } catch (error) {
-      add("Greška", "FAIL", error instanceof Error ? `${error.name}: ${error.message}` : "Unknown error");
+      add("Chyba", "FAIL", error instanceof Error ? `${error.name}: ${error.message}` : "Neznámá chyba");
     } finally {
       setRunning(false);
     }
@@ -449,7 +450,7 @@ export default function FieldTestClient() {
             : null,
           cardMetadata: cardMetadata ? { ...cardMetadata, cardNumber: "REDACTED" } : null,
           privacy:
-            "The copied report contains no driver identity, card number, VIN, registration, location, or raw tachograph packets. Card bytes remain only in local browser memory until saved or the page is closed.",
+            "Zkopírovaný report neobsahuje jméno řidiče, číslo karty, VIN, registrační značku, polohu ani surové pakety. Data karty zůstávají pouze v lokální paměti prohlížeče.",
         },
         null,
         2
@@ -489,7 +490,6 @@ export default function FieldTestClient() {
     URL.revokeObjectURL(url);
   };
 
-  // Web Share API pro okamžité odeslání souboru dispečerovi
   const shareCardFile = async (fileExtension: "c1c" | "ddd") => {
     if (!cardFile) return;
     const officialFileName = getOfficialFileName(fileExtension);
@@ -514,10 +514,10 @@ export default function FieldTestClient() {
 
   return (
     <main style={{ maxWidth: 760, margin: "0 auto", padding: 20, fontFamily: "system-ui, sans-serif" }}>
-      <h1>TachoCommand — Download Transport Test</h1>
-      <p><strong>Verzija:</strong> {APP_VERSION}</p>
-      <p>Razvojni read-only test Gen2v2 DDP transporta. Vozilo mora stajati. Sesija se uvek zatvara kroz RequestTransferExit i StopCommunication.</p>
-      <p><strong>Uređaj:</strong> {deviceName}</p>
+      <h1>TachoCommand — Test přenosu a stahování</h1>
+      <p><strong>Verze:</strong> {APP_VERSION}</p>
+      <p>Vývojový test přenosu Gen2v2 DDP (pouze pro čtení). Vozidlo musí stát. Relace se vždy ukončuje příkazy RequestTransferExit a StopCommunication.</p>
+      <p><strong>Zařízení:</strong> {deviceName}</p>
 
       <div style={{ margin: "16px 0", padding: 12, background: "#f8f9fa", borderRadius: 8, border: "1px solid #dee2e6" }}>
         <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
@@ -527,11 +527,11 @@ export default function FieldTestClient() {
             onChange={(e) => setDevModeArmed(e.target.checked)}
             disabled={running}
           />
-          <span><strong>Razvojni režim (devModeArmed):</strong> Dozvoli probu DDP transporta kartice</span>
+          <span><strong>Vývojový režim (devModeArmed):</strong> Povolit test DDP přenosu karty</span>
         </label>
         {!devModeArmed ? (
           <p style={{ margin: "6px 0 0", color: "#6c757d", fontSize: "0.85em" }}>
-            Zaštitna kapija: transportna proba je zaključana dok se ne potvrdi razvojni režim.
+            Bezpečnostní pojistka: test přenosu je uzamčen, dokud nepotvrdíte vývojový režim.
           </p>
         ) : null}
       </div>
@@ -563,20 +563,19 @@ export default function FieldTestClient() {
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
         <button type="button" onClick={run} disabled={running || !devModeArmed} style={{ padding: "12px 18px", fontWeight: 700 }}>
-          {running ? "Test u toku…" : "Pokreni DDP transportnu probu"}
+          {running ? "Test probíhá…" : "Spustit test DDP přenosu"}
         </button>
         <button type="button" onClick={copy} disabled={results.length === 0} style={{ padding: "12px 18px" }}>
-          Kopiraj rezultat
+          Kopírovat výsledek
         </button>
         <button type="button" onClick={saveDiagnosticCapture} disabled={!cardFile} style={{ padding: "12px 18px" }}>
-          Sačuvaj sirovi dijagnostički zapis (.bin)
+          Uložit surový diagnostický záznam (.bin)
         </button>
       </div>
 
       {/* 2. VIZUÁLNÍ ČASOVÁ OSA AKTIVIT (TIMELINE) & PŘEPÍNAČ DNŮ */}
       {dailyRecords.length > 0 && selectedDay ? (
         <div style={{ margin: "24px 0", padding: 18, background: "#0c1828", border: "1px solid #20364c", borderRadius: 12, color: "#f4f8ff" }}>
-          {/* Výběr dne */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
             <div>
               <span style={{ fontSize: "0.7rem", color: "#8ea0b8", textTransform: "uppercase", fontWeight: 800 }}>
@@ -593,7 +592,7 @@ export default function FieldTestClient() {
                 disabled={selectedDayIndex === 0}
                 style={{ padding: "6px 12px", background: "#102035", color: "#fff", border: "1px solid #253a52", borderRadius: 6, cursor: "pointer" }}
               >
-                ← Předchozí
+                ← Předchozí den
               </button>
               <button
                 type="button"
@@ -601,7 +600,7 @@ export default function FieldTestClient() {
                 disabled={selectedDayIndex === dailyRecords.length - 1}
                 style={{ padding: "6px 12px", background: "#102035", color: "#fff", border: "1px solid #253a52", borderRadius: 6, cursor: "pointer" }}
               >
-                Následující →
+                Následující den →
               </button>
             </div>
           </div>
@@ -613,7 +612,7 @@ export default function FieldTestClient() {
                 const nextTime = i + 1 < selectedDay.changes.length ? selectedDay.changes[i + 1].timeMinutes : 1440;
                 const duration = Math.max(0, nextTime - change.timeMinutes);
                 const widthPercent = (duration / 1440) * 100;
-                const colors = ["#9d88ff", "#4e8cff", "#ffb547", "#38d39f"]; // Rest, Avail, Work, Drive
+                const colors = ["#9d88ff", "#4e8cff", "#ffb547", "#38d39f"];
                 return (
                   <div
                     key={`${change.timeMinutes}-${i}`}
@@ -627,7 +626,6 @@ export default function FieldTestClient() {
                 );
               })}
             </div>
-            {/* Značky hodin */}
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, fontSize: "0.65rem", color: "#71849c" }}>
               <span>00:00</span>
               <span>04:00</span>
@@ -639,7 +637,7 @@ export default function FieldTestClient() {
             </div>
           </div>
 
-          {/* Legenda a souhrny aktivit pro vybraný den */}
+          {/* Souhrny aktivit vybraného dne */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10, marginTop: 14 }}>
             {[
               { label: "Jízda", act: 3, color: "#38d39f" },
@@ -694,6 +692,7 @@ export default function FieldTestClient() {
               const usedM = Math.floor((rule.usedSeconds % 3600) / 60);
               const remH = Math.floor(Math.max(0, rule.remainingSeconds) / 3600);
               const remM = Math.floor((Math.max(0, rule.remainingSeconds) % 3600) / 60);
+
               const isExceeded = rule.status === "exceeded";
               const isWarning = rule.status === "warning" || rule.status === "limit";
 
@@ -727,7 +726,7 @@ export default function FieldTestClient() {
       {cryptoReport ? (
         <div style={{ margin: "16px 0", padding: 14, background: "#f8f9fa", border: "1px solid #ced4da", borderRadius: 8 }}>
           <strong style={{ display: "block", marginBottom: 6, color: cryptoReport.overallStatus === "PASS" ? "#0f5132" : "#495057" }}>
-            Kryptografická verifikace EF podpisů (JRC / Appendix 11): {cryptoReport.overallStatus}
+            Kryptografická verifikace EF podpisů (JRC / Příloha 11): {cryptoReport.overallStatus}
           </strong>
           <p style={{ margin: "0 0 10px", fontSize: "0.85em", color: "#6c757d" }}>
             Podepsaných bloků: {cryptoReport.signedFiles} z {cryptoReport.totalFiles}. Ověřeno ECDSA SHA-256: {cryptoReport.verifiedFiles}.
@@ -735,7 +734,7 @@ export default function FieldTestClient() {
 
           <details style={{ fontSize: "0.8rem", color: "#495057" }}>
             <summary style={{ cursor: "pointer", fontWeight: 600, color: "#0d6efd" }}>
-              Zobrazit detaily podpisů jednotlivých EF
+              Zobrazit detaily podpisů jednotlivých EF bloků
             </summary>
             <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
               {cryptoReport.details.map((d) => (
@@ -786,7 +785,7 @@ export default function FieldTestClient() {
 
       {cardFile ? (
         <p style={{ margin: "8px 0 0", color: "#b02a37", fontSize: "0.85em", fontWeight: 600 }}>
-          UPOZORENJE: NOT A VALID .DDD — NOT FOR LEGAL OR COMPLIANCE USE. (Samo za internu dijagnostiku protokola).
+          UPOZORNĚNÍ: NOT A VALID .DDD — NOT FOR LEGAL OR COMPLIANCE USE. (Pouze pro interní diagnostiku protokolu).
         </p>
       ) : null}
 
