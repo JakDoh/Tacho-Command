@@ -6,17 +6,17 @@ const landing = await readFile(new URL("../app/landing-page.tsx", import.meta.ur
 const appPage = await readFile(new URL("../app/app/page.tsx", import.meta.url), "utf8");
 
 test("public root is a truthful closed-beta landing and /app recovers into the field test", () => {
-  assert.match(landing, /ZATVORENA BETA/);
-  assert.match(landing, /Kupovina se otvara nakon bete/);
-  assert.match(landing, /tahograf ostaje zvanični izvor/i);
+  assert.match(landing, /UZAVŘENÁ BETA/);
+  assert.match(landing, /Nákup se otevře po skončení bety/);
+  assert.match(landing, /tachograf zůstává oficiálním zdrojem/i);
   assert.match(appPage, /window\.location\.replace\(`\/field-test/);
 });
 
 test("landing offers three languages and never claims iPhone support", () => {
-  assert.match(landing, /value="sr"/);
+  assert.match(landing, /value="cs"/);
   assert.match(landing, /value="en"/);
   assert.match(landing, /value="de"/);
-  assert.match(landing, /iPhone\/Safari i stariji tahografi trenutno nisu podržani/);
+  assert.match(landing, /iPhone\/Safari a starší tachografy nejsou v současné době podporovány/);
 });
 
 test("mobile landing bypasses the failing server image optimizer", () => {
