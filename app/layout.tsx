@@ -3,9 +3,9 @@ import "./globals.css";
 import ServiceWorkerRegister from "./service-worker-register";
 
 export const metadata: Metadata = {
-  title: "TachoCommand — tvoj vozački cockpit",
+  title: "TachoCommand — tvůj řidičský cockpit",
   description:
-    "Mobilni pomoćnik za profesionalne vozače autobusa i kamiona. Pregled vožnje, pauza, smene i Smart Tacho 2 beta povezivanja.",
+    "Mobilní pomocník pro profesionální řidiče autobusů a kamionů. Přehled řízení, přestávek, směn a Smart Tacho 2 beta propojení.",
   manifest: "/manifest.webmanifest",
   applicationName: "TachoCommand",
   appleWebApp: {
@@ -33,7 +33,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="sr">
+    <html lang="cs">
       <body>
         <ServiceWorkerRegister />
         {children}
