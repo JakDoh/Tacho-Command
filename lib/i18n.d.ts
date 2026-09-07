@@ -1,4 +1,4 @@
-export type Locale = "sr" | "en" | "de";
+export type Locale = "cs" | "en" | "de";
 export type Translation = Readonly<Record<
   "driverAssistant" | "sourceDemo" | "sourceManual" | "truthNotConnected" | "truthShownData" | "truthDemo" | "truthManual" |
   "nextSafeDecision" | "inProgress" | "exceeded" | "pause" | "untilBreak" | "manualInput" | "continuousReference" | "why" |
