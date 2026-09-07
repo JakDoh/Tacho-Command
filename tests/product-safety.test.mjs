@@ -22,9 +22,9 @@ test("never ships the previous fake payment, licence, or DDD implementation", ()
 });
 
 test("labels unverifiable sources and keeps the official tachograph authoritative", () => {
-  assert.match(truthfulSource, /Nije povezano sa tahografom/);
-  assert.match(truthfulSource, /Tahograf ostaje zvanični izvor/);
-  assert.match(truthfulSource, /Sadržaj podataka još nije verifikovan/i);
+  assert.match(truthfulSource, /Není připojeno k tachografu/);
+  assert.match(truthfulSource, /Tachograf zůstává oficiálním zdrojem/);
+  assert.match(truthfulSource, /Obsah dat ještě není ověřen/i);
 });
 
 test("is installable as a portrait standalone PWA", () => {
