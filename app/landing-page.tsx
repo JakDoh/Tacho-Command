@@ -5,57 +5,57 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import TrialLauncher from "./trial-launcher";
 
-type Locale = "sr" | "en" | "de";
+type Locale = "cs" | "en" | "de";
 
 const copy = {
-  sr: {
-    nav: ["Mogućnosti", "Povezivanje", "Cena", "Pitanja"],
-    beta: "ZATVORENA BETA • ANDROID",
-    titleA: "Jasna smena.",
-    titleB: "Mirnija sledeća odluka.",
-    intro: "Mobilni cockpit za profesionalne vozače autobusa i kamiona. Tvoja vremena, pauze i status veze — bez buke i bez pretplate.",
-    start: "Pokreni 3-dnevni demo",
-    open: "Otvori aplikaciju",
-    how: "Kako se povezuje",
-    field: "TERENSKA PROVERA U TOKU",
-    fieldText: "Smart Tacho 2 Bluetooth očitavanje trenutno proveravamo na stvarnim autobusima i kamionima. Demo i ručni cockpit su dostupni; tahograf ostaje zvanični izvor.",
-    proof: [["3 DANA", "Beta demo bez kartice"], ["14,99 €", "Founders cena, jednom"], ["∞ VOZILA", "Jedna lična licenca"]],
-    featuresTitle: "Napravljeno za kabinu, ne za kancelariju.",
-    featuresText: "Najvažnije informacije su dostupne jednim pogledom i velikim komandama prilagođenim telefonu.",
+  cs: {
+    nav: ["Funkce", "Připojení", "Cena", "Dotazy"],
+    beta: "UZAVŘENÁ BETA • ANDROID",
+    titleA: "Jasná směna.",
+    titleB: "Klidnější další rozhodnutí.",
+    intro: "Mobilní cockpit pro profesionální řidiče autobusů a kamionů. Vaše časy, přestávky a stav připojení — bez rušení a bez předplatného.",
+    start: "Spustit 3denní demo",
+    open: "Otevřít aplikaci",
+    how: "Jak se připojit",
+    field: "PROBÍHÁ POLNÍ TESTOVÁNÍ",
+    fieldText: "Čtení Smart Tacho 2 přes Bluetooth aktuálně ověřujeme na skutečných autobusech a kamionech. Demo a manuální cockpit jsou k dispozici; tachograf zůstává oficiálním zdrojem.",
+    proof: [["3 DNY", "Beta demo bez karty"], ["14,99 €", "Founders cena, jednorázově"], ["∞ VOZIDEL", "Jedna osobní licence"]],
+    featuresTitle: "Vyrobeno pro kabinu, ne pro kancelář.",
+    featuresText: "Nejdůležitější informace na jeden pohled s velkými ovládacími prvky přizpůsobenými pro telefon.",
     features: [
-      ["01", "Cockpit bez buke", "Kontinuirana i dnevna vožnja, smena i pauza u jednom preglednom ekranu."],
-      ["02", "Smart Tacho 2 BLE", "Kontrolisana provera standardnih VDO i Stoneridge Bluetooth servisa."],
-      ["03", "Lokalno i privatno", "Ručne beleške ostaju na telefonu. Beta izveštaj ne sadrži ime, karticu ili registraciju."],
-      ["04", "SR • EN • DE", "Tri jezika u prvoj verziji, sa prostorom za kasnije proširenje."],
+      ["01", "Cockpit bez rušení", "Kontinuální a denní jízda, směna a přestávka na jedné přehledné obrazovce."],
+      ["02", "Smart Tacho 2 BLE", "Kontrolované ověření standardních Bluetooth služeb VDO a Stoneridge."],
+      ["03", "Lokální a soukromé", "Manuální záznamy zůstávají v telefonu. Beta report neobsahuje jméno, kartu ani registrační značku."],
+      ["04", "CS • EN • DE", "Tři jazyky v první verzi s prostorem pro budoucí rozšíření."],
     ],
-    screensTitle: "TachoCommand u vožnji.",
-    screensText: "Prvi stvarni beta ekran. Bluetooth proveru i dnevnik objavljujemo tek posle terenskog testa.",
-    screenNames: ["Cockpit", "Bluetooth provera", "Lokalni dnevnik"],
-    connectTitle: "Povezivanje bez nagađanja.",
+    screensTitle: "TachoCommand během jízdy.",
+    screensText: "První reálná beta obrazovka. Bluetooth ověření a deník zveřejníme až po polním testu.",
+    screenNames: ["Cockpit", "Bluetooth ověření", "Lokální deník"],
+    connectTitle: "Připojení bez dohadů.",
     steps: [
-      ["01", "Bezbedno parkiraj vozilo", "Bluetooth povezivanje i telefon koristi samo dok vozilo miruje."],
-      ["02", "Uključi ITS i saglasnost", "Kartica mora biti ubačena, a dozvola za lične ITS podatke uključena na tahografu."],
-      ["03", "Otvori Chrome na Androidu", "Pritisni „Poveži tahograf“ i potvrdi isti šestocifreni broj na oba ekrana."],
-      ["04", "Uporedi pre oslanjanja", "Tokom bete svako očitavanje proveravamo sa zvaničnim prikazom tahografa."],
+      ["01", "Bezpečně zaparkujte vozidlo", "Bluetooth párování a telefon používejte pouze tehdy, když vozidlo stojí."],
+      ["02", "Zapněte ITS a souhlas", "Karta musí být vložena a souhlas s osobními ITS údaji povolen na tachografu."],
+      ["03", "Otevřete Chrome na Androidu", "Klepněte na „Připojit tachograf“ a potvrďte stejné šestimístné číslo na obou displejích."],
+      ["04", "Před spolehnutím porovnejte", "Během bety každé načtení ověřujeme s oficiálním displejem tachografu."],
     ],
-    compatibility: "Početna kompatibilnost",
+    compatibility: "Počáteční kompatibilita",
     supported: "Smart Tacho 2 • Android • Chrome • HTTPS",
-    notSupported: "iPhone/Safari i stariji tahografi trenutno nisu podržani.",
-    priceKicker: "FOUNDERS PONUDA",
-    priceTitle: "Jedna kupovina. Bez pretplate.",
-    priceNote: "Cena se otključava tek posle uspešnog terenskog i pravnog prolaza.",
-    priceBullets: ["Jedan vozač", "Do dva lična telefona", "Neograničeno kompatibilnih vozila", "Osnovna ažuriranja uključena"],
-    locked: "Kupovina se otvara nakon bete",
-    demoTitle: "Prvo proveri u svojoj smeni.",
-    demoText: "Tri dana punog beta pristupa bez platne kartice i bez automatske naplate.",
-    faqTitle: "Kratko i pošteno.",
+    notSupported: "iPhone/Safari a starší tachografy nejsou v současné době podporovány.",
+    priceKicker: "FOUNDERS NABÍDKA",
+    priceTitle: "Jeden nákup. Žádné předplatné.",
+    priceNote: "Cena se odemkne až po úspěšném polním a právním ověření.",
+    priceBullets: ["Jeden řidič", "Až dva osobní telefony", "Neomezeně kompatibilních vozidel", "Základní aktualizace v ceně"],
+    locked: "Nákup se otevře po skončení bety",
+    demoTitle: "Nejprve vyzkoušejte ve své směně.",
+    demoText: "Tři dny plného beta přístupu bez platební karty a bez automatických plateb.",
+    faqTitle: "Stručně a na rovinu.",
     faqs: [
-      ["Da li menjanjem autobusa gubim licencu?", "Ne. Lična licenca prati vozača, ne vozilo. Možeš povezivati neograničen broj kompatibilnih autobusa i kamiona."],
-      ["Da li aplikacija menja tahograf?", "Ne. TachoCommand je pomoćni prikaz. Ne menja, ne potpisuje i ne zamenjuje podatke tahografa ili kartice."],
-      ["Da li radi na iPhone-u?", "Ne u prvoj verziji. Web Bluetooth trenutno zahteva podržani Android pregledač, prvenstveno Chrome."],
-      ["Šta se šalje u beta izveštaju?", "Verzija aplikacije, telefon/pregledač, stanje veze i pronađeni servisni UUID-ovi. Bez imena, broja kartice, registracije, lokacije i sirovih podataka."],
+      ["Ztratím při změně autobusu licenci?", "Ne. Osobní licence je vázána na řidiče, nikoli na vozidlo. Můžete připojit neomezený počet kompatibilních autobusů a kamionů."],
+      ["Nahrazuje aplikace tachograf?", "Ne. TachoCommand je pomocné zobrazení. Neupravuje, nepodepisuje ani nenahrazuje data tachografu nebo karty řidiče."],
+      ["Funguje na iPhone?", "V první verzi ne. Web Bluetooth v současnosti vyžaduje podporovaný prohlížeč na Androidu, primárně Chrome."],
+      ["Co se odesílá v beta hlášení?", "Verze aplikace, telefon/prohlížeč, stav připojení a nalezené UUID služeb. Žádné jméno, číslo karty, SPZ, poloha ani surová data."],
     ],
-    footer: "Pomoćni alat za profesionalne vozače. Tahograf i važeći propisi ostaju merodavni.",
+    footer: "Pomocný nástroj pro profesionální řidiče. Tachograf a platné předpisy zůstávají závazné.",
   },
   en: {
     nav: ["Features", "Connection", "Price", "Questions"],
@@ -73,7 +73,7 @@ const copy = {
       ["01", "Quiet cockpit", "Continuous and daily driving, shift and break in one focused screen."],
       ["02", "Smart Tacho 2 BLE", "Controlled checks of standard VDO and Stoneridge Bluetooth services."],
       ["03", "Local and private", "Manual notes stay on the phone. Beta reports exclude personal identifiers."],
-      ["04", "SR • EN • DE", "Three launch languages with room to expand later."],
+      ["04", "CS • EN • DE", "Three launch languages with room to expand later."],
     ],
     screensTitle: "TachoCommand on shift.", screensText: "The first real beta screen. Bluetooth and log captures follow only after field testing.", screenNames: ["Cockpit", "Bluetooth check", "Local log"],
     connectTitle: "Connect without guesswork.",
@@ -112,7 +112,7 @@ const copy = {
       ["01", "Ruhiges Cockpit", "Ununterbrochene und tägliche Lenkzeit, Schicht und Pause auf einem Bildschirm."],
       ["02", "Smart Tacho 2 BLE", "Kontrollierte Prüfung standardisierter VDO- und Stoneridge-Bluetooth-Dienste."],
       ["03", "Lokal und privat", "Manuelle Notizen bleiben auf dem Telefon. Beta-Berichte enthalten keine Identifikatoren."],
-      ["04", "SR • EN • DE", "Drei Sprachen zum Start, später erweiterbar."],
+      ["04", "CS • EN • DE", "Drei Sprachen zum Start, später erweiterbar."],
     ],
     screensTitle: "TachoCommand im Einsatz.", screensText: "Der erste echte Beta-Bildschirm. Bluetooth und Protokoll folgen erst nach dem Praxistest.", screenNames: ["Cockpit", "Bluetooth-Prüfung", "Lokales Protokoll"],
     connectTitle: "Verbinden ohne Rätselraten.",
@@ -138,14 +138,14 @@ const copy = {
 } as const;
 
 export default function LandingPage() {
-  const [locale, setLocale] = useState<Locale>("sr");
+  const [locale, setLocale] = useState<Locale>("cs");
 
   useEffect(() => {
     const saved = window.localStorage.getItem("tachocommand.locale");
     const browser = navigator.language.toLowerCase();
-    const next: Locale = saved === "de" || saved === "en" || saved === "sr"
+    const next: Locale = saved === "de" || saved === "en" || saved === "cs"
       ? saved
-      : browser.startsWith("de") ? "de" : browser.startsWith("en") ? "en" : "sr";
+      : browser.startsWith("de") ? "de" : browser.startsWith("en") ? "en" : "cs";
     const timeout = window.setTimeout(() => setLocale(next), 0);
     return () => window.clearTimeout(timeout);
   }, []);
@@ -154,17 +154,17 @@ export default function LandingPage() {
   const changeLocale = (next: Locale) => {
     setLocale(next);
     window.localStorage.setItem("tachocommand.locale", next);
-    document.documentElement.lang = next === "sr" ? "sr-Latn" : next;
+    document.documentElement.lang = next;
   };
 
   return (
     <main className="landing-shell">
       <header className="landing-nav">
-        <a className="landing-brand" href="#top" aria-label="TachoCommand početna">
+        <a className="landing-brand" href="#top" aria-label="TachoCommand úvod">
           <span className="landing-logo">TC</span>
           <strong>Tacho<span>Command</span></strong>
         </a>
-        <nav aria-label="Landing navigacija">
+        <nav aria-label="Landing navigace">
           <a href="#features">{t.nav[0]}</a>
           <a href="#connect">{t.nav[1]}</a>
           <a href="#price">{t.nav[2]}</a>
@@ -172,9 +172,9 @@ export default function LandingPage() {
         </nav>
         <div className="landing-actions">
           <label className="landing-language">
-            <span className="sr-only">Jezik</span>
+            <span className="sr-only">Jazyk</span>
             <select value={locale} onChange={(event) => changeLocale(event.target.value as Locale)}>
-              <option value="sr">SR</option>
+              <option value="cs">CS</option>
               <option value="en">EN</option>
               <option value="de">DE</option>
             </select>
@@ -199,18 +199,18 @@ export default function LandingPage() {
           </aside>
         </div>
 
-        <div className="hero-phone-wrap" aria-label="TachoCommand aplikacija">
+        <div className="hero-phone-wrap" aria-label="TachoCommand aplikace">
           <div className="hero-phone-halo" />
           <div className="hero-phone">
             <div className="phone-speaker" />
             <Image src="/screenshots/cockpit.webp" alt="TachoCommand cockpit" width={520} height={725} priority unoptimized />
           </div>
           <span className="floating-chip chip-top"><i />BLE READY</span>
-          <span className="floating-chip chip-bottom">SR • EN • DE</span>
+          <span className="floating-chip chip-bottom">CS • EN • DE</span>
         </div>
       </section>
 
-      <section className="proof-strip" aria-label="Ponuda">
+      <section className="proof-strip" aria-label="Nabídka">
         {t.proof.map(([value, label]) => <div key={value}><strong>{value}</strong><span>{label}</span></div>)}
       </section>
 
@@ -242,7 +242,7 @@ export default function LandingPage() {
           </figure>
           {t.screenNames.slice(1).map((name, index) => (
             <figure key={name}>
-              <div className="screen-frame screen-placeholder" aria-label={`${name} — posle terenskog testa`}>
+              <div className="screen-frame screen-placeholder" aria-label={`${name} — po polním testu`}>
                 <span>FIELD TEST</span>
                 <strong>{name}</strong>
                 <i>→</i>
@@ -279,7 +279,7 @@ export default function LandingPage() {
             <h2>{t.priceTitle}</h2>
             <p>{t.priceNote}</p>
           </div>
-          <div className="price-value"><strong>14,99</strong><span>€</span><small>JEDNOM</small></div>
+          <div className="price-value"><strong>14,99</strong><span>€</span><small>JEDNORÁZOVĚ</small></div>
           <ul>{t.priceBullets.map((item) => <li key={item}><span>✓</span>{item}</li>)}</ul>
           <button type="button" disabled>{t.locked}</button>
         </div>
@@ -299,7 +299,7 @@ export default function LandingPage() {
       <footer className="landing-footer">
         <div className="landing-brand"><span className="landing-logo">TC</span><strong>Tacho<span>Command</span></strong></div>
         <p>{t.footer}</p>
-        <div><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><Link href="/impressum">Impressum</Link></div>
+        <div><Link href="/privacy">Soukromí</Link><Link href="/terms">Podmínky</Link><Link href="/impressum">Impressum</Link></div>
       </footer>
     </main>
   );
