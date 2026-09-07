@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   TACHO_DOWNLOAD_CREDITS_UUID,
   TACHO_DOWNLOAD_FIFO_UUID,
@@ -12,8 +12,18 @@ import { runDdpCardDownload } from "../../lib/tacho-download-runner.js";
 import {
   evaluateDrivingSnapshot,
   type DrivingEvaluation,
-  type DrivingSnapshot,
 } from "../../lib/tacho-rules.js";
+import {
+  calculateDrivingSnapshotFromCard,
+  parseDriverActivityData,
+  parseCardPlaces,
+  type DailyActivityRecord,
+  type PlaceRecord,
+} from "../../lib/tacho-activity-parser.js";
+import {
+  verifyCardTlvSignatures,
+  type CryptoReport,
+} from "../../lib/tacho-crypto.js";
 
 type BleCharacteristic = {
   uuid: string;
@@ -50,23 +60,6 @@ type CardMetadata = {
   surname: string;
   firstName: string;
   expiryDate: string;
-};
-
-type SignatureVerificationDetail = {
-  fid: number;
-  name: string;
-  status: "VERIFIED" | "NOT_VALIDATED" | "CORRUPTED" | "UNSIGNED";
-  hash: string;
-  signatureLength: number;
-  detail: string;
-};
-
-type CryptoReport = {
-  overallStatus: "PASS" | "NOT_VALIDATED" | "FAIL";
-  totalFiles: number;
-  signedFiles: number;
-  verifiedFiles: number;
-  details: SignatureVerificationDetail[];
 };
 
 type ProgressState = {
@@ -159,289 +152,52 @@ function extractMetadata(objects: TlvObject[]): CardMetadata | null {
 }
 
 // ---------------------------------------------------------------------------
-// PARSER AKTIVITETŮ ŘIDIČE (EF 0x0504)
+// INDEXED DB PERSISTENCE (ZACHOVÁNÍ DAT PO ZAVŘENÍ STRÁNKY)
 // ---------------------------------------------------------------------------
-type ActivityChange = {
-  slot: number;
-  drivingStatus: number;
-  cardStatus: number;
-  activity: number; // 0 = rest, 1 = available, 2 = work, 3 = drive
-  timeMinutes: number; // 0..1439
-};
+const DB_NAME = "tachocommand_field_db";
+const STORE_NAME = "saved_card";
 
-type DailyActivityRecord = {
-  date: Date;
-  timestamp: number;
-  presenceCounter: number;
-  dayDistanceKm: number;
-  changes: ActivityChange[];
-};
-
-function parseActivityChangeWord(word: number): ActivityChange {
-  return {
-    slot: (word >>> 15) & 0x01,
-    drivingStatus: (word >>> 14) & 0x01,
-    cardStatus: (word >>> 13) & 0x01,
-    activity: (word >>> 11) & 0x03,
-    timeMinutes: word & 0x07ff,
-  };
-}
-
-function parseDriverActivityData(bytes: Uint8Array): DailyActivityRecord[] {
-  if (bytes.length < 8) return [];
-  const records: DailyActivityRecord[] = [];
-  let offset = 8; // přeskočit oldestUpdate (4B) a newestUpdate (4B)
-
-  while (offset + 12 <= bytes.length) {
-    const recordLength = (bytes[offset + 2] << 8) | bytes[offset + 3];
-    if (recordLength < 12 || offset + recordLength > bytes.length) break;
-
-    const timestamp =
-      (bytes[offset + 4] << 24) |
-      (bytes[offset + 5] << 16) |
-      (bytes[offset + 6] << 8) |
-      bytes[offset + 7];
-    const presenceCounter = (bytes[offset + 8] << 8) | bytes[offset + 9];
-    const dayDistanceKm = (bytes[offset + 10] << 8) | bytes[offset + 11];
-
-    const changeCount = Math.floor((recordLength - 12) / 2);
-    const changes: ActivityChange[] = [];
-
-    for (let i = 0; i < changeCount; i++) {
-      const idx = offset + 12 + i * 2;
-      const word = (bytes[idx] << 8) | bytes[idx + 1];
-      changes.push(parseActivityChangeWord(word));
+function openFieldDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (!("indexedDB" in window)) {
+      reject(new Error("IndexedDB není podporována"));
+      return;
     }
-
-    changes.sort((a, b) => a.timeMinutes - b.timeMinutes);
-
-    records.push({
-      date: new Date(timestamp * 1000),
-      timestamp,
-      presenceCounter,
-      dayDistanceKm,
-      changes,
-    });
-
-    offset += recordLength;
-  }
-
-  return records.sort((a, b) => a.timestamp - b.timestamp);
-}
-
-function calculateDrivingSnapshotFromCard(records: DailyActivityRecord[]): DrivingSnapshot {
-  if (records.length === 0) {
-    return {
-      continuousDriveSeconds: 0,
-      dailyDriveSeconds: 0,
-      weeklyDriveSeconds: 0,
-      fortnightlyDriveSeconds: 0,
-      currentBreakSeconds: 0,
-      previousSplitBreakSeconds: 0,
-      useDailyExtension: false,
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: "id" });
+      }
     };
-  }
-
-  const latestDay = records[records.length - 1];
-  let dailyDriveMinutes = 0;
-
-  for (let i = 0; i < latestDay.changes.length; i++) {
-    const current = latestDay.changes[i];
-    const nextTime = i + 1 < latestDay.changes.length ? latestDay.changes[i + 1].timeMinutes : 1440;
-    const duration = Math.max(0, nextTime - current.timeMinutes);
-    if (current.activity === 3) {
-      dailyDriveMinutes += duration;
-    }
-  }
-
-  let continuousDriveMinutes = 0;
-  let currentBreakMinutes = 0;
-  let previousSplitBreakMinutes = 0;
-  let breakCompleted = false;
-
-  for (let i = latestDay.changes.length - 1; i >= 0; i--) {
-    const current = latestDay.changes[i];
-    const nextTime = i + 1 < latestDay.changes.length ? latestDay.changes[i + 1].timeMinutes : 1440;
-    const duration = Math.max(0, nextTime - current.timeMinutes);
-
-    if (!breakCompleted) {
-      if (current.activity === 0 || current.activity === 1) {
-        if (currentBreakMinutes === 0) {
-          currentBreakMinutes = duration;
-        } else if (previousSplitBreakMinutes === 0 && duration >= 15) {
-          previousSplitBreakMinutes = duration;
-        }
-        if (currentBreakMinutes >= 45 || (previousSplitBreakMinutes >= 15 && currentBreakMinutes >= 30)) {
-          breakCompleted = true;
-        }
-      } else if (current.activity === 3) {
-        continuousDriveMinutes += duration;
-      }
-    } else {
-      break;
-    }
-  }
-
-  const nowTs = latestDay.timestamp;
-  const oneWeekAgo = nowTs - 7 * 86400;
-  const twoWeeksAgo = nowTs - 14 * 86400;
-
-  let weeklyDriveMinutes = 0;
-  let fortnightlyDriveMinutes = 0;
-
-  for (const day of records) {
-    if (day.timestamp >= twoWeeksAgo) {
-      let dayDriving = 0;
-      for (let i = 0; i < day.changes.length; i++) {
-        const c = day.changes[i];
-        const next = i + 1 < day.changes.length ? day.changes[i + 1].timeMinutes : 1440;
-        if (c.activity === 3) {
-          dayDriving += next - c.timeMinutes;
-        }
-      }
-      fortnightlyDriveMinutes += dayDriving;
-      if (day.timestamp >= oneWeekAgo) {
-        weeklyDriveMinutes += dayDriving;
-      }
-    }
-  }
-
-  return {
-    continuousDriveSeconds: continuousDriveMinutes * 60,
-    dailyDriveSeconds: dailyDriveMinutes * 60,
-    weeklyDriveSeconds: weeklyDriveMinutes * 60,
-    fortnightlyDriveSeconds: fortnightlyDriveMinutes * 60,
-    currentBreakSeconds: currentBreakMinutes * 60,
-    previousSplitBreakSeconds: previousSplitBreakMinutes * 60,
-    useDailyExtension: dailyDriveMinutes * 60 > 9 * 3600,
-  };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
 }
 
-// ---------------------------------------------------------------------------
-// KRYPTOGRAFICKÁ KONTROLA PODPISŮ EF BLOKŮ (APPENDIX 11 / JRC PKI)
-// ---------------------------------------------------------------------------
-async function verifyCardTlvSignatures(objects: TlvObject[]): Promise<CryptoReport> {
-  const details: SignatureVerificationDetail[] = [];
-  let validCount = 0;
-  let totalSigned = 0;
-
-  let cardPublicKey: CryptoKey | null = null;
-  const certObj = objects.find((o) => o.fid === 0x050e && !o.isSignature);
-
-  if (certObj && certObj.value.length >= 65) {
-    try {
-      const pubKeyBytes = certObj.value.slice(-65);
-      if (pubKeyBytes[0] === 0x04) {
-        cardPublicKey = await crypto.subtle.importKey(
-          "raw",
-          pubKeyBytes,
-          { name: "ECDSA", namedCurve: "P-256" },
-          false,
-          ["verify"]
-        );
-      }
-    } catch {
-      cardPublicKey = null;
-    }
-  }
-
-  for (let i = 0; i < objects.length; i++) {
-    const current = objects[i];
-    if (current.isSignature) continue;
-
-    const next = objects[i + 1];
-    const hasSignature = next && next.isSignature && next.fid === current.fid;
-
-    const hashBuffer = await crypto.subtle.digest("SHA-256", current.value);
-    const hashHex = Array.from(new Uint8Array(hashBuffer))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
-
-    if (!hasSignature) {
-      details.push({
-        fid: current.fid,
-        name: current.name,
-        status: "UNSIGNED",
-        hash: hashHex,
-        signatureLength: 0,
-        detail: "Soubor bez digitálního podpisu",
-      });
-      continue;
-    }
-
-    totalSigned++;
-    const sigBytes = next.value;
-
-    if (!cardPublicKey) {
-      details.push({
-        fid: current.fid,
-        name: current.name,
-        status: "NOT_VALIDATED",
-        hash: hashHex,
-        signatureLength: sigBytes.length,
-        detail: `Podpis přítomen (${sigBytes.length} B), SHA-256: ${hashHex.slice(0, 16)}… (Ověření autority vyžaduje JRC ERCA klíč)`,
-      });
-      continue;
-    }
-
-    try {
-      const p1363Sig = sigBytes.length === 64 ? sigBytes : sigBytes.slice(-64);
-      const isOk = await crypto.subtle.verify(
-        { name: "ECDSA", hash: "SHA-256" },
-        cardPublicKey,
-        p1363Sig,
-        current.value
-      );
-
-      if (isOk) {
-        validCount++;
-        details.push({
-          fid: current.fid,
-          name: current.name,
-          status: "VERIFIED",
-          hash: hashHex,
-          signatureLength: sigBytes.length,
-          detail: "ECDSA SHA-256 digitální podpis je platný a integrita potvrzena",
-        });
-      } else {
-        details.push({
-          fid: current.fid,
-          name: current.name,
-          status: "CORRUPTED",
-          hash: hashHex,
-          signatureLength: sigBytes.length,
-          detail: "Digitální podpis neodpovídá obsahu EF (soubor byl změněn)",
-        });
-      }
-    } catch {
-      details.push({
-        fid: current.fid,
-        name: current.name,
-        status: "NOT_VALIDATED",
-        hash: hashHex,
-        signatureLength: sigBytes.length,
-        detail: "Podpis přítomen, formát vyžaduje certifikační řetězec členského státu",
-      });
-    }
-  }
-
-  const overallStatus =
-    validCount === totalSigned && totalSigned > 0
-      ? "PASS"
-      : validCount > 0
-        ? "PASS"
-        : "NOT_VALIDATED";
-
-  return {
-    overallStatus,
-    totalFiles: objects.filter((o) => !o.isSignature).length,
-    signedFiles: totalSigned,
-    verifiedFiles: validCount,
-    details,
-  };
+async function saveCardToDb(record: { id: string; cardBytes: Uint8Array; savedAt: string }) {
+  try {
+    const db = await openFieldDb();
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).put(record);
+  } catch {}
 }
 
-const APP_VERSION = "0.23-ddp-rules-progress-v1";
+async function loadCardFromDb(): Promise<{ id: string; cardBytes: Uint8Array; savedAt: string } | null> {
+  try {
+    const db = await openFieldDb();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const req = tx.objectStore(STORE_NAME).get("latest");
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+const APP_VERSION = "0.24-ddp-timeline-indexeddb-v1";
 
 export default function FieldTestClient() {
   const [running, setRunning] = useState(false);
@@ -450,12 +206,17 @@ export default function FieldTestClient() {
   const [cardFile, setCardFile] = useState<Uint8Array<ArrayBuffer> | null>(null);
   const [cardMetadata, setCardMetadata] = useState<CardMetadata | null>(null);
   const [tlvValid, setTlvValid] = useState(false);
+
   const [progress, setProgress] = useState<ProgressState>({
     percent: 0,
     phase: "idle",
     detail: "Připraven ke startu",
     bytesTransferred: 0,
   });
+
+  const [dailyRecords, setDailyRecords] = useState<DailyActivityRecord[]>([]);
+  const [places, setPlaces] = useState<PlaceRecord[]>([]);
+  const [selectedDayIndex, setSelectedDayIndex] = useState<number>(0);
   const [rulesEvaluation, setRulesEvaluation] = useState<DrivingEvaluation | null>(null);
   const [cryptoReport, setCryptoReport] = useState<CryptoReport | null>(null);
 
@@ -469,6 +230,42 @@ export default function FieldTestClient() {
   const add = (step: string, status: string, detail?: string) =>
     setResults((current) => [...current, { step, status, detail }]);
 
+  // Obnovení dříve stažených dat z IndexedDB po načtení stránky
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const saved = await loadCardFromDb();
+      if (saved && !cancelled && saved.cardBytes) {
+        const data = saved.cardBytes;
+        setCardFile(data);
+        const tlv = parseCardTlv(data);
+        if (tlv.valid) {
+          setTlvValid(true);
+          const meta = extractMetadata(tlv.objects);
+          setCardMetadata(meta);
+
+          const actObj = tlv.objects.find((o) => o.fid === 0x0504 && !o.isSignature);
+          if (actObj) {
+            const records = parseDriverActivityData(actObj.value);
+            setDailyRecords(records);
+            setSelectedDayIndex(Math.max(0, records.length - 1));
+            setRulesEvaluation(evaluateDrivingSnapshot(calculateDrivingSnapshotFromCard(records)));
+          }
+
+          const placeObj = tlv.objects.find((o) => o.fid === 0x0506 && !o.isSignature);
+          if (placeObj) {
+            setPlaces(parseCardPlaces(placeObj.value));
+          }
+
+          void verifyCardTlvSignatures(tlv.objects).then((rep) => setCryptoReport(rep));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const run = async () => {
     if (!devModeArmed) {
       add("Bezbednosna kapija", "BLOCKED", "Uključi razvojni režim za pokretanje transportnog testa.");
@@ -478,6 +275,8 @@ export default function FieldTestClient() {
     setCardFile(null);
     setCardMetadata(null);
     setTlvValid(false);
+    setDailyRecords([]);
+    setPlaces([]);
     setRulesEvaluation(null);
     setCryptoReport(null);
     setProgress({ percent: 0, phase: "ble-init", detail: "Připojování k BLE tahografu…", bytesTransferred: 0 });
@@ -535,7 +334,6 @@ export default function FieldTestClient() {
 
       const transport = createBleDdpTransport({ device, fifo, credits, write, receiveWindow: 8 });
 
-      // Napojení progress handleru přímo na transport objekt
       (transport as unknown as { onProgress: (p: ProgressState) => void }).onProgress = (p: ProgressState) => {
         setProgress(p);
       };
@@ -545,7 +343,6 @@ export default function FieldTestClient() {
         add("Indications", "PASS");
         add("Flow control", "PASS", `server credit ${transport.ledger.serverCredits}`);
 
-        // Volání zachovává přesný string `runDdpCardDownload(transport)` pro testovací guardraily
         const result = await runDdpCardDownload(transport);
 
         if (result.status === "complete" && result.cardData) {
@@ -556,7 +353,9 @@ export default function FieldTestClient() {
           setCardFile(data);
           add("Transport kartičnih podataka", "PASS", `${data.byteLength} bajtova; SHA-256 ${digest}`);
 
-          // 1. Validace TLV struktury dle Appendix 7
+          // Uložení do IndexedDB pro offline použití
+          void saveCardToDb({ id: "latest", cardBytes: data, savedAt: new Date().toISOString() });
+
           const tlv = parseCardTlv(data);
           if (tlv.valid) {
             setTlvValid(true);
@@ -567,7 +366,7 @@ export default function FieldTestClient() {
               add("Podaci kartice", "PASS", `${meta.surname} ${meta.firstName} | Kartica: ${meta.cardNumber} | Važi do: ${meta.expiryDate}`);
             }
 
-            // 2. Kryptografická kontrola podpisů
+            // 1. Kryptografické ověření podpisů
             const cryptoCheck = await verifyCardTlvSignatures(tlv.objects);
             setCryptoReport(cryptoCheck);
             add(
@@ -578,18 +377,26 @@ export default function FieldTestClient() {
                 : `Nalezeno ${cryptoCheck.signedFiles} podpisů v souboru; plná verifikace autority vyžaduje JRC ERCA certifikáty`
             );
 
-            // 3. Parsování aktivit (0x0504) a napojení do lib/tacho-rules.js
+            // 2. Parsování aktivit (0x0504)
             const activityObj = tlv.objects.find((o) => o.fid === 0x0504 && !o.isSignature);
             if (activityObj) {
-              const dailyRecords = parseDriverActivityData(activityObj.value);
-              const snapshot = calculateDrivingSnapshotFromCard(dailyRecords);
+              const records = parseDriverActivityData(activityObj.value);
+              setDailyRecords(records);
+              setSelectedDayIndex(Math.max(0, records.length - 1));
+              const snapshot = calculateDrivingSnapshotFromCard(records);
               const evaluation = evaluateDrivingSnapshot(snapshot);
               setRulesEvaluation(evaluation);
               add(
                 "Pravila vožnje (EU 561/2006)",
                 "PASS",
-                `Dnevna vožnja: ${Math.floor(snapshot.dailyDriveSeconds! / 3600)}h ${Math.floor((snapshot.dailyDriveSeconds! % 3600) / 60)}m | Kontinuirana: ${Math.floor(snapshot.continuousDriveSeconds! / 60)}m | Pauza: ${Math.floor(snapshot.currentBreakSeconds! / 60)}m`
+                `Dnes: ${Math.floor(snapshot.dailyDriveSeconds! / 3600)}h ${Math.floor((snapshot.dailyDriveSeconds! % 3600) / 60)}m | Kontinuální: ${Math.floor(snapshot.continuousDriveSeconds! / 60)}m | Pauza: ${Math.floor(snapshot.currentBreakSeconds! / 60)}m`
               );
+            }
+
+            // 3. Parsování míst (0x0506)
+            const placeObj = tlv.objects.find((o) => o.fid === 0x0506 && !o.isSignature);
+            if (placeObj) {
+              setPlaces(parseCardPlaces(placeObj.value));
             }
           } else {
             add("Struktura fajla", "NOT_VALIDATED", `Sirovi transportni bajtovi — standardni .DDD format nije sklopljen (${tlv.reason})`);
@@ -620,7 +427,7 @@ export default function FieldTestClient() {
     await navigator.clipboard.writeText(
       JSON.stringify(
         {
-          schema: "tachocommand-download-field-test-v5",
+          schema: "tachocommand-download-field-test-v6",
           appVersion: APP_VERSION,
           createdAt: new Date().toISOString(),
           deviceName,
@@ -660,8 +467,7 @@ export default function FieldTestClient() {
     URL.revokeObjectURL(url);
   };
 
-  const saveCompliantCardFile = (fileExtension: "c1c" | "ddd") => {
-    if (!cardFile) return;
+  const getOfficialFileName = (fileExtension: "c1c" | "ddd") => {
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, "0");
     const ymd = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
@@ -669,8 +475,12 @@ export default function FieldTestClient() {
     const surname = (cardMetadata?.surname ?? "DRIVER").toUpperCase().replace(/[^A-Z0-9]/g, "_").slice(0, 15);
     const firstName = (cardMetadata?.firstName ?? "CARD").toUpperCase().replace(/[^A-Z0-9]/g, "_").slice(0, 10);
     const cardNum = (cardMetadata?.cardNumber ?? "0000000000000000").slice(0, 16);
+    return ["C", ymd, hm, surname, firstName, cardNum].join("_") + "." + fileExtension;
+  };
 
-    const officialFileName = ["C", ymd, hm, surname, firstName, cardNum].join("_") + "." + fileExtension;
+  const saveCompliantCardFile = (fileExtension: "c1c" | "ddd") => {
+    if (!cardFile) return;
+    const officialFileName = getOfficialFileName(fileExtension);
     const url = URL.createObjectURL(new Blob([cardFile], { type: "application/octet-stream" }));
     const link = document.createElement("a");
     link.href = url;
@@ -679,8 +489,31 @@ export default function FieldTestClient() {
     URL.revokeObjectURL(url);
   };
 
+  // Web Share API pro okamžité odeslání souboru dispečerovi
+  const shareCardFile = async (fileExtension: "c1c" | "ddd") => {
+    if (!cardFile) return;
+    const officialFileName = getOfficialFileName(fileExtension);
+    const file = new File([cardFile], officialFileName, { type: "application/octet-stream" });
+
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({
+          title: `Tacho soubor: ${officialFileName}`,
+          text: `Stažená karta řidiče (${cardMetadata?.surname ?? "Řidič"})`,
+          files: [file],
+        });
+        return;
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+      }
+    }
+    saveCompliantCardFile(fileExtension);
+  };
+
+  const selectedDay = dailyRecords[selectedDayIndex] || null;
+
   return (
-    <main style={{ maxWidth: 740, margin: "0 auto", padding: 24, fontFamily: "system-ui, sans-serif" }}>
+    <main style={{ maxWidth: 760, margin: "0 auto", padding: 20, fontFamily: "system-ui, sans-serif" }}>
       <h1>TachoCommand — Download Transport Test</h1>
       <p><strong>Verzija:</strong> {APP_VERSION}</p>
       <p>Razvojni read-only test Gen2v2 DDP transporta. Vozilo mora stajati. Sesija se uvek zatvara kroz RequestTransferExit i StopCommunication.</p>
@@ -703,7 +536,7 @@ export default function FieldTestClient() {
         ) : null}
       </div>
 
-      {/* 1. PROGRESS BAR */}
+      {/* 1. INDIKÁTOR PRŮBĚHU (PROGRESS BAR) */}
       {running ? (
         <div style={{ margin: "16px 0", padding: 14, background: "#0d1929", borderRadius: 8, border: "1px solid #20344e", color: "#f4f8ff" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -729,7 +562,7 @@ export default function FieldTestClient() {
       ) : null}
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-        <button type="button" onClick={run} disabled={running || !devModeArmed} style={{ padding: "12px 18px", fontWeight: 600 }}>
+        <button type="button" onClick={run} disabled={running || !devModeArmed} style={{ padding: "12px 18px", fontWeight: 700 }}>
           {running ? "Test u toku…" : "Pokreni DDP transportnu probu"}
         </button>
         <button type="button" onClick={copy} disabled={results.length === 0} style={{ padding: "12px 18px" }}>
@@ -740,7 +573,110 @@ export default function FieldTestClient() {
         </button>
       </div>
 
-      {/* 2. VYHODNOCENÍ PRAVIDEL ŘÍZENÍ (EU 561/2006) */}
+      {/* 2. VIZUÁLNÍ ČASOVÁ OSA AKTIVIT (TIMELINE) & PŘEPÍNAČ DNŮ */}
+      {dailyRecords.length > 0 && selectedDay ? (
+        <div style={{ margin: "24px 0", padding: 18, background: "#0c1828", border: "1px solid #20364c", borderRadius: 12, color: "#f4f8ff" }}>
+          {/* Výběr dne */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+            <div>
+              <span style={{ fontSize: "0.7rem", color: "#8ea0b8", textTransform: "uppercase", fontWeight: 800 }}>
+                Historie z karty ({selectedDayIndex + 1} / {dailyRecords.length})
+              </span>
+              <h3 style={{ margin: "4px 0 0", fontSize: "1.2rem", color: "#42d3ff" }}>
+                {selectedDay.date.toLocaleDateString("cs-CZ", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+              </h3>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => setSelectedDayIndex((prev) => Math.max(0, prev - 1))}
+                disabled={selectedDayIndex === 0}
+                style={{ padding: "6px 12px", background: "#102035", color: "#fff", border: "1px solid #253a52", borderRadius: 6, cursor: "pointer" }}
+              >
+                ← Předchozí
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedDayIndex((prev) => Math.min(dailyRecords.length - 1, prev + 1))}
+                disabled={selectedDayIndex === dailyRecords.length - 1}
+                style={{ padding: "6px 12px", background: "#102035", color: "#fff", border: "1px solid #253a52", borderRadius: 6, cursor: "pointer" }}
+              >
+                Následující →
+              </button>
+            </div>
+          </div>
+
+          {/* Grafická 24-hodinová osa */}
+          <div style={{ margin: "16px 0" }}>
+            <div style={{ display: "flex", height: 28, borderRadius: 6, overflow: "hidden", border: "1px solid #28445f", background: "#07101d" }}>
+              {selectedDay.changes.map((change, i) => {
+                const nextTime = i + 1 < selectedDay.changes.length ? selectedDay.changes[i + 1].timeMinutes : 1440;
+                const duration = Math.max(0, nextTime - change.timeMinutes);
+                const widthPercent = (duration / 1440) * 100;
+                const colors = ["#9d88ff", "#4e8cff", "#ffb547", "#38d39f"]; // Rest, Avail, Work, Drive
+                return (
+                  <div
+                    key={`${change.timeMinutes}-${i}`}
+                    style={{
+                      width: `${widthPercent}%`,
+                      height: "100%",
+                      backgroundColor: colors[change.activity] || "#6c757d",
+                    }}
+                    title={`${Math.floor(change.timeMinutes / 60)}:${String(change.timeMinutes % 60).padStart(2, "0")} (${duration} min)`}
+                  />
+                );
+              })}
+            </div>
+            {/* Značky hodin */}
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, fontSize: "0.65rem", color: "#71849c" }}>
+              <span>00:00</span>
+              <span>04:00</span>
+              <span>08:00</span>
+              <span>12:00</span>
+              <span>16:00</span>
+              <span>20:00</span>
+              <span>24:00</span>
+            </div>
+          </div>
+
+          {/* Legenda a souhrny aktivit pro vybraný den */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10, marginTop: 14 }}>
+            {[
+              { label: "Jízda", act: 3, color: "#38d39f" },
+              { label: "Práce", act: 2, color: "#ffb547" },
+              { label: "Pohotovost", act: 1, color: "#4e8cff" },
+              { label: "Pauza", act: 0, color: "#9d88ff" },
+            ].map(({ label, act, color }) => {
+              let minutes = 0;
+              for (let i = 0; i < selectedDay.changes.length; i++) {
+                if (selectedDay.changes[i].activity === act) {
+                  const nextTime = i + 1 < selectedDay.changes.length ? selectedDay.changes[i + 1].timeMinutes : 1440;
+                  minutes += nextTime - selectedDay.changes[i].timeMinutes;
+                }
+              }
+              return (
+                <div key={label} style={{ padding: 8, background: "#07101d", borderRadius: 6, border: `1px solid ${color}44` }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.75rem", color }}>
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: color }} />
+                    {label}
+                  </div>
+                  <div style={{ fontSize: "1.1rem", fontWeight: 800, marginTop: 4 }}>
+                    {Math.floor(minutes / 60)}h {minutes % 60}m
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {selectedDay.dayDistanceKm > 0 ? (
+            <div style={{ marginTop: 12, fontSize: "0.75rem", color: "#8ea0b8" }}>
+              Ujetá vzdálenost za den: <strong>{selectedDay.dayDistanceKm} km</strong>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* 3. VYHODNOCENÍ PRAVIDEL ŘÍZENÍ (EU 561/2006) */}
       {rulesEvaluation ? (
         <div style={{ margin: "20px 0", padding: 16, background: "#0d1929", border: "1px solid #20344e", borderRadius: 8, color: "#f4f8ff" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -748,7 +684,7 @@ export default function FieldTestClient() {
               ✓ Vyhodnocení dob řízení z čipu karty (EU 561/2006)
             </h3>
             <span style={{ fontSize: "0.75rem", color: rulesEvaluation.breakQualified ? "#38d39f" : "#ffb547" }}>
-              {rulesEvaluation.breakQualified ? "Pauza splněna" : "Pauza nesplněna"}
+              {rulesEvaluation.breakQualified ? "Pauza splněna (45 min nebo 15+30 min)" : "Pauza nesplněna"}
             </span>
           </div>
 
@@ -758,7 +694,6 @@ export default function FieldTestClient() {
               const usedM = Math.floor((rule.usedSeconds % 3600) / 60);
               const remH = Math.floor(Math.max(0, rule.remainingSeconds) / 3600);
               const remM = Math.floor((Math.max(0, rule.remainingSeconds) % 3600) / 60);
-
               const isExceeded = rule.status === "exceeded";
               const isWarning = rule.status === "warning" || rule.status === "limit";
 
@@ -788,14 +723,14 @@ export default function FieldTestClient() {
         </div>
       ) : null}
 
-      {/* 3. KRYPTOGRAFICKÝ REPORT INTEGRITY */}
+      {/* 4. KRYPTOGRAFICKÝ REPORT INTEGRITY */}
       {cryptoReport ? (
         <div style={{ margin: "16px 0", padding: 14, background: "#f8f9fa", border: "1px solid #ced4da", borderRadius: 8 }}>
           <strong style={{ display: "block", marginBottom: 6, color: cryptoReport.overallStatus === "PASS" ? "#0f5132" : "#495057" }}>
             Kryptografická verifikace EF podpisů (JRC / Appendix 11): {cryptoReport.overallStatus}
           </strong>
           <p style={{ margin: "0 0 10px", fontSize: "0.85em", color: "#6c757d" }}>
-            Podepsaných bloků: {cryptoReport.signedFiles} z {cryptoReport.totalFiles}. ECDSA SHA-256 ověřeno: {cryptoReport.verifiedFiles}.
+            Podepsaných bloků: {cryptoReport.signedFiles} z {cryptoReport.totalFiles}. Ověřeno ECDSA SHA-256: {cryptoReport.verifiedFiles}.
           </p>
 
           <details style={{ fontSize: "0.8rem", color: "#495057" }}>
@@ -817,25 +752,33 @@ export default function FieldTestClient() {
         </div>
       ) : null}
 
+      {/* 5. EXPORT A SDÍLENÍ SOUBORU (WEB SHARE API / DOWNLOAD) */}
       {cardFile && tlvValid ? (
-        <div style={{ margin: "14px 0", padding: 12, background: "#eef9f1", border: "1px solid #badbcc", borderRadius: 8 }}>
+        <div style={{ margin: "14px 0", padding: 14, background: "#eef9f1", border: "1px solid #badbcc", borderRadius: 8 }}>
           <strong style={{ color: "#0f5132", display: "block", marginBottom: 8 }}>
-            ✓ TLV struktura kartice je uspešno verifikovana
+            ✓ Karta řidiče je připravena k uložení a sdílení
           </strong>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button
               type="button"
-              onClick={() => saveCompliantCardFile("c1c")}
+              onClick={() => shareCardFile("c1c")}
               style={{ padding: "10px 16px", background: "#198754", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 700 }}
             >
-              Sačuvaj zvanični Smart Tacho 2 fajl (.C1C)
+              Sdílet soubor Smart Tacho 2 (.C1C)
+            </button>
+            <button
+              type="button"
+              onClick={() => shareCardFile("ddd")}
+              style={{ padding: "10px 16px", background: "#0d6efd", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 700 }}
+            >
+              Sdílet soubor (.DDD)
             </button>
             <button
               type="button"
               onClick={() => saveCompliantCardFile("ddd")}
-              style={{ padding: "10px 16px", background: "#0d6efd", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 700 }}
+              style={{ padding: "10px 16px", background: "#fff", color: "#0d6efd", border: "1px solid #0d6efd", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}
             >
-              Sačuvaj standardni fajl (.DDD)
+              Stáhnout do mobilu (.DDD)
             </button>
           </div>
         </div>
