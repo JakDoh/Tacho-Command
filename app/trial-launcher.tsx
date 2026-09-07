@@ -22,9 +22,9 @@ export default function TrialLauncher({ label, className = "" }: { label: string
   return (
     <span className="trial-launcher">
       <button type="button" className={className} onClick={start} disabled={starting}>
-        {starting ? "Pokrećem…" : label}
+        {starting ? "Spouštím…" : label}
       </button>
-      {error && <small role="alert">Demo trenutno nije dostupan. Pokušaj ponovo za nekoliko minuta.</small>}
+      {error && <small role="alert">Demo v současné době není k dispozici. Zkuste to prosím za několik minut znovu.</small>}
     </span>
   );
 }
