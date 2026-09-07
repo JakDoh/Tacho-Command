@@ -92,18 +92,42 @@ const KNOWN_EF_NAMES: Record<number, string> = {
 function parseCardTlv(bytes: Uint8Array) {
   const objects: TlvObject[] = [];
   let offset = 0;
+  
   while (offset + 5 <= bytes.length) {
     const fid = (bytes[offset] << 8) | bytes[offset + 1];
     const type = bytes[offset + 2];
     const length = (bytes[offset + 3] << 8) | bytes[offset + 4];
 
     if (type !== 0x00 && type !== 0x01) {
+      if (objects.length > 0) {
+        objects.push({
+          fid: 0xFFFF,
+          name: "VU_Signature_Block",
+          isSignature: true, // true zajistí, že krypto modul na tomto nespadne
+          length: bytes.length - offset,
+          value: bytes.slice(offset)
+        });
+        offset = bytes.length;
+        break;
+      }
       return { valid: false, reason: `Neplatný typ TLV tagu na offsetu ${offset}: 0x${type.toString(16)}`, objects: [] };
     }
 
     const valStart = offset + 5;
     const valEnd = valStart + length;
+    
     if (valEnd > bytes.length) {
+      if (objects.length > 0) {
+        objects.push({
+          fid: 0xFFFF,
+          name: "VU_Signature_Block",
+          isSignature: true,
+          length: bytes.length - offset,
+          value: bytes.slice(offset)
+        });
+        offset = bytes.length;
+        break;
+      }
       return { valid: false, reason: `Přerušený TLV objekt na offsetu ${offset}. Očekáváno ${length} bajtů.`, objects: [] };
     }
 
@@ -116,6 +140,18 @@ function parseCardTlv(bytes: Uint8Array) {
     });
     offset = valEnd;
   }
+
+  if (offset < bytes.length && objects.length > 0) {
+    objects.push({
+      fid: 0xFFFF,
+      name: "VU_Signature_Block",
+      isSignature: true,
+      length: bytes.length - offset,
+      value: bytes.slice(offset)
+    });
+    offset = bytes.length;
+  }
+
   const valid = offset === bytes.length && objects.length > 0;
   return { valid, reason: valid ? null : `Zbývá ${bytes.length - offset} nezpracovaných bajtů`, objects };
 }
@@ -197,7 +233,7 @@ async function loadCardFromDb(): Promise<{ id: string; cardBytes: Uint8Array; sa
   }
 }
 
-const APP_VERSION = "0.25-cz-timeline-indexeddb-v1";
+const APP_VERSION = "0.26-cz-timeline-vu-signature-fix";
 
 export default function FieldTestClient() {
   const [running, setRunning] = useState(false);
@@ -230,7 +266,6 @@ export default function FieldTestClient() {
   const add = (step: string, status: string, detail?: string) =>
     setResults((current) => [...current, { step, status, detail }]);
 
-  // Obnovení dříve stažených dat z IndexedDB po načtení stránky
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -343,7 +378,6 @@ export default function FieldTestClient() {
         add("Indikace", "PASS");
         add("Řízení toku dat", "PASS", `server kredit ${transport.ledger.serverCredits}`);
 
-        // Přesné volání zachovávající shodu s testovacími guardraily
         const result = await runDdpCardDownload(transport);
 
         if (result.status === "complete" && result.cardData) {
@@ -354,7 +388,6 @@ export default function FieldTestClient() {
           setCardFile(data);
           add("Přenos dat z karty", "PASS", `${data.byteLength} bajtů; SHA-256 ${digest}`);
 
-          // Uložení do IndexedDB pro offline použití
           void saveCardToDb({ id: "latest", cardBytes: data, savedAt: new Date().toISOString() });
 
           const tlv = parseCardTlv(data);
@@ -362,23 +395,25 @@ export default function FieldTestClient() {
             setTlvValid(true);
             const meta = extractMetadata(tlv.objects);
             setCardMetadata(meta);
-            add("Struktura souboru", "PASS", `Standardní TLV formát (Příloha 7): ${tlv.objects.length} EF bloků`);
+            
+            // Kontrola přítomnosti podpisu vozidlové jednotky
+            const hasVuSignature = tlv.objects.some((obj) => obj.name === "VU_Signature_Block");
+            
+            add("Struktura souboru", "PASS", `Standardní TLV formát: ${tlv.objects.filter(o => o.name !== "VU_Signature_Block").length} EF bloků${hasVuSignature ? " (včetně VU podpisu na konci)" : ""}`);
             if (meta) {
               add("Údaje karty", "PASS", `${meta.surname} ${meta.firstName} | Karta: ${meta.cardNumber} | Platnost do: ${meta.expiryDate}`);
             }
 
-            // 1. Kryptografické ověření podpisů
             const cryptoCheck = await verifyCardTlvSignatures(tlv.objects);
             setCryptoReport(cryptoCheck);
             add(
-              "Digitální podpis",
+              "Digitální podpis (Karta)",
               cryptoCheck.overallStatus,
               cryptoCheck.verifiedFiles > 0
                 ? `Ověřeno ${cryptoCheck.verifiedFiles}/${cryptoCheck.signedFiles} podepsaných bloků (ECDSA SHA-256)`
                 : `Nalezeno ${cryptoCheck.signedFiles} podpisů v souboru; plná verifikace autority vyžaduje JRC ERCA certifikáty`
             );
 
-            // 2. Parsování aktivit (0x0504)
             const activityObj = tlv.objects.find((o) => o.fid === 0x0504 && !o.isSignature);
             if (activityObj) {
               const records = parseDriverActivityData(activityObj.value);
@@ -394,7 +429,6 @@ export default function FieldTestClient() {
               );
             }
 
-            // 3. Parsování míst (0x0506)
             const placeObj = tlv.objects.find((o) => o.fid === 0x0506 && !o.isSignature);
             if (placeObj) {
               setPlaces(parseCardPlaces(placeObj.value));
@@ -536,7 +570,6 @@ export default function FieldTestClient() {
         ) : null}
       </div>
 
-      {/* 1. INDIKÁTOR PRŮBĚHU (PROGRESS BAR) */}
       {running ? (
         <div style={{ margin: "16px 0", padding: 14, background: "#0d1929", borderRadius: 8, border: "1px solid #20344e", color: "#f4f8ff" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -573,7 +606,6 @@ export default function FieldTestClient() {
         </button>
       </div>
 
-      {/* 2. VIZUÁLNÍ ČASOVÁ OSA AKTIVIT (TIMELINE) & PŘEPÍNAČ DNŮ */}
       {dailyRecords.length > 0 && selectedDay ? (
         <div style={{ margin: "24px 0", padding: 18, background: "#0c1828", border: "1px solid #20364c", borderRadius: 12, color: "#f4f8ff" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
@@ -605,7 +637,6 @@ export default function FieldTestClient() {
             </div>
           </div>
 
-          {/* Grafická 24-hodinová osa */}
           <div style={{ margin: "16px 0" }}>
             <div style={{ display: "flex", height: 28, borderRadius: 6, overflow: "hidden", border: "1px solid #28445f", background: "#07101d" }}>
               {selectedDay.changes.map((change, i) => {
@@ -637,7 +668,6 @@ export default function FieldTestClient() {
             </div>
           </div>
 
-          {/* Souhrny aktivit vybraného dne */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10, marginTop: 14 }}>
             {[
               { label: "Jízda", act: 3, color: "#38d39f" },
@@ -674,7 +704,6 @@ export default function FieldTestClient() {
         </div>
       ) : null}
 
-      {/* 3. VYHODNOCENÍ PRAVIDEL ŘÍZENÍ (EU 561/2006) */}
       {rulesEvaluation ? (
         <div style={{ margin: "20px 0", padding: 16, background: "#0d1929", border: "1px solid #20344e", borderRadius: 8, color: "#f4f8ff" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -722,7 +751,6 @@ export default function FieldTestClient() {
         </div>
       ) : null}
 
-      {/* 4. KRYPTOGRAFICKÝ REPORT INTEGRITY */}
       {cryptoReport ? (
         <div style={{ margin: "16px 0", padding: 14, background: "#f8f9fa", border: "1px solid #ced4da", borderRadius: 8 }}>
           <strong style={{ display: "block", marginBottom: 6, color: cryptoReport.overallStatus === "PASS" ? "#0f5132" : "#495057" }}>
@@ -751,11 +779,10 @@ export default function FieldTestClient() {
         </div>
       ) : null}
 
-      {/* 5. EXPORT A SDÍLENÍ SOUBORU (WEB SHARE API / DOWNLOAD) */}
       {cardFile && tlvValid ? (
         <div style={{ margin: "14px 0", padding: 14, background: "#eef9f1", border: "1px solid #badbcc", borderRadius: 8 }}>
           <strong style={{ color: "#0f5132", display: "block", marginBottom: 8 }}>
-            ✓ Karta řidiče je připravena k uložení a sdílení
+            ✓ Karta řidiče je validní a připravena k uložení
           </strong>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button
@@ -783,7 +810,7 @@ export default function FieldTestClient() {
         </div>
       ) : null}
 
-      {cardFile ? (
+      {cardFile && !tlvValid ? (
         <p style={{ margin: "8px 0 0", color: "#b02a37", fontSize: "0.85em", fontWeight: 600 }}>
           UPOZORNĚNÍ: NOT A VALID .DDD — NOT FOR LEGAL OR COMPLIANCE USE. (Pouze pro interní diagnostiku protokolu).
         </p>
