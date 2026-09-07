@@ -61,3 +61,5 @@ npm run validate:artifact
 - The interface foundation supports exactly Serbian (Latin), English, and German.
 - Timer updates derive elapsed seconds from timestamps so browser throttling does not silently lose active time.
 - Production hardware data is still blocked behind the physical-device validation gate.
+
+  test
