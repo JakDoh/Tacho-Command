@@ -343,11 +343,6 @@ export default function TachoCommandApp() {
   };
 
   const chooseActivity = (next: Activity) => {
-    // A driver who was resting/available and now switches to drive/work has just
-    // ended their break. If that break already satisfied Article 4/7 (45 min, or
-    // 15+30 split), the continuous-driving clock resets — otherwise it keeps
-    // accumulating across the "break" and the hero card would stay stuck on
-    // "exceeded" forever even after a valid rest.
     const endingQualifyingBreak = activity === "rest" && next !== "rest" && ruleResults.breakQualified;
     setActivity(next);
     setDemoMode(false);
@@ -372,7 +367,7 @@ export default function TachoCommandApp() {
     }).bluetooth;
     if (!bluetooth) {
       setDeviceState("unsupported");
-      setNotice("Web Bluetooth nije dostupan. Za test koristi ažurirani Chrome na Android telefonu preko HTTPS veze.");
+      setNotice(t.errNoBluetooth);
       return;
     }
     let linkEstablished = false;
@@ -415,7 +410,7 @@ export default function TachoCommandApp() {
       selected.addEventListener("gattserverdisconnected", () => {
         addBleTestEvent("disconnected");
         setDeviceState("idle");
-        setNotice("BLE veza je prekinuta. Nijedan tahografski podatak nije sačuvan kao verifikovan.");
+        setNotice(t.errBleDisconnected);
       });
       if (!selected.gatt) throw new Error("GATT unavailable");
       const server = await selected.gatt.connect();
@@ -535,9 +530,9 @@ export default function TachoCommandApp() {
         if (received === null) {
           addBleTestEvent("flow-control-timeout");
           setFlowControlState("timeout");
-          setNotice("Transport je pronađen, ali tahograf nije vratio kredit u roku od 6 sekundi. Podaci nisu traženi.");
+          setNotice(t.bleCreditTimeout);
         } else if (received === 0xff) {
-          setNotice("Tahograf je odbio dijagnostički transport. Podaci nisu traženi niti menjani.");
+          setNotice(t.bleTransportRejected);
         } else if (received > 0) {
           failureStage = "application-probe";
           setApplicationProbeState("waiting");
@@ -588,7 +583,7 @@ export default function TachoCommandApp() {
           if (!packet) {
             addBleTestEvent("tester-present-timeout");
             setApplicationProbeState("timeout");
-            setNotice("Transport je potvrđen, ali TesterPresent nije dobio odgovor u roku od 6 sekundi. Tahografski podaci nisu traženi.");
+            setNotice(t.bleTesterPresentTimeout);
           } else {
             addBleTestEvent("tester-present-response");
             const packetHeaderValid = packet[0] === 1 && packet[1] === 1;
@@ -600,10 +595,10 @@ export default function TachoCommandApp() {
             setApplicationProbeResponse({ packetHeaderValid, responseType, responseService, negativeResponseCode });
             setApplicationProbeState(responseType);
             setNotice(positive
-              ? "PASS: tahograf je pozitivno odgovorio na bezbednu UDS proveru. Nijedan vozački podatak nije tražen."
+              ? t.bleUdsSuccess
               : negative
-                ? `Transport radi, ali je UDS provera odbijena kodom ${negativeResponseCode ?? "?"}.`
-                : "Stigao je odgovor, ali format nije očekivani TesterPresent odgovor. Sirovi sadržaj nije sačuvan.");
+                ? `${t.bleUdsRejected} ${negativeResponseCode ?? "?"}.`
+                : t.bleUdsUnexpected);
 
             if (positive) {
               const observePacket = (packet: number[]): FifoPacketObservation => {
@@ -656,7 +651,7 @@ export default function TachoCommandApp() {
               if (!sessionResponse) {
                 setDiagnosticSessionState("timeout");
                 addBleTestEvent("diagnostic-session-timeout");
-                setNotice("Tahograf nije odgovorio na zahtev za udaljenu dijagnostičku sesiju (0x7E). F903 nije poslat.");
+                setNotice(t.bleSessionTimeout);
                 return;
               }
               const sessionHeaderValid = sessionResponse[0] === 1 && sessionResponse[1] === 1;
@@ -673,8 +668,8 @@ export default function TachoCommandApp() {
               addBleTestEvent(sessionPositive ? "diagnostic-session-positive" : sessionNegative ? "diagnostic-session-negative" : "diagnostic-session-negative");
               if (!sessionPositive) {
                 setNotice(sessionNegative
-                  ? `Tahograf je odbio udaljenu dijagnostičku sesiju kodom ${sessionResponse[4] ?? "?"}. F903 nije poslat.`
-                  : "Stigao je neočekivan odgovor na udaljenu dijagnostičku sesiju. F903 nije poslat.");
+                  ? `${t.bleSessionRejected} ${sessionResponse[4] ?? "?"}.`
+                  : t.bleSessionUnexpected);
                 return;
               }
 
@@ -732,8 +727,8 @@ export default function TachoCommandApp() {
               setDriverCardReadResults(readResults);
               const positiveReads = readResults.filter((entry) => entry.status === "positive").length;
               setNotice(positiveReads > 0
-                ? `PASS: očitano je ${positiveReads} read-only polja sa vozačke kartice. Sačuvaj novi izveštaj.`
-                : "Tahograf nije vratio podatke kartice. Proveri da je kartica u slotu 1 i da je uključena saglasnost za ITS lične podatke.");
+                ? t.bleCardReadSuccess
+                : t.bleCardReadMissing);
             }
           }
         }
@@ -752,14 +747,14 @@ export default function TachoCommandApp() {
         setRemoteHmiState("error");
         addBleTestEvent("rhmi-error");
         setDeviceState("linked");
-        setNotice(`BLE i UDS rade, ali Remote HMI sesija nije otvorena (${safeError.name}). Nijedan podatak nije očitan.`);
+        setNotice(`${t.bleRhmiError} (${safeError.name})`);
         return;
       }
       if (failureStage === "diagnostic-session") {
         setDiagnosticSessionError(safeError);
         setDiagnosticSessionState("error");
         setDeviceState("linked");
-        setNotice(`BLE i TesterPresent rade, ali dijagnostička sesija nije potvrđena (${safeError.name}). Remote HMI nije pokrenut.`);
+        setNotice(`${t.bleDiagSessionError} (${safeError.name})`);
         return;
       }
       if (failureStage === "application-probe") {
@@ -767,12 +762,12 @@ export default function TachoCommandApp() {
         setApplicationProbeState("error");
         addBleTestEvent("application-probe-error");
         setDeviceState("linked");
-        setNotice(`BLE transport radi, ali bezbedna UDS provera nije uspela (${safeError.name}). Tahografski podaci nisu traženi.`);
+        setNotice(`${t.bleAppProbeError} (${safeError.name})`);
         return;
       }
       if (failureStage === "driver-card-read") {
         setDeviceState("linked");
-        setNotice(`BLE i UDS rade, ali read-only očitavanje kartice nije završeno (${safeError.name}).`);
+        setNotice(`${t.bleCardReadError} (${safeError.name})`);
         return;
       }
       if (flowControlFailure) {
@@ -784,7 +779,7 @@ export default function TachoCommandApp() {
       addBleTestEvent(cancelled ? "cancelled" : flowControlFailure ? "flow-control-error" : "connection-error");
       if (flowControlFailure) setFlowControlState("error");
       setDeviceState(cancelled ? "idle" : flowControlFailure ? "linked" : "error");
-      setNotice(cancelled ? "Izbor uređaja je otkazan." : flowControlFailure ? "BLE veza postoji, ali credit handshake nije uspeo. Podaci nisu traženi." : "BLE veza nije uspela. Aplikacija neće prikazati lažno povezivanje.");
+      setNotice(cancelled ? t.bleDeviceCancelled : flowControlFailure ? t.bleHandshakeFailed : t.bleConnectionFailed);
     }
   };
 
@@ -893,19 +888,19 @@ export default function TachoCommandApp() {
     setDriverCardReadResults([]);
     setDriverCardReadAttempted(false);
     setDeviceState("idle");
-    setNotice("BLE veza je bezbedno prekinuta.");
+    setNotice(t.bleDisconnectedSafely);
   };
 
   const installApp = async () => {
     if (!installPrompt) {
-      setNotice("U Chrome meniju izaberi „Dodaj na početni ekran“. Aplikacija već ima PWA manifest.");
+      setNotice(t.msgInstallPrompt);
       return;
     }
     await installPrompt.prompt();
     const choice = await installPrompt.userChoice;
     setInstallPrompt(null);
     if (choice.outcome === "accepted") setInstalled(true);
-    setNotice(choice.outcome === "accepted" ? "TachoCommand je dodat na početni ekran." : "Instalacija je otkazana; možeš je pokrenuti kasnije.");
+    setNotice(choice.outcome === "accepted" ? t.msgInstalled : t.msgInstallCancelled);
   };
 
   const saveManualTimes = (event: React.FormEvent<HTMLFormElement>) => {
@@ -921,7 +916,7 @@ export default function TachoCommandApp() {
     setShiftElapsed(duration("shift"));
     setDemoMode(false);
     setShowTimeEditor(false);
-    setNotice("Ručna vremena su sačuvana samo na ovom uređaju.");
+    setNotice(t.msgManualSaved);
   };
 
   return (
@@ -953,7 +948,7 @@ export default function TachoCommandApp() {
                 setShiftElapsed(7 * HOUR + 15 * MINUTE);
                 setRestElapsed(12 * MINUTE);
               }
-              setNotice("Izvor je jasno označen. Demonstracija se nikada ne prikazuje kao podatak tahografa.");
+              setNotice(t.msgDemoNote);
             }}
             type="button"
             aria-label="Promeni prikaz izvora podataka"
@@ -990,7 +985,7 @@ export default function TachoCommandApp() {
 
             <div className="hero-rule">
               <span>{t.continuousReference} • {ruleResults.rulesetId}</span>
-              <button type="button" onClick={() => setNotice("Ovo je pomoćni prikaz. Uvek proveri tahograf i konkretne uslove svoje smene.")}>{t.why}</button>
+              <button type="button" onClick={() => setNotice(t.msgDisclaimer)}>{t.why}</button>
             </div>
           </section>
 
@@ -1054,18 +1049,18 @@ export default function TachoCommandApp() {
               <span className="connection-icon">⌁</span>
               <div>
                 <p className="section-kicker">{t.tachoConnection}</p>
-                <h3>{deviceState === "linked" ? device?.name || "BLE uređaj povezan" : t.notConnected}</h3>
-                <p>{deviceState === "linked" ? "BLE link postoji; tahografski protokol nije verifikovan." : "Proveri da li telefon i pregledač podržavaju bezbedan BLE pristup."}</p>
+                <h3>{deviceState === "linked" ? device?.name || t.statusLinked : t.notConnected}</h3>
+                <p>{deviceState === "linked" ? t.devSubtitle : t.statusUnknown}</p>
               </div>
             </div>
-            <button type="button" className="primary-button" onClick={() => { setSelectedTab("device"); setNotice("Otvoren je centar za kompatibilnost uređaja."); }}>
+            <button type="button" className="primary-button" onClick={() => { setSelectedTab("device"); setNotice(t.msgCompatCenterOpened); }}>
               {t.checkDevice} <span>→</span>
             </button>
           </section>
 
           <aside className="legal-note">
             <span>!</span>
-            <p><strong>Važno:</strong> TachoCommand je pomoćni alat. Tahograf, kartica vozača i važeći propisi ostaju merodavni izvori.</p>
+            <p><strong>Važno:</strong> TachoCommand je pomocný nástroj. Tachograf, karta řidiče a předpisy zůstávají vždy merodavné.</p>
           </aside>
         </div>
 
@@ -1073,21 +1068,21 @@ export default function TachoCommandApp() {
           <section className="module-screen" aria-labelledby="log-title">
             <div className="module-heading">
               <div>
-                <p className="section-kicker">LOKALNI DNEVNIK</p>
-                <h2 id="log-title">Tok aktivnosti</h2>
-                <p>Ručne promene ostaju na ovom telefonu. Ne menjaju zapis u tahografu.</p>
+                <p className="section-kicker">{t.logLocalLog}</p>
+                <h2 id="log-title">{t.logTitle}</h2>
+                <p>{t.logSubtitle}</p>
               </div>
               <span className={`network-badge ${online ? "online" : "offline"}`}>{online ? "ONLINE" : "OFFLINE"}</span>
             </div>
 
             <div className="summary-grid">
-              <div><span>DANAS VOŽNJA</span><strong>{formatClock(dailyDrive)}</strong></div>
-              <div><span>AKTIVNA SMENA</span><strong>{formatClock(shiftElapsed)}</strong></div>
+              <div><span>{t.logTodayDrive}</span><strong>{formatClock(dailyDrive)}</strong></div>
+              <div><span>{t.logActiveShift}</span><strong>{formatClock(shiftElapsed)}</strong></div>
             </div>
 
             <div className="timeline-card">
               {events.length === 0 ? (
-                <div className="empty-state"><strong>Nema ručnih zapisa</strong><span>Promeni aktivnost u Cockpitu da započneš lokalni dnevnik.</span></div>
+                <div className="empty-state"><strong>{t.logEmptyTitle}</strong><span>{t.logEmptyDesc}</span></div>
               ) : events.map((entry, index) => (
                 <div className="timeline-entry" key={entry.id}>
                   <div className={`timeline-dot ${entry.activity}`}><span>{activityMeta[entry.activity].symbol}</span></div>
@@ -1095,12 +1090,12 @@ export default function TachoCommandApp() {
                     <strong>{activityMeta[entry.activity].label}</strong>
                     <span>{new Intl.DateTimeFormat(locale === "cs" ? "cs-CZ" : locale === "de" ? "de-DE" : "en-GB", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }).format(new Date(entry.startedAt))}</span>
                   </div>
-                  <em>{entry.source === "demo" ? "DEMO" : index === 0 ? "SADA" : "RUČNO"}</em>
+                  <em>{entry.source === "demo" ? t.logDemo : index === 0 ? t.logNow : t.logManual}</em>
                 </div>
               ))}
             </div>
 
-            <aside className="legal-note"><span>i</span><p>Dnevnik je pomoćna beleška i nije zamena za potpisani `.DDD` fajl, karticu vozača ili memoriju jedinice vozila.</p></aside>
+            <aside className="legal-note"><span>i</span><p>{t.logNote}</p></aside>
           </section>
         )}
 
@@ -1108,36 +1103,36 @@ export default function TachoCommandApp() {
           <section className="module-screen" aria-labelledby="device-title">
             <div className="module-heading">
               <div>
-                <p className="section-kicker">CENTAR KOMPATIBILNOSTI</p>
-                <h2 id="device-title">Tahograf i telefon</h2>
-                <p>Prvo proveravamo bezbedan BLE link. Podatke ne nazivamo tahografskim dok protokol nije potvrđen.</p>
+                <p className="section-kicker">{t.devCompatCenter}</p>
+                <h2 id="device-title">{t.devTitle}</h2>
+                <p>{t.devSubtitle}</p>
               </div>
               <span className={`device-orb ${deviceState}`} aria-hidden="true">⌁</span>
             </div>
 
             <div className="field-profile-card">
               <div>
-                <p className="section-kicker">ANONIMNI PROFIL TESTA</p>
-                <h3>Koji uređaj proveravamo?</h3>
-                <p>Čuva se samo na ovom telefonu i ulazi u beta izveštaj bez imena, kartice, registracije i lokacije.</p>
+                <p className="section-kicker">{t.devProfileKicker}</p>
+                <h3>{t.devProfileTitle}</h3>
+                <p>{t.devProfileDesc}</p>
               </div>
               <div className="field-profile-grid">
-                <label>VOZILO
+                <label>{t.devVehicle}
                   <select value={fieldTestProfile.vehicleType} onChange={(event) => setFieldTestProfile((current) => ({ ...current, vehicleType: event.target.value as FieldTestProfile["vehicleType"] }))}>
-                    <option value="bus">Autobus</option>
-                    <option value="truck">Kamion</option>
-                    <option value="other">Drugo</option>
+                    <option value="bus">{t.devBus}</option>
+                    <option value="truck">{t.devTruck}</option>
+                    <option value="other">{t.devOther}</option>
                   </select>
                 </label>
-                <label>TAHOGRAF
+                <label>{t.devTacho}
                   <select value={fieldTestProfile.tachoBrand} onChange={(event) => setFieldTestProfile((current) => ({ ...current, tachoBrand: event.target.value as FieldTestProfile["tachoBrand"] }))}>
                     <option value="vdo">VDO / DTCO</option>
                     <option value="stoneridge">Stoneridge</option>
-                    <option value="other">Drugi</option>
+                    <option value="other">{t.devOther}</option>
                   </select>
                 </label>
-                <label className="field-profile-model">MODEL / VERZIJA (AKO JE POZNATA)
-                  <input value={fieldTestProfile.tachoModel} onChange={(event) => setFieldTestProfile((current) => ({ ...current, tachoModel: event.target.value.slice(0, 60) }))} placeholder="npr. DTCO 4.1a" />
+                <label className="field-profile-model">{t.devModel}
+                  <input value={fieldTestProfile.tachoModel} onChange={(event) => setFieldTestProfile((current) => ({ ...current, tachoModel: event.target.value.slice(0, 60) }))} placeholder={t.devModelPlaceholder} />
                 </label>
               </div>
             </div>
@@ -1147,19 +1142,19 @@ export default function TachoCommandApp() {
                 <span className={`status-light ${deviceState}`} />
                 <div>
                   <strong>{
-                    deviceState === "linked" ? "BLE veza uspostavljena" :
-                    deviceState === "connecting" ? "Čekam izbor uređaja" :
-                    deviceState === "unsupported" ? "Pregledač nije podržan" :
-                    deviceState === "error" ? "Povezivanje nije uspelo" : "Spremno za proveru"
+                    deviceState === "linked" ? t.statusLinked :
+                    deviceState === "connecting" ? t.statusWaiting :
+                    deviceState === "unsupported" ? t.statusUnsupported :
+                    deviceState === "error" ? t.statusFailed : t.statusReady
                   }</strong>
-                  <span>{deviceState === "linked" ? device?.name || "Nepoznat BLE uređaj" : "Chrome za Android • bez dodatka • HTTPS"}</span>
+                  <span>{deviceState === "linked" ? device?.name || t.statusDevice : t.statusUnknown}</span>
                 </div>
               </div>
               {deviceState === "linked" ? (
-                <button className="secondary-button danger" type="button" onClick={disconnectBluetooth}>Prekini BLE vezu</button>
+                <button className="secondary-button danger" type="button" onClick={disconnectBluetooth}>{t.actionDisconnect}</button>
               ) : (
                 <button className="primary-button" type="button" onClick={connectBluetooth} disabled={deviceState === "connecting"}>
-                  {deviceState === "connecting" ? "Biranje uređaja…" : "Pokreni BLE proveru"} <span>→</span>
+                  {deviceState === "connecting" ? t.actionConnecting : t.actionConnect} <span>→</span>
                 </button>
               )}
             </div>
@@ -1172,116 +1167,116 @@ export default function TachoCommandApp() {
 
             {bleTestEvents.length > 0 && (
               <div className="field-session-strip" aria-label="Sažetak beta testa">
-                <div><span>POKUŠAJI</span><strong>{bleTestEvents.filter((entry) => entry.event === "connection-attempt").length}</strong></div>
-                <div><span>PREKIDI</span><strong>{bleTestEvents.filter((entry) => entry.event === "disconnected").length}</strong></div>
-                <div><span>EU SERVIS</span><strong>{protocolServiceDetected === true ? "DA" : protocolServiceDetected === false ? "NE" : "—"}</strong></div>
-                <div><span>TRANSPORT</span><strong>{transportReady === true ? "4/4" : transportReady === false ? "NE" : "—"}</strong></div>
-                <div><span>HANDSHAKE</span><strong>{flowControlState === "ready" ? "DA" : flowControlState === "rejected" ? "ODBIJEN" : flowControlState === "error" || flowControlState === "timeout" ? "NE" : flowControlState === "idle" ? "—" : "…"}</strong></div>
-                <div><span>UDS PROBA</span><strong>{applicationProbeState === "positive" ? "DA" : applicationProbeState === "negative" ? "ODBIJEN" : applicationProbeState === "timeout" || applicationProbeState === "error" || applicationProbeState === "unexpected" ? "NE" : applicationProbeState === "idle" ? "—" : "…"}</strong></div>
-                <div><span>KARTICA</span><strong>{driverCardReadResults.some((entry) => entry.status === "positive") ? "DA" : driverCardReadResults.length > 0 ? "NE" : "—"}</strong></div>
+                <div><span>{t.statAttempts}</span><strong>{bleTestEvents.filter((entry) => entry.event === "connection-attempt").length}</strong></div>
+                <div><span>{t.statDrops}</span><strong>{bleTestEvents.filter((entry) => entry.event === "disconnected").length}</strong></div>
+                <div><span>{t.statService}</span><strong>{protocolServiceDetected === true ? t.statYes : protocolServiceDetected === false ? t.statNo : "—"}</strong></div>
+                <div><span>{t.statTransport}</span><strong>{transportReady === true ? "4/4" : transportReady === false ? t.statNo : "—"}</strong></div>
+                <div><span>{t.statHandshake}</span><strong>{flowControlState === "ready" ? t.statYes : flowControlState === "rejected" ? t.statRejected : flowControlState === "error" || flowControlState === "timeout" ? t.statNo : flowControlState === "idle" ? "—" : "…"}</strong></div>
+                <div><span>{t.statUds}</span><strong>{applicationProbeState === "positive" ? t.statYes : applicationProbeState === "negative" ? t.statRejected : applicationProbeState === "timeout" || applicationProbeState === "error" || applicationProbeState === "unexpected" ? t.statNo : applicationProbeState === "idle" ? "—" : "…"}</strong></div>
+                <div><span>{t.statCard}</span><strong>{driverCardReadResults.some((entry) => entry.status === "positive") ? t.statYes : driverCardReadResults.length > 0 ? t.statNo : "—"}</strong></div>
               </div>
             )}
 
             <div className="truth-card">
-              <p className="section-kicker">ŠTA JE POTVRĐENO</p>
+              <p className="section-kicker">{t.chkWhatConfirmed}</p>
               <ul>
-                <li className="pass"><span>✓</span><div><strong>Smart Tacho 2 koristi Bluetooth Low Energy</strong><small>EU tehnička specifikacija zahteva BLE 5.0 ili noviji interfejs.</small></div></li>
-                <li className="pass"><span>✓</span><div><strong>Vozač mora dati saglasnost</strong><small>Lični podaci nisu dostupni kroz ITS interfejs bez saglasnosti vozača.</small></div></li>
+                <li className="pass"><span>✓</span><div><strong>{t.chkBleTitle}</strong><small>{t.chkBleDesc}</small></div></li>
+                <li className="pass"><span>✓</span><div><strong>{t.chkConsentTitle}</strong><small>{t.chkConsentDesc}</small></div></li>
                 <li className={protocolServiceDetected === true ? "pass" : "pending"}>
                   <span>{protocolServiceDetected === true ? "✓" : "…"}</span>
                   <div>
-                    <strong>EU Smart Tacho 2 GATT servisi</strong>
+                    <strong>{t.chkServiceTitle}</strong>
                     <small>{protocolServiceDetected === true
                       ? t.protocolServiceDetected
                       : protocolServiceDetected === false
                         ? t.protocolServiceMissing
-                        : "Čeka se kontrolisani test na fizičkom uređaju."}</small>
+                        : t.chkServicePending}</small>
                   </div>
                 </li>
                 <li className={transportReady === true ? "pass" : "pending"}>
                   <span>{transportReady === true ? "✓" : "…"}</span>
                   <div>
-                    <strong>FIFO/Credits karakteristike</strong>
+                    <strong>{t.chkTransportTitle}</strong>
                     <small>{transportReady === true
-                      ? "Pronađene su sve četiri standardne transportne karakteristike."
+                      ? t.chkTransportPass
                       : transportReady === false
-                        ? "Servis postoji, ali kompletan transportni skup nije vidljiv. Sačuvaj novi beta izveštaj."
-                        : "Čeka se read-only provera karakteristika."}</small>
+                        ? t.chkTransportFail
+                        : t.chkTransportPending}</small>
                   </div>
                 </li>
                 <li className={flowControlState === "ready" ? "pass" : flowControlState === "rejected" || flowControlState === "error" || flowControlState === "timeout" ? "blocked" : "pending"}>
                   <span>{flowControlState === "ready" ? "✓" : flowControlState === "rejected" || flowControlState === "error" || flowControlState === "timeout" ? "×" : "…"}</span>
                   <div>
-                    <strong>Dijagnostički credit handshake</strong>
+                    <strong>{t.chkHandshakeTitle}</strong>
                     <small>{flowControlState === "ready"
-                      ? `Tahograf je prihvatio transport i vratio kredit (${serverCreditsReceived.at(-1)}). Nijedan podatak još nije tražen.`
+                      ? `${t.chkHandshakePass} (${serverCreditsReceived.at(-1)}).`
                       : flowControlState === "rejected"
-                        ? "Tahograf je vratio 0xFF i odbio transport."
+                        ? t.chkHandshakeRej
                         : flowControlState === "timeout"
-                          ? "Indications su uključene, ali kredit nije stigao u roku od 6 sekundi."
+                          ? t.chkHandshakeTime
                       : flowControlState === "error"
-                            ? `Credit handshake nije uspeo (${flowControlError.name}); BLE veza može i dalje biti aktivna.`
+                            ? t.chkHandshakeErr
                             : flowControlState === "arming" || flowControlState === "waiting"
-                              ? "U toku je standardna FIFO/Credits sekvenca."
-                              : "Čeka se kontrolisani test dok vozilo stoji."}</small>
+                              ? t.chkHandshakeWait
+                              : t.chkHandshakePending}</small>
                   </div>
                 </li>
                 <li className={applicationProbeState === "positive" ? "pass" : applicationProbeState === "negative" || applicationProbeState === "unexpected" || applicationProbeState === "timeout" || applicationProbeState === "error" ? "blocked" : "pending"}>
                   <span>{applicationProbeState === "positive" ? "✓" : applicationProbeState === "negative" || applicationProbeState === "unexpected" || applicationProbeState === "timeout" || applicationProbeState === "error" ? "×" : "…"}</span>
                   <div>
-                    <strong>UDS TesterPresent</strong>
+                    <strong>{t.chkUdsTitle}</strong>
                     <small>{applicationProbeState === "positive"
-                      ? "Tahograf je pozitivno odgovorio na bezbednu aplikacionu proveru."
+                      ? t.chkUdsPass
                       : applicationProbeState === "negative"
-                        ? `Tahograf je vratio negativan odgovor${applicationProbeResponse.negativeResponseCode === null ? "" : ` (kod ${applicationProbeResponse.negativeResponseCode})`}.`
+                        ? `${t.chkUdsRej} ${applicationProbeResponse.negativeResponseCode === null ? "" : ` (${applicationProbeResponse.negativeResponseCode})`}.`
                         : applicationProbeState === "timeout"
-                          ? "Paket je poslat, ali odgovor nije stigao u roku od 6 sekundi."
+                          ? t.chkUdsTime
                           : applicationProbeState === "unexpected"
-                            ? "Odgovor je stigao, ali nije očekivani TesterPresent format."
+                            ? t.chkUdsUnexp
                             : applicationProbeState === "error"
-                              ? `Aplikaciona proba nije uspela (${applicationProbeError.name}).`
+                              ? t.chkUdsErr
                               : applicationProbeState === "waiting"
-                                ? "Čeka se odgovor tahografa."
-                                : "Čeka se potvrđen transport; ne traži vozačke podatke."}</small>
+                                ? t.chkUdsWait
+                                : t.chkUdsPending}</small>
                   </div>
                 </li>
                 <li className={diagnosticSessionState === "positive" ? "pass" : diagnosticSessionState === "idle" || diagnosticSessionState === "waiting" ? "pending" : "blocked"}>
                   <span>{diagnosticSessionState === "positive" ? "✓" : diagnosticSessionState === "idle" || diagnosticSessionState === "waiting" ? "…" : "×"}</span>
                   <div>
-                    <strong>Udaljena dijagnostička sesija (0x7E)</strong>
+                    <strong>{t.chkSessionTitle}</strong>
                     <small>{diagnosticSessionState === "positive"
-                      ? "Sesija je potvrđena; tek sada se nastavlja read-only F903 čitanje."
+                      ? t.chkSessionPass
                       : diagnosticSessionState === "timeout"
-                        ? "Tahograf nije odgovorio; F903 nije poslat."
+                        ? t.chkSessionTime
                       : diagnosticSessionState === "negative"
-                          ? `Sesija je odbijena${diagnosticSessionResponse.negativeResponseCode === null ? "" : ` (kod ${diagnosticSessionResponse.negativeResponseCode})`}; F903 nije poslat.`
+                          ? `${t.chkSessionRej} ${diagnosticSessionResponse.negativeResponseCode === null ? "" : ` (${diagnosticSessionResponse.negativeResponseCode})`}.`
                           : diagnosticSessionState === "error" || diagnosticSessionState === "unexpected"
-                            ? "Sesija nije potvrđena; F903 nije poslat."
-                            : "Čeka se standardizovana udaljena sesija; Remote HMI se ne otvara."}</small>
+                            ? t.chkSessionErr
+                            : t.chkSessionPending}</small>
                   </div>
                 </li>
                 <li className={driverCardReadResults.some((entry) => entry.status === "positive") ? "pass" : driverCardReadResults.length > 0 ? "blocked" : "pending"}>
                   <span>{driverCardReadResults.some((entry) => entry.status === "positive") ? "✓" : driverCardReadResults.length > 0 ? "×" : "…"}</span>
                   <div>
-                    <strong>Read-only podaci vozačke kartice</strong>
+                    <strong>{t.chkCardTitle}</strong>
                     <small>{driverCardReadResults.some((entry) => entry.status === "positive")
-                      ? `Tahograf je vratio ${driverCardReadResults.filter((entry) => entry.status === "positive").length} polja: aktivnost i vremena vozača.`
+                      ? t.chkCardPass
                       : driverCardReadResults.length > 0
-                        ? "Podaci nisu dostupni. Proveri karticu u slotu 1 i saglasnost za ITS lične podatke."
-                        : "Čeka se pozitivan UDS kanal. Ne tražimo ime, broj kartice, VIN, registraciju ni lokaciju."}</small>
+                        ? t.chkCardFail
+                        : t.chkCardPending}</small>
                   </div>
                 </li>
-                <li className="blocked"><span>×</span><div><strong>Lažni `.DDD` je uklonjen</strong><small>Aplikacija neće generisati simulirani fajl sa zvaničnom ekstenzijom.</small></div></li>
+                <li className="blocked"><span>×</span><div><strong>{t.chkFakeTitle}</strong><small>{t.chkFakeDesc}</small></div></li>
               </ul>
             </div>
 
             <div className="steps-card">
-              <p className="section-kicker">ZA TERENSKI TEST</p>
+              <p className="section-kicker">{t.stepsKicker}</p>
               <ol>
-                <li><span>1</span>Android telefon sa ažuriranim Chrome pregledačem</li>
-                <li><span>2</span>DTCO 4.1/4.1a ili SE5000 Smart 2 sa ubačenom karticom</li>
-                <li><span>3</span>Uključena saglasnost za ITS lične podatke na tahografu</li>
-                <li><span>4</span>Vozilo bezbedno parkirano tokom testa</li>
+                <li><span>1</span>{t.step1}</li>
+                <li><span>2</span>{t.step2}</li>
+                <li><span>3</span>{t.step3}</li>
+                <li><span>4</span>{t.step4}</li>
               </ol>
             </div>
           </section>
@@ -1291,7 +1286,7 @@ export default function TachoCommandApp() {
           <section className="module-screen" aria-labelledby="more-title">
             <div className="module-heading">
               <div>
-                <p className="section-kicker">PODEŠAVANJA</p>
+                <p className="section-kicker">{t.setKicker}</p>
                 <h2 id="more-title">{t.yourTachoCommand}</h2>
                 <p>{t.fastLocalTransparent}</p>
               </div>
@@ -1300,12 +1295,12 @@ export default function TachoCommandApp() {
 
             <div className="settings-list">
               {installed ? (
-                <div className="installed-setting"><span className="setting-icon">✓</span><div><strong>Aplikacija je instalirana</strong><small>Pokrenuta je kao samostalna mobilna aplikacija</small></div><em className="good">●</em></div>
+                <div className="installed-setting"><span className="setting-icon">✓</span><div><strong>{t.setAppInstalled}</strong><small>{t.setAppInstalledDesc}</small></div><em className="good">●</em></div>
               ) : (
-                <button type="button" onClick={installApp}><span className="setting-icon">⇩</span><div><strong>Instaliraj aplikaciju</strong><small>Dodaj TachoCommand na početni ekran</small></div><em>›</em></button>
+                <button type="button" onClick={installApp}><span className="setting-icon">⇩</span><div><strong>{t.setInstallApp}</strong><small>{t.setInstallAppDesc}</small></div><em>›</em></button>
               )}
-              <button type="button" onClick={() => setShowTimeEditor(true)}><span className="setting-icon">◷</span><div><strong>Podesi ručna vremena</strong><small>Kontinuirana, dnevna vožnja i smena</small></div><em>›</em></button>
-              <button type="button" onClick={() => setNotice(online ? "Mreža je dostupna. Ručni podaci se i dalje čuvaju samo lokalno." : "Offline režim je aktivan; Cockpit nastavlja da radi.")}><span className="setting-icon">◎</span><div><strong>Offline status</strong><small>{online ? "Mreža dostupna" : "Aplikacija radi bez mreže"}</small></div><em className={online ? "good" : "warn"}>●</em></button>
+              <button type="button" onClick={() => setShowTimeEditor(true)}><span className="setting-icon">◷</span><div><strong>{t.setManualTime}</strong><small>{t.setManualTimeDesc}</small></div><em>›</em></button>
+              <button type="button" onClick={() => setNotice(online ? t.msgNetworkOnline : t.msgNetworkOffline)}><span className="setting-icon">◎</span><div><strong>{t.setOfflineStat}</strong><small>{online ? t.setOfflineOn : t.setOfflineOff}</small></div><em className={online ? "good" : "warn"}>●</em></button>
               <label className="language-setting">
                 <span className="setting-icon">文</span>
                 <div><strong>{t.language}</strong><small>{t.languageHint}</small></div>
@@ -1318,21 +1313,21 @@ export default function TachoCommandApp() {
             </div>
 
             <div className="ad-boundary-card">
-              <span>OGLASNI PROSTOR</span>
-              <strong>Prihod bez pristupa vozačkim podacima</strong>
-              <p>Oglasi će biti na odvojenom informativnom ekranu. Neće se učitavati u Bluetooth centru niti u aktivnom Cockpitu.</p>
+              <span>{t.adKicker}</span>
+              <strong>{t.adTitle}</strong>
+              <p>{t.adDesc}</p>
             </div>
 
             <div className="about-card">
-              <div><span>{t.version}</span><strong>0.15 Remote Session F903</strong></div>
-              <div><span>Izvor podataka</span><strong>{demoMode ? "Demo" : "Ručni lokalni"}</strong></div>
-              <div><span>Cloud nalog</span><strong>Nije potreban</strong></div>
+              <div><span>{t.version}</span><strong>0.16 Remote Session F903</strong></div>
+              <div><span>{t.aboutSource}</span><strong>{demoMode ? t.sourceDemo : t.aboutManual}</strong></div>
+              <div><span>{t.aboutCloud}</span><strong>{t.aboutCloudDesc}</strong></div>
             </div>
 
             <div className="source-card">
-              <p className="section-kicker">PROVERENI IZVORI</p>
+              <p className="section-kicker">{t.provSources}</p>
               <a href="https://eur-lex.europa.eu/eli/reg_impl/2021/1228/oj/eng" target="_blank" rel="noreferrer">EU 2021/1228 — Smart Tacho 2 i ITS/BLE <span>↗</span></a>
-              <a href="https://developer.chrome.com/docs/capabilities/bluetooth" target="_blank" rel="noreferrer">Chrome — Web Bluetooth zahtevi <span>↗</span></a>
+              <a href="https://developer.chrome.com/docs/capabilities/bluetooth" target="_blank" rel="noreferrer">Chrome — Web Bluetooth <span>↗</span></a>
               <a href="https://www.fleet.vdo.com/support/faq/" target="_blank" rel="noreferrer">VDO — DTCO 4.1 Bluetooth <span>↗</span></a>
               <a href="https://stoneridge-tachographs.com/en/products/se5000-smart-2" target="_blank" rel="noreferrer">Stoneridge — SE5000 Smart 2 <span>↗</span></a>
             </div>
@@ -1343,25 +1338,25 @@ export default function TachoCommandApp() {
           <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) setShowTimeEditor(false); }}>
             <form className="editor-modal" onSubmit={saveManualTimes} aria-labelledby="editor-title">
               <div className="modal-heading">
-                <div><p className="section-kicker">RUČNI IZVOR</p><h2 id="editor-title">Podesi vremena</h2></div>
+                <div><p className="section-kicker">{t.modManualSrc}</p><h2 id="editor-title">{t.modTitle}</h2></div>
                 <button type="button" aria-label="Zatvori" onClick={() => setShowTimeEditor(false)}>×</button>
               </div>
-              <p className="modal-explainer">Prepiši stanje sa tahografa samo kao ličnu pomoćnu belešku. Ovaj unos nije pravni dokaz.</p>
+              <p className="modal-explainer">{t.modDesc}</p>
               {([
-                ["continuous", "Kontinuirana vožnja", continuousDrive],
-                ["daily", "Dnevna vožnja", dailyDrive],
-                ["shift", "Trajanje smene", shiftElapsed],
+                ["continuous", t.modContinuous, continuousDrive],
+                ["daily", t.modDaily, dailyDrive],
+                ["shift", t.modShift, shiftElapsed],
               ] as [string, string, number][]).map(([key, label, value]) => (
                 <fieldset key={key}>
                   <legend>{label}</legend>
-                  <label><input name={`${key}Hours`} type="number" inputMode="numeric" min="0" max="99" defaultValue={Math.floor(value / HOUR)} /><span>sati</span></label>
+                  <label><input name={`${key}Hours`} type="number" inputMode="numeric" min="0" max="99" defaultValue={Math.floor(value / HOUR)} /><span>{t.modHours}</span></label>
                   <b>:</b>
-                  <label><input name={`${key}Minutes`} type="number" inputMode="numeric" min="0" max="59" defaultValue={Math.floor((value % HOUR) / MINUTE)} /><span>min</span></label>
+                  <label><input name={`${key}Minutes`} type="number" inputMode="numeric" min="0" max="59" defaultValue={Math.floor((value % HOUR) / MINUTE)} /><span>{t.modMins}</span></label>
                 </fieldset>
               ))}
               <div className="modal-actions">
-                <button type="button" className="secondary-button" onClick={() => setShowTimeEditor(false)}>Otkaži</button>
-                <button type="submit" className="primary-button">Sačuvaj ručno</button>
+                <button type="button" className="secondary-button" onClick={() => setShowTimeEditor(false)}>{t.modCancel}</button>
+                <button type="submit" className="primary-button">{t.modSave}</button>
               </div>
             </form>
           </div>
