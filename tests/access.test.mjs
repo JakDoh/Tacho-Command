@@ -44,6 +44,6 @@ test("beta access cookie never contains the activation code", async () => {
 
 test("an active demo always exposes the beta-code upgrade flow", () => {
   assert.match(accessGate, /access\.status === "active"/);
-  assert.match(accessGate, /Aktiviraj kod/);
+  assert.match(accessGate, /Aktivovat kód/);
   assert.match(accessGate, /beta-code-active/);
 });
