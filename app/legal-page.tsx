@@ -23,7 +23,7 @@ export default function LegalPage({
         <p className="legal-updated">{updated}</p>
         {children}
       </article>
-      <Link className="legal-back" href="/">← Nazad na početnu</Link>
+      <Link className="legal-back" href="/">← Zpět na úvod</Link>
     </main>
   );
 }
