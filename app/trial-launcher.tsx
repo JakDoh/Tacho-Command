@@ -2,7 +2,19 @@
 
 import { useState } from "react";
 
-export default function TrialLauncher({ label, className = "" }: { label: string; className?: string }) {
+type Props = {
+  label: string;
+  loadingLabel?: string;
+  errorLabel?: string;
+  className?: string;
+};
+
+export default function TrialLauncher({
+  label,
+  loadingLabel = "Pokrećem…",
+  errorLabel = "Demo trenutno nije dostupan. Pokušaj ponovo za nekoliko minuta.",
+  className = "",
+}: Props) {
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState(false);
 
@@ -22,9 +34,9 @@ export default function TrialLauncher({ label, className = "" }: { label: string
   return (
     <span className="trial-launcher">
       <button type="button" className={className} onClick={start} disabled={starting}>
-        {starting ? "Pokrećem…" : label}
+        {starting ? loadingLabel : label}
       </button>
-      {error && <small role="alert">Demo trenutno nije dostupan. Pokušaj ponovo za nekoliko minuta.</small>}
+      {error && <small role="alert">{errorLabel}</small>}
     </span>
   );
 }
