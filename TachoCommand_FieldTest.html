@@ -76,14 +76,6 @@
 <body>
 
 <div class="container">
-  <!-- Status traka licence -->
-  <div class="license-bar" style="display:flex; justify-content:space-between; align-items:center; background:#1e293b; padding:6px 12px; border-radius:10px; margin-bottom:10px; font-size:12px; border:1px solid #263352;">
-    <div style="display:flex; align-items:center; gap:8px;">
-      <span>Status:</span>
-      <span id="licenseBadge" style="font-weight:800; padding:2px 8px; border-radius:6px; background:#d97706; color:#fff;">DEMO (24h Pregled)</span>
-    </div>
-    <button id="btnOpenActivate" style="background:#3b82f6; color:#fff; border:none; padding:4px 10px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:11px;" onclick="openModal()">🔑 Aktiviraj Punu Licencu</button>
-  </div>
   <!-- Navigacija tabova -->
   <div class="nav-tabs">
     <button id="tabBtnCockpit" class="nav-btn active" onclick="switchTab('cockpit')">🚚 Kokpit (Uživo)</button>
@@ -171,12 +163,6 @@
       </div>
 
       <!-- Selektor dana (Prethodnih 56 dana) -->
-            <!-- Demo Zaključavanje obaveštenje -->
-      <div id="demoLockCard" style="background:linear-gradient(135deg, #1e1b4b, #172554); border:1px solid #3b82f6; border-radius:14px; padding:14px; margin-bottom:12px; text-align:center;">
-        <div style="font-size:14px; font-weight:800; color:#93c5fd; margin-bottom:4px;">🔒 DEMO REŽIM (Poslednja 24-48h otključana)</div>
-        <div style="font-size:12px; color:#cbd5e1; margin-bottom:8px;">Puni 56-dnevni kalendar, evidencija 10h produžetaka i zaštita od BALM/BAG kazni dostupni su u aktiviranoj licenci.</div>
-        <button class="btn btn-primary btn-sm" onclick="openModal()">Otključaj svih 56 dana (Unesi Kod)</button>
-      </div>
       <div class="day-selector" id="daySelector"></div>
 
       <!-- Detalji izabranog dana -->
@@ -252,8 +238,6 @@
   const DIAG_SERVICE_UUID = "fa213def-aef4-475c-bcea-0a8d69073efc";
   const FIFO_UUID = "e413960c-75ba-4ca9-8a67-99bc052a1b13";
   const CREDITS_UUID = "e168d1a6-304f-42b4-ab96-4cd1d4efebd9";
-  const MASTER_SECRET = "bcb00bf5139f5c3e10069ed7a3cdbeb0aabf6bd245e156aeb55f013c90d089da";
-  let isProLicensed = false;
 
   let isConnected = false;
   let fifoChar = null;
@@ -264,91 +248,12 @@
   // Lokalna baza podataka za 56 dana
   let historyData = {};
 
-
-  function updateLicenseUI() {
-    const badge = document.getElementById("licenseBadge");
-    const lockCard = document.getElementById("demoLockCard");
-    const btnActivate = document.getElementById("btnOpenActivate");
-    if (isProLicensed) {
-      if (badge) { badge.innerText = "PRO LICENCA (56 Dana)"; badge.style.background = "#059669"; }
-      if (lockCard) lockCard.style.display = "none";
-      if (btnActivate) btnActivate.style.display = "none";
-    } else {
-      if (badge) { badge.innerText = "DEMO (24h Pregled)"; badge.style.background = "#d97706"; }
-      if (lockCard) lockCard.style.display = "block";
-      if (btnActivate) btnActivate.style.display = "block";
-    }
-  }
-
-  function openModal() {
-    document.getElementById("activateModal").style.display = "grid";
-    document.getElementById("inputBetaCode").focus();
-  }
-  function closeModal() {
-    document.getElementById("activateModal").style.display = "none";
-  }
-
-  const base32 = (bytes) => {
-    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    let bits = 0, value = 0, output = "";
-    for (const byte of bytes) {
-      value = (value << 8) | byte;
-      bits += 8;
-      while (bits >= 5) {
-        output += alphabet[(value >>> (bits - 5)) & 31];
-        bits -= 5;
-      }
-    }
-    if (bits > 0) output += alphabet[(value << (5 - bits)) & 31];
-    return output;
-  };
-
-  async function submitActivationCode() {
-    const code = document.getElementById("inputBetaCode").value.trim();
-    const msg = document.getElementById("modalMsg");
-    msg.style.display = "block";
-    msg.style.color = "#fcd34d";
-    msg.innerText = "Proveravam kod…";
-
-    try {
-      const norm = code.toUpperCase().replace(/[^A-Z2-9]/g, "");
-      if (!norm.startsWith("TCB") || norm.length !== 21) {
-        throw new Error("Neispravan format koda (mora početi sa TCB- i imati 20 cifara).");
-      }
-      const id = norm.slice(3, 11);
-      const signature = norm.slice(11);
-      const encoder = new TextEncoder();
-      const key = await crypto.subtle.importKey("raw", encoder.encode(MASTER_SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-      const sign = new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode("tachocommand:beta:" + id)));
-      const expected = base32(sign.slice(0, 7)).slice(0, 10);
-      
-      if (signature !== expected) {
-        throw new Error("Aktivacioni kod nije važeći ili je istekao.");
-      }
-
-      isProLicensed = true;
-      localStorage.setItem("tc_license_active", "true");
-      localStorage.setItem("tc_license_key", code);
-      msg.style.color = "#34d399";
-      msg.innerText = "🎉 Čestitamo! Licenca je uspešno aktivirana. Svih 56 dana je otključano!";
-      updateLicenseUI();
-      renderCalendar();
-      setTimeout(() => { closeModal(); }, 1800);
-
-    } catch (err) {
-      msg.style.color = "#f87171";
-      msg.innerText = err.message;
-    }
-  }
-
   function initDatabase() {
     try {
       const saved = localStorage.getItem("tachocommand_56days_v1");
       if (saved) {
         historyData = JSON.parse(saved);
       }
-      isProLicensed = localStorage.getItem("tc_license_active") === "true";
-      updateLicenseUI();
     } catch(e) { historyData = {}; }
   }
 
@@ -405,10 +310,8 @@
       if (dayRec && dayRec.drive > 0) chip.classList.add("has-drive");
       if (dayRec && dayRec.drive > 9 * 3600) chip.classList.add("has-warn");
 
-      const isLocked = !isProLicensed && i > 1;
-      if (isLocked) chip.style.opacity = "0.55";
-      chip.innerHTML = `<div style="font-size:10px; color:#94a3b8;">${dayName}</div><div style="font-weight:bold;">${isLocked ? "🔒 " : ""}${dayNum}.${monthNum}</div>`;
-      chip.onclick = () => { if (isLocked) { openModal(); } else { selectDay(key, d, chip); } };
+      chip.innerHTML = `<div style="font-size:10px; color:#94a3b8;">${dayName}</div><div style="font-weight:bold;">${dayNum}.${monthNum}</div>`;
+      chip.onclick = () => selectDay(key, d, chip);
       selector.appendChild(chip);
     }
     selectDay(getTodayKey(today), today);
@@ -721,24 +624,5 @@
   });
 </script>
 
-
-<!-- Modal za aktivaciju licence -->
-<div id="activateModal" style="position:fixed; inset:0; background:rgba(0,0,0,0.8); display:none; place-items:center; z-index:999; padding:16px;">
-  <div style="background:#0f172a; border:1px solid #263352; border-radius:16px; padding:20px; max-width:440px; width:100%;">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-      <h3 style="color:#60a5fa; font-size:18px;">🔑 Aktiviraj TachoCommand</h3>
-      <button onclick="closeModal()" style="background:none; border:none; color:#94a3b8; font-size:20px; cursor:pointer;">×</button>
-    </div>
-    <p style="font-size:13px; color:#cbd5e1; margin-bottom:12px;">
-      Unesite vaš 20-cifreni aktivacioni kod (npr. <code style="color:#38bdf8;">TCB-MC9P-LHZH-8R92P-4DGA2</code>) da otključate puni 56-dnevni kalendar i trajnu licencu.
-    </p>
-    <input id="inputBetaCode" style="width:100%; padding:12px; background:#020617; border:1px solid #263352; border-radius:8px; color:#fff; font-size:15px; font-family:monospace; text-transform:uppercase; margin:12px 0;" placeholder="TCB-XXXX-XXXX-XXXXX-XXXXX" autocomplete="off" />
-    <div id="modalMsg" style="font-size:12px; margin-bottom:10px; display:none;"></div>
-    <div style="display:flex; gap:8px;">
-      <button class="btn btn-primary" style="flex:1;" onclick="submitActivationCode()">Aktiviraj Kod</button>
-      <button class="btn" style="background:#334155; color:#fff;" onclick="closeModal()">Zatvori</button>
-    </div>
-  </div>
-</div>
 </body>
 </html>

@@ -9,8 +9,7 @@ const COOKIE_NAME = "tc_beta_trial";
 const ACCESS_COOKIE_NAME = "tc_beta_access";
 const YEAR_SECONDS = 365 * 24 * 60 * 60;
 
-const secret = () =>
-  process.env.TRIAL_SIGNING_SECRET || "bcb00bf5139f5c3e10069ed7a3cdbeb0aabf6bd245e156aeb55f013c90d089da";
+const secret = () => process.env.TRIAL_SIGNING_SECRET?.trim() || null;
 
 const readCookie = (request: Request, cookieName = COOKIE_NAME) => {
   const header = request.headers.get("cookie") ?? "";

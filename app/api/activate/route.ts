@@ -13,8 +13,8 @@ const json = (body: unknown, init: ResponseInit = {}) =>
   });
 
 export async function POST(request: Request) {
-  const signingSecret =
-    process.env.TRIAL_SIGNING_SECRET || "bcb00bf5139f5c3e10069ed7a3cdbeb0aabf6bd245e156aeb55f013c90d089da";
+  const signingSecret = process.env.TRIAL_SIGNING_SECRET?.trim();
+  if (!signingSecret) return json({ status: "unavailable" }, { status: 503 });
 
   let code = "";
   try {
