@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   TACHO_DIAGNOSTICS_CREDITS_UUID,
   TACHO_DIAGNOSTICS_FIFO_UUID,
@@ -8,12 +8,6 @@ import {
   TACHO_OPTIONAL_SERVICE_UUIDS,
 } from "../../lib/tacho-ble.js";
 import {
-  OPEN_RHMI_ROUTINE_ID,
-  RHMI_DIDS,
-  buildOpenRhmiStartRequest,
-  buildOpenRhmiStatusRequest,
-  buildReadDataByIdentifier,
-  buildTesterPresentRequest,
   classifyOpenRhmiPacket,
   describeRhmiStatus,
   parseDriverWorkingState,
@@ -278,7 +272,7 @@ export default function FieldTestClient() {
         // Održavamo TesterPresent
         await sendUds([0x3e, 0x00], 1000);
 
-      } catch (err) {
+      } catch {
         addLog("warn", "Strim: preskočen ciklus");
       }
       await sleep(2000);
@@ -362,7 +356,11 @@ export default function FieldTestClient() {
       {/* ŽIVI KOKPIT EKRAN */}
       <div style={{ marginTop: 24, background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 16, padding: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: "#4b5563" }}>Uređaj: <strong>{deviceName}</strong></span>
+          <div>
+            <span style={{ fontSize: 14, fontWeight: 600, color: "#4b5563" }}>Uređaj: <strong>{deviceName}</strong></span>
+            {rhmiOpen && <span style={{ marginLeft: 8, padding: "2px 6px", background: "#d1fae5", color: "#065f46", fontSize: 11, borderRadius: 4, fontWeight: 700 }}>RHMI AKTIVAN</span>}
+            {liveStreamActive && <span style={{ marginLeft: 6, padding: "2px 6px", background: "#dbeafe", color: "#1e40af", fontSize: 11, borderRadius: 4, fontWeight: 700 }}>LIVE</span>}
+          </div>
           <span style={{ padding: "6px 14px", borderRadius: 20, background: act.color, color: "#fff", fontWeight: 800, fontSize: 14 }}>
             {act.icon} {act.label}
           </span>
@@ -405,6 +403,15 @@ export default function FieldTestClient() {
               {formatHoursMin(dailyDrivingSec)}
             </div>
             <span style={{ fontSize: 12, color: "#6b7280" }}>Maks: 09h 00m (ili 10h)</span>
+          </div>
+
+          {/* Kumulativna pauza */}
+          <div style={{ background: "#ffffff", padding: 20, borderRadius: 12, border: "1px solid #e5e7eb", textAlign: "center" }}>
+            <span style={{ fontSize: 13, color: "#6b7280", fontWeight: 600, textTransform: "uppercase" }}>Kumulativna pauza</span>
+            <div style={{ fontSize: 36, fontWeight: 900, color: breakSec >= 2700 ? "#10b981" : "#1f2937", margin: "8px 0" }}>
+              {formatHoursMin(breakSec)}
+            </div>
+            <span style={{ fontSize: 12, color: "#6b7280" }}>{breakSec >= 2700 ? "Ispunjeno 45 min" : "Obavezno 45 min"}</span>
           </div>
 
         </div>

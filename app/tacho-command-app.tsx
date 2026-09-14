@@ -310,7 +310,7 @@ export default function TachoCommandApp() {
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
-  const t = (translations as Record<string, any>)[locale] ?? translations.sr;
+  const t = (translations as Record<string, typeof translations.sr>)[locale] ?? translations.sr;
   const activityMeta = useMemo<Record<Activity, { label: string; short: string; symbol: string }>>(() => ({
     drive: { label: t.activityDrive, short: t.activityDriveShort, symbol: "●" },
     work: { label: t.activityWork, short: t.activityWorkShort, symbol: "◆" },
@@ -435,7 +435,7 @@ export default function TachoCommandApp() {
       addBleTestEvent("services-scanned");
       addBleTestEvent("characteristics-scanned");
       setDetectedServiceUuids([...classification.normalizedServices]);
-      setDetectedCharacteristics(transport.serviceCharacteristics.map((entry: any) => ({ serviceUuid: entry.serviceUuid, characteristicUuids: [...entry.characteristicUuids] })));
+      setDetectedCharacteristics(transport.serviceCharacteristics.map((entry: { serviceUuid: string; characteristicUuids: readonly string[] }) => ({ serviceUuid: entry.serviceUuid, characteristicUuids: [...entry.characteristicUuids] })));
       setProtocolServiceDetected(classification.hasStandardTachoService);
       setTransportReady(transport.transportReady);
       setDevice(selected);

@@ -12,12 +12,21 @@ export type ServiceClassification = Readonly<{
   hasStandardTachoService: boolean;
 }>;
 
-export function classifyTachoServices(serviceUuids?: readonly string[]): ServiceClassification;
-export function classifyTachoTransport(serviceCharacteristics?: readonly any[]): Readonly<Record<string, any>>;
-export function classifyFlowControl(input?: Record<string, unknown>): Readonly<Record<string, any>>;
-export function classifyApplicationProbe(input?: Record<string, unknown>): Readonly<Record<string, any>>;
-export function classifyDiagnosticSession(input?: Record<string, unknown>): Readonly<Record<string, any>>;
-export function classifyRemoteHmi(input?: Record<string, unknown>): Readonly<Record<string, any>>;
-export function classifyDriverCardRead(input?: Record<string, unknown>): Readonly<Record<string, any>>;
+export interface ServiceCharacteristicEntry {
+  readonly serviceUuid: string;
+  readonly characteristicUuids: readonly string[];
+}
 
-export function buildCompatibilityReport(input?: Record<string, any>): Readonly<Record<string, any>>;
+export function classifyTachoServices(serviceUuids?: readonly string[]): ServiceClassification;
+export function classifyTachoTransport(serviceCharacteristics?: readonly ServiceCharacteristicEntry[]): Readonly<{
+  serviceCharacteristics: readonly ServiceCharacteristicEntry[];
+  checks: Readonly<Record<string, boolean>>;
+  transportReady: boolean;
+}>;
+export function classifyFlowControl(input?: Record<string, unknown>): Readonly<Record<string, unknown>>;
+export function classifyApplicationProbe(input?: Record<string, unknown>): Readonly<Record<string, unknown>>;
+export function classifyDiagnosticSession(input?: Record<string, unknown>): Readonly<Record<string, unknown>>;
+export function classifyRemoteHmi(input?: Record<string, unknown>): Readonly<Record<string, unknown>>;
+export function classifyDriverCardRead(input?: Record<string, unknown>): Readonly<Record<string, unknown>>;
+
+export function buildCompatibilityReport(input?: Record<string, unknown>): Readonly<Record<string, unknown>>;

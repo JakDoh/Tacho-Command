@@ -10,8 +10,8 @@ export function createItsMessageAssembler(): { expectedPackets: number; nextPack
 export function pushItsPacket(assembler: { expectedPackets: number; nextPacket: number; chunks: number[][] }, packet: readonly number[]): Readonly<{ status: string; reason: string | null; message: readonly number[] | null }>;
 export function parseDdpMessage(message: readonly number[]): Readonly<{ valid: boolean; reason: string | null; sid: number | null; data: readonly number[] }>;
 export function createDdpSession(): Readonly<{ phaseIndex: number; status: string; failure: null }>;
-export function advanceDdpSession(session: Readonly<Record<string, any>>, event: Readonly<Record<string, any>>): Readonly<Record<string, any>>;
-export function getDdpTeardownMessages(session: Readonly<Record<string, any>>): readonly (readonly number[])[];
+export function advanceDdpSession(session: Readonly<Record<string, unknown>>, event: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>>;
+export function getDdpTeardownMessages(session: Readonly<Record<string, unknown>>): readonly (readonly number[])[];
 export function classifyDdpPacket(packet: readonly number[] | null | undefined, requestSid: number): Readonly<{
   framed: boolean;
   checksumValid: boolean;
