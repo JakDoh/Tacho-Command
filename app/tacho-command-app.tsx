@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { resolveLocale, translations } from "../lib/i18n.js";
-import type { Locale } from "../lib/i18n.js";
+type Locale = "sr" | "en" | "de";
 import { evaluateDrivingSnapshot } from "../lib/tacho-rules.js";
 import {
   buildCompatibilityReport,
@@ -96,9 +96,12 @@ const DAILY_LIMIT = 9 * HOUR;
 const SHIFT_REFERENCE = 13 * HOUR;
 
 async function writeGattByMethod(characteristic: BleGattCharacteristic, method: string, value: Uint8Array) {
-  if (method === "with-response" && characteristic.writeValueWithResponse) return characteristic.writeValueWithResponse(value);
-  if (method === "without-response" && characteristic.writeValueWithoutResponse) return characteristic.writeValueWithoutResponse(value);
-  if (method === "legacy-auto" && characteristic.writeValue) return characteristic.writeValue(value);
+  const buffer = value as unknown as BufferSource;
+  if (method === "with-response" && characteristic.writeValueWithResponse) return characteristic.writeValueWithResponse(buffer);
+  if (method === "without-response" && characteristic.writeValueWithoutResponse) return characteristic.writeValueWithoutResponse(buffer);
+  if (characteristic.writeValue) return characteristic.writeValue(buffer);
+  if (characteristic.writeValueWithResponse) return characteristic.writeValueWithResponse(buffer);
+  if (characteristic.writeValueWithoutResponse) return characteristic.writeValueWithoutResponse(buffer);
   throw new DOMException("Previously verified GATT write method is unavailable", "NotSupportedError");
 }
 
@@ -207,7 +210,7 @@ export default function TachoCommandApp() {
     const hydrate = window.setTimeout(() => {
       setOnline(navigator.onLine);
       setInstalled(window.matchMedia("(display-mode: standalone)").matches);
-      setLocale(resolveLocale(window.localStorage.getItem("tachocommand.locale"), navigator.language));
+      setLocale(resolveLocale(window.localStorage.getItem("tachocommand.locale"), navigator.language) as Locale);
       const saved = window.localStorage.getItem("tachocommand.manual.v1");
       if (saved) {
         try {
@@ -307,7 +310,7 @@ export default function TachoCommandApp() {
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
-  const t = translations[locale];
+  const t = (translations as Record<string, any>)[locale] ?? translations.sr;
   const activityMeta = useMemo<Record<Activity, { label: string; short: string; symbol: string }>>(() => ({
     drive: { label: t.activityDrive, short: t.activityDriveShort, symbol: "●" },
     work: { label: t.activityWork, short: t.activityWorkShort, symbol: "◆" },
@@ -347,7 +350,7 @@ export default function TachoCommandApp() {
     setDemoMode(false);
     if (next !== "rest") setRestElapsed(0);
     setEvents((current) => [
-      { id: `${Date.now()}-${next}`, activity: next, startedAt: new Date().toISOString(), source: "manual" },
+      { id: `${Date.now()}-${next}`, activity: next, startedAt: new Date().toISOString(), source: "manual" as const },
       ...current.filter((entry) => entry.source === "manual"),
     ].slice(0, 40));
     setNotice(`${t.modeChanged}: ${activityMeta[next].label}. ${t.officialSource}.`);
@@ -363,7 +366,7 @@ export default function TachoCommandApp() {
       return;
     }
     let linkEstablished = false;
-    let failureStage: "connection" | "flow-control" | "application-probe" | "diagnostic-session" | "remote-hmi" | "driver-card-read" = "connection";
+    let failureStage = "connection";
     try {
       setFlowControlState("idle");
       setDiagnosticsFifoIndications(false);
@@ -431,8 +434,8 @@ export default function TachoCommandApp() {
       const transport = classifyTachoTransport(serviceCharacteristics);
       addBleTestEvent("services-scanned");
       addBleTestEvent("characteristics-scanned");
-      setDetectedServiceUuids(classification.normalizedServices);
-      setDetectedCharacteristics(transport.serviceCharacteristics.map((entry) => ({ serviceUuid: entry.serviceUuid, characteristicUuids: [...entry.characteristicUuids] })));
+      setDetectedServiceUuids([...classification.normalizedServices]);
+      setDetectedCharacteristics(transport.serviceCharacteristics.map((entry: any) => ({ serviceUuid: entry.serviceUuid, characteristicUuids: [...entry.characteristicUuids] })));
       setProtocolServiceDetected(classification.hasStandardTachoService);
       setTransportReady(transport.transportReady);
       setDevice(selected);

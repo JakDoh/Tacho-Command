@@ -28,7 +28,7 @@ self.addEventListener("fetch", (event) => {
           if (response.ok) caches.open(CACHE_NAME).then((cache) => cache.put(request, response.clone()));
           return response;
         })
-        .catch(() => caches.match(request).then((cached) => cached || caches.match("/field-test"))),
+        .catch(() => caches.match(request).then((cached) => cached || caches.match(url.pathname === "/app" ? "/app" : "/"))),
     );
     return;
   }
