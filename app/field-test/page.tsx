@@ -1,10 +1,10 @@
-import FieldTestClient from "./field-test-client";
+import ReadOnlyFieldTestClient from "./read-only-field-test-client";
 
 export const metadata = {
-  title: "TachoCommand 0.16 — RHMI Field Test",
-  description: "Smart Tacho V2 Remote HMI F211 field test",
+  title: "TachoCommand — Core Read-Only Field Test",
+  description: "Minimal Smart Tacho V2 read-only RDBI field candidate",
 };
 
 export default function FieldTestPage() {
-  return <FieldTestClient />;
+  return <ReadOnlyFieldTestClient />;
 }
