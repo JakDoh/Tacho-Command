@@ -12,7 +12,7 @@ const workerSource = await readFile(new URL("../worker/index.ts", import.meta.ur
 test("field-test route uses the read-only core candidate", () => {
   assert.match(pageSource, /read-only-field-test-client/);
   assert.doesNotMatch(pageSource, /from\s+["']\.\/field-test-client["']/);
-  assert.match(clientSource, /0\.31a-core-rdbi-gatt-serialized/);
+  assert.match(clientSource, /0\.31b-f903-single-probe/);
 });
 
 test("read-only field candidate does not open RHMI or diagnostic sessions", () => {
@@ -21,10 +21,11 @@ test("read-only field candidate does not open RHMI or diagnostic sessions", () =
   assert.doesNotMatch(clientSource, /classifyOpenRhmiPacket|describeRhmiStatus/);
 });
 
-test("read-only field candidate uses shared UDS reassembly and core telemetry modules", () => {
+test("read-only field candidate uses shared UDS reassembly and F903 helpers", () => {
   assert.match(clientSource, /createUdsResponseCollector/);
-  assert.match(clientSource, /readCoreDriverTelemetry/);
-  assert.match(clientSource, /TesterPresent potvrđen\. Krećem direktno na read-only 0x22 RDBI/);
+  assert.match(clientSource, /buildReadDataByIdentifier/);
+  assert.match(clientSource, /parseDriverWorkingState/);
+  assert.match(clientSource, /TesterPresent potvrđen\. Šaljem jedan read-only F903 zahtev/);
 });
 
 test("field candidate serializes every Web Bluetooth GATT write", () => {
@@ -32,6 +33,15 @@ test("field candidate serializes every Web Bluetooth GATT write", () => {
   assert.match(clientSource, /queueGattWrite\(credits, \[1\]\)/);
   assert.match(clientSource, /queueGattWrite\(fifo, \[1, 1, \.\.\.payload\]\)/);
   assert.doesNotMatch(clientSource, /writeGatt\(fifo, \[1, 1, \.\.\.payload\]\)/);
+});
+
+test("field candidate sends exactly one bounded F903 probe and no telemetry loop", () => {
+  assert.match(clientSource, /DRIVER_1_WORKING_STATE/);
+  assert.match(clientSource, /F903 rezultat: TIMEOUT/);
+  assert.match(clientSource, /F903 rezultat: NRC/);
+  assert.match(clientSource, /F903 rezultat: POSITIVE/);
+  assert.doesNotMatch(clientSource, /runTelemetry|readCoreDriverTelemetry/);
+  assert.doesNotMatch(clientSource, /DRIVER_1_CONTINUOUS_DRIVING|DRIVER_1_CUMULATIVE_BREAK|DRIVER_1_CURRENT_DAILY_DRIVING|DRIVER_1_CURRENT_WEEKLY_DRIVING/);
 });
 
 test("field candidate exposes a copyable diagnostic log", () => {
