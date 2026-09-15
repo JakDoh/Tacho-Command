@@ -12,7 +12,7 @@ const workerSource = await readFile(new URL("../worker/index.ts", import.meta.ur
 test("field-test route uses the read-only core candidate", () => {
   assert.match(pageSource, /read-only-field-test-client/);
   assert.doesNotMatch(pageSource, /from\s+["']\.\/field-test-client["']/);
-  assert.match(clientSource, /0\.31c-rdbi-observability-pass/);
+  assert.match(clientSource, /0\.31d-rdbi-settled-observability/);
 });
 
 test("read-only field candidate does not open RHMI or diagnostic sessions", () => {
@@ -26,7 +26,16 @@ test("read-only field candidate uses shared UDS reassembly and DID parsers", () 
   assert.match(clientSource, /buildReadDataByIdentifier/);
   assert.match(clientSource, /parseDriverWorkingState/);
   assert.match(clientSource, /parseDriverMinutesDid/);
-  assert.match(clientSource, /TesterPresent potvrđen\. Pokrećem jedan opservacioni prolaz/);
+  assert.match(clientSource, /TesterPresent potvrđen\. Sačekajte 1 s za stabilizaciju transporta/);
+});
+
+test("field candidate lets the transport settle before the first RDBI and formats durations", () => {
+  const testerPresentLog = clientSource.indexOf("TesterPresent potvrđen. Sačekajte 1 s");
+  const settlingDelay = clientSource.indexOf("await sleep(1000)", testerPresentLog);
+  const firstRdbi = clientSource.indexOf('probeMinutes("F923"', settlingDelay);
+  assert.ok(testerPresentLog >= 0 && settlingDelay > testerPresentLog && firstRdbi > settlingDelay);
+  assert.match(clientSource, /formatMinutes\(parsed\.minutes\)/);
+  assert.match(clientSource, /formatSeconds\(dailyDrivingSec\)/);
 });
 
 test("field candidate serializes every Web Bluetooth GATT write", () => {
