@@ -39,8 +39,14 @@ type PendingRequest = {
   reject: (error: Error) => void;
 };
 
-const APP_VERSION = "0.31c-rdbi-observability-pass";
+const APP_VERSION = "0.31d-rdbi-settled-observability";
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+const formatMinutes = (minutes: number) => {
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return `${String(hours).padStart(2, "0")}h ${String(remainingMinutes).padStart(2, "0")}m`;
+};
+const formatSeconds = (seconds: number | null) => seconds === null ? "—" : formatMinutes(Math.floor(seconds / 60));
 
 const writeGatt = async (char: BleCharacteristic, bytes: number[]) => {
   const value = Uint8Array.from(bytes);
@@ -212,7 +218,9 @@ export default function ReadOnlyFieldTestClient() {
       }
 
       setConnected(true);
-      addLog("pass", "TesterPresent potvrđen. Pokrećem jedan opservacioni prolaz kroz pet RDBI DID-ova.");
+      addLog("pass", "TesterPresent potvrđen. Sačekajte 1 s za stabilizaciju transporta.");
+      await sleep(1000);
+      addLog("info", "Pokrećem jedan opservacioni prolaz kroz pet RDBI DID-ova.");
 
       const formatDid = (did: number) => did.toString(16).padStart(4, "0").toUpperCase();
       const classifyFailure = (label: string, response: number[] | null) => {
@@ -237,7 +245,7 @@ export default function ReadOnlyFieldTestClient() {
         const parsed = parseDriverMinutesDid(response ?? [], did);
         if (parsed.valid) {
           setter(parsed.minutes * 60);
-          addLog("pass", `${label} rezultat: POSITIVE — ${parsed.minutes} min.`);
+          addLog("pass", `${label} rezultat: POSITIVE — ${formatMinutes(parsed.minutes)} (${parsed.minutes} min).`);
         } else {
           addLog("warn", `${label} rezultat: UNEXPECTED — servis 0x${Number(response?.[2] ?? 0).toString(16).padStart(2, "0").toUpperCase()}.`);
         }
@@ -311,19 +319,19 @@ export default function ReadOnlyFieldTestClient() {
         </article>
         <article style={{ padding: 16, border: "1px solid #e5e7eb", borderRadius: 12 }}>
           <small>Neprekidna vožnja — F923</small>
-          <div style={{ fontSize: 28, fontWeight: 800 }}>{continuousDrivingSec === null ? "—" : `${continuousDrivingSec / 60} min`}</div>
+          <div style={{ fontSize: 28, fontWeight: 800 }}>{formatSeconds(continuousDrivingSec)}</div>
         </article>
         <article style={{ padding: 16, border: "1px solid #e5e7eb", borderRadius: 12 }}>
           <small>Kumulativna pauza — F925</small>
-          <div style={{ fontSize: 28, fontWeight: 800 }}>{breakSec === null ? "—" : `${breakSec / 60} min`}</div>
+          <div style={{ fontSize: 28, fontWeight: 800 }}>{formatSeconds(breakSec)}</div>
         </article>
         <article style={{ padding: 16, border: "1px solid #e5e7eb", borderRadius: 12 }}>
           <small>Dnevna vožnja — F99A (optional)</small>
-          <div style={{ fontSize: 28, fontWeight: 800 }}>{dailyDrivingSec === null ? "—" : `${dailyDrivingSec / 60} min`}</div>
+          <div style={{ fontSize: 28, fontWeight: 800 }}>{formatSeconds(dailyDrivingSec)}</div>
         </article>
         <article style={{ padding: 16, border: "1px solid #e5e7eb", borderRadius: 12 }}>
           <small>Nedeljna vožnja — F99B (optional)</small>
-          <div style={{ fontSize: 28, fontWeight: 800 }}>{weeklyDrivingSec === null ? "—" : `${weeklyDrivingSec / 60} min`}</div>
+          <div style={{ fontSize: 28, fontWeight: 800 }}>{formatSeconds(weeklyDrivingSec)}</div>
         </article>
       </div>
 
