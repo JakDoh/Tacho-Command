@@ -12,7 +12,7 @@ const workerSource = await readFile(new URL("../worker/index.ts", import.meta.ur
 test("field-test route uses the read-only core candidate", () => {
   assert.match(pageSource, /read-only-field-test-client/);
   assert.doesNotMatch(pageSource, /from\s+["']\.\/field-test-client["']/);
-  assert.match(clientSource, /0\.31-core-rdbi-field-candidate/);
+  assert.match(clientSource, /0\.31a-core-rdbi-gatt-serialized/);
 });
 
 test("read-only field candidate does not open RHMI or diagnostic sessions", () => {
@@ -25,6 +25,18 @@ test("read-only field candidate uses shared UDS reassembly and core telemetry mo
   assert.match(clientSource, /createUdsResponseCollector/);
   assert.match(clientSource, /readCoreDriverTelemetry/);
   assert.match(clientSource, /TesterPresent potvrđen\. Krećem direktno na read-only 0x22 RDBI/);
+});
+
+test("field candidate serializes every Web Bluetooth GATT write", () => {
+  assert.match(clientSource, /gattWriteQueueRef/);
+  assert.match(clientSource, /queueGattWrite\(credits, \[1\]\)/);
+  assert.match(clientSource, /queueGattWrite\(fifo, \[1, 1, \.\.\.payload\]\)/);
+  assert.doesNotMatch(clientSource, /writeGatt\(fifo, \[1, 1, \.\.\.payload\]\)/);
+});
+
+test("field candidate exposes a copyable diagnostic log", () => {
+  assert.match(clientSource, /Kopiraj dnevnik/);
+  assert.match(clientSource, /navigator\.clipboard\.writeText/);
 });
 
 test("PWA and legacy recovery surfaces point to the 0.31 field candidate", () => {
