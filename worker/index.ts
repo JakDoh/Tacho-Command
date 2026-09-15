@@ -28,7 +28,7 @@ const LEGACY_APP_RECOVERY_HTML = `<!doctype html>
 <title>TachoCommand update</title>
 <style>html,body{margin:0;min-height:100%;background:#07101d;color:#f5f7fb;font-family:system-ui,-apple-system,sans-serif}main{min-height:100dvh;display:grid;place-items:center;padding:24px;text-align:center}h1{margin:0 0 8px}p{opacity:.8}</style>
 </head>
-<body><main><div><h1>TachoCommand</h1><p>Osvježavam aplikaciju…</p></div></main>
+<body><main><div><h1>TachoCommand</h1><p>Osvežavam aplikaciju…</p></div></main>
 <script>
 (async()=>{
   try {
@@ -41,7 +41,7 @@ const LEGACY_APP_RECOVERY_HTML = `<!doctype html>
       await Promise.all(regs.map(r=>r.unregister()));
     }
   } catch(e) {}
-  location.replace('/field-test?recovered=016&ts='+Date.now());
+  location.replace('/field-test?recovered=031&ts='+Date.now());
 })();
 </script></body></html>`;
 
@@ -49,8 +49,8 @@ const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
-    // Legacy PWA installs use /app as their start_url. Return a dependency-free
-    // recovery document here so a stale cache-first JS bundle cannot block cleanup.
+    // Legacy PWA installs use /app as their stable identity/start surface. Return a
+    // dependency-free recovery document so stale cached bundles cannot block cleanup.
     if (url.pathname === "/app" && request.method === "GET") {
       return new Response(LEGACY_APP_RECOVERY_HTML, {
         status: 200,

@@ -31,13 +31,15 @@ test("is installable as a portrait standalone PWA", () => {
   assert.equal(manifest.display, "standalone");
   assert.equal(manifest.orientation, "portrait-primary");
   assert.equal(manifest.start_url, "/field-test");
+  assert.match(manifest.name, /0\.31/);
   assert.ok(manifest.icons.length > 0);
 });
 
-test("offline cache is same-origin and keeps a navigation fallback", () => {
+test("offline cache is same-origin and falls back to the field-test source of truth", () => {
   assert.match(serviceWorker, /url\.origin !== self\.location\.origin/);
   assert.match(serviceWorker, /request\.mode === "navigate"/);
-  assert.match(serviceWorker, /caches\.match\(url\.pathname === "\/app" \? "\/app" : "\/"\)/);
+  assert.match(serviceWorker, /caches\.match\("\/field-test"\)/);
+  assert.doesNotMatch(serviceWorker, /caches\.match\(url\.pathname === "\/app"/);
 });
 
 test("requests only published standard optional BLE services and keeps reports data-minimal", async () => {

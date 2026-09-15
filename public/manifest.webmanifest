@@ -1,7 +1,7 @@
 {
-  "name": "TachoCommand — RHMI Field Test 0.16",
+  "name": "TachoCommand — Core Field Test 0.31",
   "short_name": "TachoCommand",
-  "description": "Teren test BLE transporta i Remote HMI F211 na VDO DTCO.",
+  "description": "Minimalni Smart Tacho V2 read-only RDBI field kandidat bez Remote HMI/F211 sesije.",
   "id": "/app",
   "start_url": "/field-test",
   "scope": "/",

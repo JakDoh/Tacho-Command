@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 
-const LEGACY_CACHE_PREFIXES = ["tachocommand-shell-v13", "tachocommand-shell-v14", "tachocommand-shell-v15"];
+const LEGACY_CACHE_PREFIX = "tachocommand-shell-";
 
 export default function DriverAppPage() {
-  const [status, setStatus] = useState("Osvježavam TachoCommand…");
+  const [status, setStatus] = useState("Osvežavam TachoCommand…");
 
   useEffect(() => {
     let cancelled = false;
@@ -16,7 +16,7 @@ export default function DriverAppPage() {
           const keys = await caches.keys();
           await Promise.all(
             keys
-              .filter((key) => LEGACY_CACHE_PREFIXES.some((prefix) => key.startsWith(prefix)))
+              .filter((key) => key.startsWith(LEGACY_CACHE_PREFIX))
               .map((key) => caches.delete(key)),
           );
         }
@@ -29,7 +29,7 @@ export default function DriverAppPage() {
         if (!cancelled) setStatus("Čistim staru verziju…");
       } finally {
         if (!cancelled) {
-          window.location.replace(`/field-test?recovered=016&ts=${Date.now()}`);
+          window.location.replace(`/field-test?recovered=031&ts=${Date.now()}`);
         }
       }
     };
