@@ -34,7 +34,7 @@ type PendingRequest = {
   reject: (error: Error) => void;
 };
 
-const APP_VERSION = "0.31-core-rdbi-field-candidate";
+const APP_VERSION = "0.31a-core-rdbi-gatt-serialized";
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
 const writeGatt = async (char: BleCharacteristic, bytes: number[]) => {
@@ -67,6 +67,15 @@ export default function ReadOnlyFieldTestClient() {
 
   const stopRef = useRef(false);
   const creditsRef = useRef<BleCharacteristic | null>(null);
+  const gattWriteQueueRef = useRef<Promise<void>>(Promise.resolve());
+
+  const queueGattWrite = (char: BleCharacteristic, bytes: number[]) => {
+    const operation = gattWriteQueueRef.current
+      .catch(() => {})
+      .then(() => writeGatt(char, bytes));
+    gattWriteQueueRef.current = operation.catch(() => {});
+    return operation;
+  };
 
   const addLog = (level: LogEntry["level"], message: string) => {
     const time = new Date().toLocaleTimeString();
@@ -110,6 +119,7 @@ export default function ReadOnlyFieldTestClient() {
     setLogs([]);
     setRunning(true);
     stopRef.current = false;
+    gattWriteQueueRef.current = Promise.resolve();
     setActivity("unknown");
     setContinuousDrivingSec(null);
     setBreakSec(null);
@@ -162,7 +172,10 @@ export default function ReadOnlyFieldTestClient() {
         const packet = Array.from(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
 
         // Jedan novi kredit za svaki primljeni ITS paket.
-        writeGatt(credits, [1]).catch(() => {});
+        // Web Bluetooth permits only one in-flight GATT operation. Queue the
+        // returned client credit before resolving the response so the next
+        // UDS request cannot overlap this characteristic write.
+        void queueGattWrite(credits, [1]).catch(() => {});
 
         if (!pendingRequest) return;
         const result = pendingRequest.collector.push(packet);
@@ -189,7 +202,7 @@ export default function ReadOnlyFieldTestClient() {
       await fifo.startNotifications();
 
       const serverCreditPromise = new Promise<number>((resolve) => { creditResolver = resolve; });
-      await writeGatt(credits, [1]);
+      await queueGattWrite(credits, [1]);
       const serverCredit = await Promise.race([serverCreditPromise, sleep(4000).then(() => null)]);
       creditResolver = null;
       if (serverCredit === null) throw new Error("Server credit timeout");
@@ -220,7 +233,7 @@ export default function ReadOnlyFieldTestClient() {
           }, timeoutMs);
 
           pendingRequest = { collector, resolve: finishResolve, reject: finishReject };
-          writeGatt(fifo, [1, 1, ...payload]).catch((error) => {
+          queueGattWrite(fifo, [1, 1, ...payload]).catch((error) => {
             if (pendingRequest?.collector === collector) pendingRequest = null;
             finishReject(error instanceof Error ? error : new Error(String(error)));
           });
@@ -249,7 +262,7 @@ export default function ReadOnlyFieldTestClient() {
     setConnected(false);
     if (creditsRef.current) {
       try {
-        await writeGatt(creditsRef.current, [0xff]);
+        await queueGattWrite(creditsRef.current, [0xff]);
       } catch {}
     }
     addLog("info", "Read-only sesija je zaustavljena.");
@@ -302,7 +315,18 @@ export default function ReadOnlyFieldTestClient() {
       </div>
 
       <section style={{ marginTop: 20 }}>
-        <h2 style={{ fontSize: 16 }}>Dnevnik</h2>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+          <h2 style={{ fontSize: 16 }}>Dnevnik</h2>
+          <button
+            type="button"
+            disabled={logs.length === 0}
+            onClick={() => navigator.clipboard.writeText(logs
+              .map((entry) => `[${entry.time}] ${entry.level.toUpperCase()}: ${entry.message}`)
+              .join("\n"))}
+          >
+            Kopiraj dnevnik
+          </button>
+        </div>
         <div style={{ background: "#111827", color: "#e5e7eb", borderRadius: 10, padding: 12, minHeight: 180, fontFamily: "monospace", fontSize: 12 }}>
           {logs.length === 0 ? "Još nema događaja." : logs.map((entry, index) => (
             <div key={`${entry.time}-${index}`} style={{ marginBottom: 4 }}>
