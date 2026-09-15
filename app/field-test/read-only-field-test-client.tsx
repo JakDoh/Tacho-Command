@@ -7,7 +7,12 @@ import {
   TACHO_DIAGNOSTICS_SERVICE_UUID,
   TACHO_OPTIONAL_SERVICE_UUIDS,
 } from "../../lib/tacho-ble.js";
-import { buildReadDataByIdentifier, parseDriverWorkingState, RHMI_DIDS } from "../../lib/tacho-rhmi.js";
+import {
+  buildReadDataByIdentifier,
+  parseDriverMinutesDid,
+  parseDriverWorkingState,
+  RHMI_DIDS,
+} from "../../lib/tacho-rhmi.js";
 import { createUdsResponseCollector } from "../../lib/tacho-uds.js";
 
 type BleCharacteristic = {
@@ -34,7 +39,7 @@ type PendingRequest = {
   reject: (error: Error) => void;
 };
 
-const APP_VERSION = "0.31b-f903-single-probe";
+const APP_VERSION = "0.31c-rdbi-observability-pass";
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
 const writeGatt = async (char: BleCharacteristic, bytes: number[]) => {
@@ -52,6 +57,10 @@ export default function ReadOnlyFieldTestClient() {
   const [connected, setConnected] = useState(false);
   const [deviceName, setDeviceName] = useState("—");
   const [activity, setActivity] = useState("unknown");
+  const [continuousDrivingSec, setContinuousDrivingSec] = useState<number | null>(null);
+  const [breakSec, setBreakSec] = useState<number | null>(null);
+  const [dailyDrivingSec, setDailyDrivingSec] = useState<number | null>(null);
+  const [weeklyDrivingSec, setWeeklyDrivingSec] = useState<number | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
 
   const stopRef = useRef(false);
@@ -77,6 +86,10 @@ export default function ReadOnlyFieldTestClient() {
     stopRef.current = false;
     gattWriteQueueRef.current = Promise.resolve();
     setActivity("unknown");
+    setContinuousDrivingSec(null);
+    setBreakSec(null);
+    setDailyDrivingSec(null);
+    setWeeklyDrivingSec(null);
 
     try {
       const bluetooth = (navigator as Navigator & {
@@ -199,28 +212,56 @@ export default function ReadOnlyFieldTestClient() {
       }
 
       setConnected(true);
-      addLog("pass", "TesterPresent potvrđen. Šaljem jedan read-only F903 zahtev.");
+      addLog("pass", "TesterPresent potvrđen. Pokrećem jedan opservacioni prolaz kroz pet RDBI DID-ova.");
 
-      const f903Response = await sendUds(
-        buildReadDataByIdentifier(RHMI_DIDS.DRIVER_1_WORKING_STATE),
-        4000,
-      );
-      if (!f903Response) {
-        addLog("warn", "F903 rezultat: TIMEOUT — odgovor nije primljen u roku od 4 s.");
-      } else if (f903Response[2] === 0x7f && f903Response[3] === 0x22) {
-        const nrc = f903Response[4];
-        addLog("warn", `F903 rezultat: NRC 0x${Number(nrc ?? 0).toString(16).padStart(2, "0").toUpperCase()}.`);
-      } else {
-        const parsed = parseDriverWorkingState(f903Response);
+      const formatDid = (did: number) => did.toString(16).padStart(4, "0").toUpperCase();
+      const classifyFailure = (label: string, response: number[] | null) => {
+        if (!response) {
+          addLog("warn", `${label} rezultat: TIMEOUT.`);
+          return true;
+        }
+        if (response[2] === 0x7f && response[3] === 0x22) {
+          addLog("warn", `${label} rezultat: NRC 0x${Number(response[4] ?? 0).toString(16).padStart(2, "0").toUpperCase()}.`);
+          return true;
+        }
+        return false;
+      };
+
+      const probeMinutes = async (
+        label: string,
+        did: number,
+        setter: (seconds: number | null) => void,
+      ) => {
+        const response = await sendUds(buildReadDataByIdentifier(did), 4000);
+        if (classifyFailure(label, response)) return;
+        const parsed = parseDriverMinutesDid(response ?? [], did);
+        if (parsed.valid) {
+          setter(parsed.minutes * 60);
+          addLog("pass", `${label} rezultat: POSITIVE — ${parsed.minutes} min.`);
+        } else {
+          addLog("warn", `${label} rezultat: UNEXPECTED — servis 0x${Number(response?.[2] ?? 0).toString(16).padStart(2, "0").toUpperCase()}.`);
+        }
+        await sleep(350);
+      };
+
+      await probeMinutes("F923", RHMI_DIDS.DRIVER_1_CONTINUOUS_DRIVING, setContinuousDrivingSec);
+      await probeMinutes("F925", RHMI_DIDS.DRIVER_1_CUMULATIVE_BREAK, setBreakSec);
+
+      const f903Response = await sendUds(buildReadDataByIdentifier(RHMI_DIDS.DRIVER_1_WORKING_STATE), 4000);
+      if (!classifyFailure("F903", f903Response)) {
+        const parsed = parseDriverWorkingState(f903Response ?? []);
         if (parsed.valid) {
           setActivity(parsed.activity);
           addLog("pass", `F903 rezultat: POSITIVE — aktivnost ${parsed.activity.toUpperCase()}.`);
         } else {
-          const service = f903Response[2];
-          addLog("warn", `F903 rezultat: UNEXPECTED — servis 0x${Number(service ?? 0).toString(16).padStart(2, "0").toUpperCase()}.`);
+          addLog("warn", `F903 rezultat: UNEXPECTED — DID ${formatDid(RHMI_DIDS.DRIVER_1_WORKING_STATE)}.`);
         }
       }
-      addLog("info", "Jednokratna F903 proba je završena. Pritisnite Prekini.");
+      await sleep(350);
+
+      await probeMinutes("F99A", RHMI_DIDS.DRIVER_1_CURRENT_DAILY_DRIVING, setDailyDrivingSec);
+      await probeMinutes("F99B", RHMI_DIDS.DRIVER_1_CURRENT_WEEKLY_DRIVING, setWeeklyDrivingSec);
+      addLog("info", "Jednokratni RDBI opservacioni prolaz je završen. Pritisnite Prekini.");
     } catch (error) {
       setConnected(false);
       addLog("fail", error instanceof Error ? error.message : String(error));
@@ -257,8 +298,8 @@ export default function ReadOnlyFieldTestClient() {
       </div>
 
       <p style={{ padding: 12, background: "#f3f4f6", borderRadius: 10, fontSize: 13 }}>
-        Ovaj kandidat šalje tačno jedan read-only F903 zahtev. Ne otvara Remote HMI/F211 sesiju
-        i ne čita druge DID-ove.
+        Ovaj kandidat šalje po jedan read-only zahtev za F923, F925, F903, F99A i F99B.
+        Ne otvara Remote HMI/F211 sesiju i ne ponavlja očitavanje u petlji.
       </p>
 
       <div style={{ marginBottom: 14, fontSize: 14 }}>Uređaj: <strong>{deviceName}</strong></div>
@@ -267,6 +308,22 @@ export default function ReadOnlyFieldTestClient() {
         <article style={{ padding: 16, border: "1px solid #e5e7eb", borderRadius: 12 }}>
           <small>Trenutna aktivnost — F903</small>
           <div style={{ fontSize: 28, fontWeight: 800 }}>{activity.toUpperCase()}</div>
+        </article>
+        <article style={{ padding: 16, border: "1px solid #e5e7eb", borderRadius: 12 }}>
+          <small>Neprekidna vožnja — F923</small>
+          <div style={{ fontSize: 28, fontWeight: 800 }}>{continuousDrivingSec === null ? "—" : `${continuousDrivingSec / 60} min`}</div>
+        </article>
+        <article style={{ padding: 16, border: "1px solid #e5e7eb", borderRadius: 12 }}>
+          <small>Kumulativna pauza — F925</small>
+          <div style={{ fontSize: 28, fontWeight: 800 }}>{breakSec === null ? "—" : `${breakSec / 60} min`}</div>
+        </article>
+        <article style={{ padding: 16, border: "1px solid #e5e7eb", borderRadius: 12 }}>
+          <small>Dnevna vožnja — F99A (optional)</small>
+          <div style={{ fontSize: 28, fontWeight: 800 }}>{dailyDrivingSec === null ? "—" : `${dailyDrivingSec / 60} min`}</div>
+        </article>
+        <article style={{ padding: 16, border: "1px solid #e5e7eb", borderRadius: 12 }}>
+          <small>Nedeljna vožnja — F99B (optional)</small>
+          <div style={{ fontSize: 28, fontWeight: 800 }}>{weeklyDrivingSec === null ? "—" : `${weeklyDrivingSec / 60} min`}</div>
         </article>
       </div>
 
