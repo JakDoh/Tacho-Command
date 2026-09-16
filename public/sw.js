@@ -1,4 +1,4 @@
-const CACHE_NAME = "tachocommand-shell-v31-core-rdbi";
+const CACHE_NAME = "tachocommand-shell-v32-oled-landing";
 const CORE_ASSETS = ["/", "/field-test", "/manifest.webmanifest", "/favicon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -28,9 +28,7 @@ self.addEventListener("fetch", (event) => {
           if (response.ok) caches.open(CACHE_NAME).then((cache) => cache.put(request, response.clone()));
           return response;
         })
-        .catch(() =>
-          caches.match(request).then((cached) => cached || caches.match("/field-test") || caches.match("/")),
-        ),
+        .catch(() => caches.match(request).then((cached) => cached || caches.match("/"))),
     );
     return;
   }

@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-const SERVICE_WORKER_URL = "/sw.js?v=0.31-core-rdbi-1";
+const SERVICE_WORKER_URL = "/sw.js?v=0.32-oled-landing-1";
 
 export default function ServiceWorkerRegister() {
   useEffect(() => {

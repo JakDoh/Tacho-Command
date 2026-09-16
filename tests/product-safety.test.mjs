@@ -26,19 +26,21 @@ test("labels unverifiable sources and keeps the official tachograph authoritativ
   assert.match(truthfulSource, /Sadržaj podataka još nije verifikovan/i);
 });
 
-test("is installable as a portrait standalone PWA", () => {
+test("is installable as a portrait standalone TachoCommand PWA", () => {
   assert.equal(manifest.short_name, "TachoCommand");
   assert.equal(manifest.display, "standalone");
   assert.equal(manifest.orientation, "portrait-primary");
-  assert.equal(manifest.start_url, "/field-test");
-  assert.match(manifest.name, /0\.31/);
+  assert.equal(manifest.start_url, "/");
+  assert.equal(manifest.id, "/");
+  assert.doesNotMatch(manifest.name, /Core Field Test|0\.31/);
   assert.ok(manifest.icons.length > 0);
 });
 
-test("offline cache is same-origin and falls back to the field-test source of truth", () => {
+test("offline cache is same-origin and falls back to the TachoCommand shell", () => {
   assert.match(serviceWorker, /url\.origin !== self\.location\.origin/);
   assert.match(serviceWorker, /request\.mode === "navigate"/);
-  assert.match(serviceWorker, /caches\.match\("\/field-test"\)/);
+  assert.match(serviceWorker, /caches\.match\("\/"\)/);
+  assert.match(serviceWorker, /"\/field-test"/);
   assert.doesNotMatch(serviceWorker, /caches\.match\(url\.pathname === "\/app"/);
 });
 
