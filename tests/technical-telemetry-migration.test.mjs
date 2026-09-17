@@ -104,6 +104,6 @@ test("drizzle journal registers exactly the initial telemetry migration", () => 
   assert.equal(journal.entries[0].breakpoints, true);
 });
 
-test("D1 remains deliberately unbound during migration-prep PR", () => {
-  assert.equal(hosting.d1, null);
+test("telemetry D1 binding is explicitly named DB once migration prep is complete", () => {
+  assert.equal(hosting.d1, "DB");
 });
