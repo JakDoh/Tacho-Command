@@ -12,7 +12,7 @@ const workerSource = await readFile(new URL("../worker/index.ts", import.meta.ur
 test("field-test route uses the read-only core candidate", () => {
   assert.match(pageSource, /read-only-field-test-client/);
   assert.doesNotMatch(pageSource, /from\s+["']\.\/field-test-client["']/);
-  assert.match(clientSource, /0\.31d-rdbi-settled-observability/);
+  assert.match(clientSource, /0\.31e-rdbi-technical-telemetry/);
 });
 
 test("read-only field candidate does not open RHMI or diagnostic sessions", () => {
@@ -56,6 +56,24 @@ test("field candidate runs one bounded observable pass without a telemetry loop"
   assert.match(clientSource, /rezultat: POSITIVE/);
   assert.doesNotMatch(clientSource, /runTelemetry|readCoreDriverTelemetry/);
   assert.doesNotMatch(clientSource, /while\s*\(!stopRef\.current\)/);
+});
+
+test("technical telemetry is buffered during BLE and posted only after the bounded pass", () => {
+  assert.match(clientSource, /postTechnicalTelemetry/);
+  assert.match(clientSource, /const telemetryEvents: TelemetryEvent\[\] = \[\]/);
+  assert.match(clientSource, /deviceFamily:\s*"unknown"/);
+  assert.match(clientSource, /snapshot_complete/);
+
+  const finalRead = clientSource.indexOf('probeMinutes("F99B"');
+  const snapshotComplete = clientSource.indexOf('addTechnicalEvent("snapshot_complete"', finalRead);
+  const post = clientSource.indexOf("await postTechnicalTelemetry(telemetryEvents)", snapshotComplete);
+  assert.ok(finalRead >= 0 && snapshotComplete > finalRead && post > snapshotComplete);
+
+  assert.doesNotMatch(clientSource, /driverName\s*:/);
+  assert.doesNotMatch(clientSource, /cardNumber\s*:/);
+  assert.doesNotMatch(clientSource, /vehicleRegistration\s*:/);
+  assert.doesNotMatch(clientSource, /rawBytes\s*:/);
+  assert.doesNotMatch(clientSource, /actualValue\s*:/);
 });
 
 test("field candidate exposes a copyable diagnostic log", () => {

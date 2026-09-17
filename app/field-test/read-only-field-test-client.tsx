@@ -13,6 +13,7 @@ import {
   parseDriverWorkingState,
   RHMI_DIDS,
 } from "../../lib/tacho-rhmi.js";
+import { postTechnicalTelemetry } from "../../lib/technical-telemetry-client.js";
 import { createUdsResponseCollector } from "../../lib/tacho-uds.js";
 
 type BleCharacteristic = {
@@ -32,6 +33,7 @@ type BleDevice = { name?: string; gatt?: { connect: () => Promise<BleServer> } }
 type LogEntry = { time: string; level: "info" | "pass" | "warn" | "fail"; message: string };
 type UdsResult = { status: string; reason: string | null; response: readonly number[] | null };
 type UdsCollector = { push: (packet: number[]) => UdsResult };
+type TelemetryEvent = Record<string, unknown>;
 
 type PendingRequest = {
   collector: UdsCollector;
@@ -39,7 +41,7 @@ type PendingRequest = {
   reject: (error: Error) => void;
 };
 
-const APP_VERSION = "0.31d-rdbi-settled-observability";
+const APP_VERSION = "0.31e-rdbi-technical-telemetry";
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 const formatMinutes = (minutes: number) => {
   const hours = Math.floor(minutes / 60);
@@ -58,6 +60,14 @@ const writeGatt = async (char: BleCharacteristic, bytes: number[]) => {
   throw new Error("Write metoda nije dostupna na karakteristici");
 };
 
+const telemetryStatusLabel = (status: string, accepted: number) => {
+  if (status === "accepted") return `upisano ${accepted}`;
+  if (status === "storage_unavailable") return "baza nije dostupna";
+  if (status === "network_unavailable") return "mreža nije dostupna";
+  if (status === "no_valid_events") return "nema validnih događaja";
+  return "odbijeno";
+};
+
 export default function ReadOnlyFieldTestClient() {
   const [running, setRunning] = useState(false);
   const [connected, setConnected] = useState(false);
@@ -67,11 +77,13 @@ export default function ReadOnlyFieldTestClient() {
   const [breakSec, setBreakSec] = useState<number | null>(null);
   const [dailyDrivingSec, setDailyDrivingSec] = useState<number | null>(null);
   const [weeklyDrivingSec, setWeeklyDrivingSec] = useState<number | null>(null);
+  const [telemetryStatus, setTelemetryStatus] = useState("nije poslato");
   const [logs, setLogs] = useState<LogEntry[]>([]);
 
   const stopRef = useRef(false);
   const creditsRef = useRef<BleCharacteristic | null>(null);
   const gattWriteQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const sessionIdRef = useRef<string | null>(null);
 
   const queueGattWrite = (char: BleCharacteristic, bytes: number[]) => {
     const operation = gattWriteQueueRef.current
@@ -96,6 +108,30 @@ export default function ReadOnlyFieldTestClient() {
     setBreakSec(null);
     setDailyDrivingSec(null);
     setWeeklyDrivingSec(null);
+    setTelemetryStatus("prikuplja se do kraja prolaza");
+
+    const sessionId = window.crypto.randomUUID();
+    sessionIdRef.current = sessionId;
+    const telemetryEvents: TelemetryEvent[] = [];
+    let currentPhase = "bluetooth";
+    const sessionStartedAt = performance.now();
+    const addTechnicalEvent = (
+      event: string,
+      phase: string,
+      outcome: string,
+      extra: TelemetryEvent = {},
+    ) => {
+      telemetryEvents.push({
+        sessionId,
+        event,
+        phase,
+        outcome,
+        deviceFamily: "unknown",
+        ...extra,
+      });
+    };
+
+    addTechnicalEvent("connect_start", "bluetooth", "start");
 
     try {
       const bluetooth = (navigator as Navigator & {
@@ -116,8 +152,14 @@ export default function ReadOnlyFieldTestClient() {
       });
       setDeviceName(device.name || "Tahograf");
 
+      currentPhase = "gatt";
+      const gattStartedAt = performance.now();
       if (!device.gatt) throw new Error("GATT interfejs nije dostupan");
       const server = await device.gatt.connect();
+      addTechnicalEvent("gatt_connected", "gatt", "positive", {
+        durationMs: Math.round(performance.now() - gattStartedAt),
+      });
+
       const services = await server.getPrimaryServices();
       const diagnostics = services.find(
         (service) => service.uuid.toLowerCase() === TACHO_DIAGNOSTICS_SERVICE_UUID.toLowerCase(),
@@ -169,6 +211,8 @@ export default function ReadOnlyFieldTestClient() {
         resolve(view.getUint8(0));
       });
 
+      currentPhase = "transport";
+      const transportStartedAt = performance.now();
       await credits.startNotifications();
       await fifo.startNotifications();
 
@@ -178,6 +222,9 @@ export default function ReadOnlyFieldTestClient() {
       creditResolver = null;
       if (serverCredit === null) throw new Error("Server credit timeout");
       if (serverCredit === 0xff) throw new Error("Tahograf je odbio flow control");
+      addTechnicalEvent("transport_ready", "transport", "positive", {
+        durationMs: Math.round(performance.now() - transportStartedAt),
+      });
       addLog("pass", `BLE FIFO/Credits spremni. Server credit: ${serverCredit}`);
 
       const sendUds = async (payload: readonly number[], timeoutMs = 4000): Promise<number[] | null> => {
@@ -212,23 +259,45 @@ export default function ReadOnlyFieldTestClient() {
       };
 
       // Zdravlje transporta proveravamo pre prvog read-only RDBI zahteva.
+      currentPhase = "tester_present";
+      const testerPresentStartedAt = performance.now();
       const testerPresent = await sendUds([0x3e, 0x00]);
       if (!testerPresent || testerPresent[2] !== 0x7e) {
         throw new Error("TesterPresent nije dobio pozitivan odgovor");
       }
+      addTechnicalEvent("tester_present", "tester_present", "positive", {
+        durationMs: Math.round(performance.now() - testerPresentStartedAt),
+      });
 
       setConnected(true);
       addLog("pass", "TesterPresent potvrđen. Sačekajte 1 s za stabilizaciju transporta.");
       await sleep(1000);
       addLog("info", "Pokrećem jedan opservacioni prolaz kroz pet RDBI DID-ova.");
 
+      currentPhase = "live_read";
+      const snapshotStartedAt = performance.now();
       const formatDid = (did: number) => did.toString(16).padStart(4, "0").toUpperCase();
-      const classifyFailure = (label: string, response: number[] | null) => {
+      const classifyFailure = (
+        label: string,
+        response: number[] | null,
+        durationMs: number,
+      ) => {
         if (!response) {
+          addTechnicalEvent("timeout", "live_read", "timeout", {
+            did: label,
+            durationMs,
+            errorCode: "read_timeout",
+          });
           addLog("warn", `${label} rezultat: TIMEOUT.`);
           return true;
         }
         if (response[2] === 0x7f && response[3] === 0x22) {
+          addTechnicalEvent("nrc", "live_read", "nrc", {
+            did: label,
+            durationMs,
+            nrc: Number(response[4] ?? 0),
+            errorCode: "negative_response",
+          });
           addLog("warn", `${label} rezultat: NRC 0x${Number(response[4] ?? 0).toString(16).padStart(2, "0").toUpperCase()}.`);
           return true;
         }
@@ -240,13 +309,21 @@ export default function ReadOnlyFieldTestClient() {
         did: number,
         setter: (seconds: number | null) => void,
       ) => {
+        const startedAt = performance.now();
         const response = await sendUds(buildReadDataByIdentifier(did), 4000);
-        if (classifyFailure(label, response)) return;
+        const durationMs = Math.round(performance.now() - startedAt);
+        if (classifyFailure(label, response, durationMs)) return;
         const parsed = parseDriverMinutesDid(response ?? [], did);
         if (parsed.valid) {
           setter(parsed.minutes * 60);
+          addTechnicalEvent("did_read", "live_read", "positive", { did: label, durationMs });
           addLog("pass", `${label} rezultat: POSITIVE — ${formatMinutes(parsed.minutes)} (${parsed.minutes} min).`);
         } else {
+          addTechnicalEvent("error", "live_read", "error", {
+            did: label,
+            durationMs,
+            errorCode: "unexpected_response",
+          });
           addLog("warn", `${label} rezultat: UNEXPECTED — servis 0x${Number(response?.[2] ?? 0).toString(16).padStart(2, "0").toUpperCase()}.`);
         }
         await sleep(350);
@@ -255,13 +332,24 @@ export default function ReadOnlyFieldTestClient() {
       await probeMinutes("F923", RHMI_DIDS.DRIVER_1_CONTINUOUS_DRIVING, setContinuousDrivingSec);
       await probeMinutes("F925", RHMI_DIDS.DRIVER_1_CUMULATIVE_BREAK, setBreakSec);
 
+      const f903StartedAt = performance.now();
       const f903Response = await sendUds(buildReadDataByIdentifier(RHMI_DIDS.DRIVER_1_WORKING_STATE), 4000);
-      if (!classifyFailure("F903", f903Response)) {
+      const f903DurationMs = Math.round(performance.now() - f903StartedAt);
+      if (!classifyFailure("F903", f903Response, f903DurationMs)) {
         const parsed = parseDriverWorkingState(f903Response ?? []);
         if (parsed.valid) {
           setActivity(parsed.activity);
+          addTechnicalEvent("did_read", "live_read", "positive", {
+            did: "F903",
+            durationMs: f903DurationMs,
+          });
           addLog("pass", `F903 rezultat: POSITIVE — aktivnost ${parsed.activity.toUpperCase()}.`);
         } else {
+          addTechnicalEvent("error", "live_read", "error", {
+            did: "F903",
+            durationMs: f903DurationMs,
+            errorCode: "unexpected_response",
+          });
           addLog("warn", `F903 rezultat: UNEXPECTED — DID ${formatDid(RHMI_DIDS.DRIVER_1_WORKING_STATE)}.`);
         }
       }
@@ -269,11 +357,26 @@ export default function ReadOnlyFieldTestClient() {
 
       await probeMinutes("F99A", RHMI_DIDS.DRIVER_1_CURRENT_DAILY_DRIVING, setDailyDrivingSec);
       await probeMinutes("F99B", RHMI_DIDS.DRIVER_1_CURRENT_WEEKLY_DRIVING, setWeeklyDrivingSec);
+      addTechnicalEvent("snapshot_complete", "live_read", "complete", {
+        durationMs: Math.round(performance.now() - snapshotStartedAt),
+      });
       addLog("info", "Jednokratni RDBI opservacioni prolaz je završen. Pritisnite Prekini.");
     } catch (error) {
       setConnected(false);
+      addTechnicalEvent("error", currentPhase, "error", {
+        durationMs: Math.round(performance.now() - sessionStartedAt),
+        errorCode: "unknown",
+      });
       addLog("fail", error instanceof Error ? error.message : String(error));
     } finally {
+      const telemetryResult = await postTechnicalTelemetry(telemetryEvents);
+      const label = telemetryStatusLabel(telemetryResult.status, telemetryResult.accepted);
+      setTelemetryStatus(label);
+      if (telemetryResult.status === "accepted") {
+        addLog("pass", `TELEMETRY: ${label}.`);
+      } else {
+        addLog("warn", `TELEMETRY: ${label}. BLE rezultat je sačuvan samo u ovom prikazu.`);
+      }
       setRunning(false);
     }
   };
@@ -286,6 +389,22 @@ export default function ReadOnlyFieldTestClient() {
         await queueGattWrite(creditsRef.current, [0xff]);
       } catch {}
     }
+
+    if (sessionIdRef.current) {
+      const result = await postTechnicalTelemetry([
+        {
+          sessionId: sessionIdRef.current,
+          event: "disconnected",
+          phase: "teardown",
+          outcome: "disconnected",
+          deviceFamily: "unknown",
+        },
+      ]);
+      if (result.status === "accepted") {
+        setTelemetryStatus(`upisano +${result.accepted} teardown`);
+      }
+    }
+
     addLog("info", "Read-only sesija je zaustavljena.");
   };
 
@@ -308,9 +427,11 @@ export default function ReadOnlyFieldTestClient() {
       <p style={{ padding: 12, background: "#f3f4f6", borderRadius: 10, fontSize: 13 }}>
         Ovaj kandidat šalje po jedan read-only zahtev za F923, F925, F903, F99A i F99B.
         Ne otvara Remote HMI/F211 sesiju i ne ponavlja očitavanje u petlji.
+        Tehnički događaji se drže samo u memoriji tokom BLE prolaza i šalju tek po njegovom završetku.
       </p>
 
-      <div style={{ marginBottom: 14, fontSize: 14 }}>Uređaj: <strong>{deviceName}</strong></div>
+      <div style={{ marginBottom: 8, fontSize: 14 }}>Uređaj: <strong>{deviceName}</strong></div>
+      <div style={{ marginBottom: 14, fontSize: 14 }}>Tehnička telemetrija: <strong>{telemetryStatus}</strong></div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 12 }}>
         <article style={{ padding: 16, border: "1px solid #e5e7eb", borderRadius: 12 }}>
