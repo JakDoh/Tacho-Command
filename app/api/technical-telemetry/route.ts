@@ -3,6 +3,7 @@ import { getDb } from "../../../db";
 import { technicalTelemetryEvents } from "../../../db/schema";
 import {
   TECHNICAL_TELEMETRY_RETENTION_DAYS,
+  TECHNICAL_TELEMETRY_SCHEMA,
   sanitizeTechnicalTelemetryBatch,
   technicalTelemetryRetentionCutoffEpochSeconds,
 } from "../../../lib/technical-telemetry.js";
@@ -15,6 +16,21 @@ const json = (body: unknown, init: ResponseInit = {}) =>
       ...init.headers,
     },
   });
+
+export async function GET() {
+  try {
+    const db = await getDb();
+    await db.select({ id: technicalTelemetryEvents.id }).from(technicalTelemetryEvents).limit(1);
+
+    return json({
+      status: "ready",
+      schema: TECHNICAL_TELEMETRY_SCHEMA,
+      retentionDays: TECHNICAL_TELEMETRY_RETENTION_DAYS,
+    });
+  } catch {
+    return json({ status: "storage_unavailable" }, { status: 503 });
+  }
+}
 
 export async function POST(request: Request) {
   let payload: unknown;
