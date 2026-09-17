@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="sr-Latn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>TachoCommand 0.32c — Driver Card Slot 1</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#f4f4f5;background:#09090b}
+*{box-sizing:border-box}body{margin:0;background:#09090b;color:#f4f4f5}
+main{max-width:780px;margin:auto;padding:18px 14px 42px}
+h1{font-size:1.4rem;margin:.2rem 0}.meta{color:#a1a1aa;font-size:.8rem;word-break:break-word}
+.card{border:1px solid #27272a;border-radius:14px;padding:14px;margin:12px 0;background:#111113}
+.warn{border-color:#854d0e;background:#1c1509}
+button{width:100%;padding:14px 12px;margin:7px 0;border:0;border-radius:12px;font-weight:760;font-size:1rem}
+button.primary{background:#fafafa;color:#09090b}button.stop{background:#7f1d1d;color:white}
+button.secondary{background:#27272a;color:white}button:disabled{opacity:.45}
+.kv{display:grid;grid-template-columns:1fr auto;gap:10px;padding:5px 0;border-bottom:1px solid #27272a}
+.check{display:flex;gap:10px;align-items:flex-start;margin:11px 0}.check input{width:20px;height:20px;margin-top:1px}
+pre{white-space:pre-wrap;word-break:break-word;background:#050506;border:1px solid #27272a;padding:12px;border-radius:10px;max-height:390px;overflow:auto;font-size:.8rem}
+.pill{display:inline-block;border:1px solid #3f3f46;border-radius:999px;padding:3px 8px;font-size:.75rem;margin:2px}
+small{color:#a1a1aa}
+</style>
+</head>
+<body>
+<main>
+<h1>TachoCommand 0.32c</h1>
+<div class="meta">Driver Card Slot 1 — single-shot field candidate · baseline PR #32 / 708fc3cb6d117da7cade478eb29cd0d8320ff776</div>
+
+<section class="card warn">
+  <strong>VAŽNO — ovaj test čita celu driver karticu</strong>
+  <p>Za razliku od 0.32b, ovaj test šalje <b>Card Download TREP 06, slot 1</b>. Uspešan download može ažurirati <b>LastCardDownload</b> datum na driver kartici.</p>
+  <div class="pill">NEMA TREP 00</div><div class="pill">NEMA TREP 31</div><div class="pill">NEMA auto-retry</div>
+  <p><small>Drži ekran telefona uključen. Vozilo mora ostati potpuno zaustavljeno. Ne vadi karticu tokom transfera.</small></p>
+  <label class="check"><input id="c1" type="checkbox"><span>Vozilo je potpuno zaustavljeno i može ostati zaustavljeno tokom testa.</span></label>
+  <label class="check"><input id="c2" type="checkbox"><span>Moja driver kartica je u slotu 1; co-driver slot je prazan i nema control/workshop/company kartice.</span></label>
+  <label class="check"><input id="c3" type="checkbox"><span>Razumem da uspešan download može ažurirati LastCardDownload na kartici.</span></label>
+</section>
+
+<section class="card">
+  <div class="kv"><span>Web Bluetooth / secure context</span><strong id="secureState">—</strong></div>
+  <div class="kv"><span>Uređaj</span><strong id="deviceName">—</strong></div>
+  <div class="kv"><span>Card transfer</span><strong id="cardState">—</strong></div>
+  <div class="kv"><span>TLV validacija</span><strong id="tlvState">—</strong></div>
+  <div class="kv"><span>Status</span><strong id="status">SPREMAN</strong></div>
+</section>
+
+<section class="card">
+  <button id="runBtn" class="primary" disabled>POKRENI JEDAN 0.32c CARD DOWNLOAD</button>
+  <button id="stopBtn" class="stop" disabled>PREKINI SESIJU</button>
+  <button id="saveBtn" class="secondary" disabled>SAČUVAJ PREUZETI CARD FILE (.ddd)</button>
+  <button id="copyBtn" class="secondary">KOPIRAJ SANITIZOVANI LOG</button>
+</section>
+
+<section class="card">
+  <strong>Log</strong>
+  <pre id="log">Još nema rezultata.</pre>
+</section>
+</main>
+
+<script>
+"use strict";
+
+const APP_VERSION="0.32c-driver-card-slot1-single-shot";
+const SOURCE_BASELINE="708fc3cb6d117da7cade478eb29cd0d8320ff776";
+const DDP_P3_GUARD_MS=100;
+const CARD_IDLE_TIMEOUT_MS=20*60*1000;
+
+const SVC="eef90782-55dd-4388-b80b-695aba7a69b5";
+const FIFO_UUID="29d3a479-1592-47df-80a4-afa742d369bb";
+const CREDITS_UUID="db9c4128-bff3-41fe-a306-fb6f9a8aeb2d";
+
+const checksum=b=>b.reduce((s,x)=>(s+x)&0xff,0);
+const withChecksum=b=>Object.freeze([...b,checksum(b)]);
+
+const START_COMM=withChecksum([0x81,0xee,0xf0,0x81]);
+const START_DIAG=withChecksum([0x80,0xee,0xf0,0x02,0x10,0x81]);
+const REQUEST_UPLOAD=withChecksum([0x80,0xee,0xf0,0x0a,0x35,0x00,0x00,0x00,0x00,0x00,0xff,0xff,0xff,0xff]);
+const CARD_SLOT1=withChecksum([0x80,0xee,0xf0,0x03,0x36,0x06,0x01]);
+const TRANSFER_EXIT=withChecksum([0x80,0xee,0xf0,0x01,0x37]);
+const STOP_COMM=withChecksum([0x80,0xee,0xf0,0x01,0x82]);
+
+const POS={0x81:0xc1,0x10:0x50,0x35:0x75,0x36:0x76,0x37:0x77,0x82:0xc2};
+
+const $=id=>document.getElementById(id);
+const el={run:$("runBtn"),stop:$("stopBtn"),save:$("saveBtn"),copy:$("copyBtn"),
+  secure:$("secureState"),device:$("deviceName"),card:$("cardState"),tlv:$("tlvState"),status:$("status"),log:$("log"),
+  c1:$("c1"),c2:$("c2"),c3:$("c3")};
+
+let logs=[],running=false,attempted=false,stopRequested=false,abortCurrent=null,creditsRef=null,gattQueue=Promise.resolve(),cardFile=null;
+
+function log(level,msg){
+  logs.push({t:new Date().toLocaleTimeString(),level,msg});
+  if(logs.length>180) logs=logs.slice(-180);
+  el.log.textContent=logs.map(x=>`[${x.t}] ${x.level.toUpperCase()}: ${x.msg}`).join("\n");
+  el.log.scrollTop=el.log.scrollHeight;
+}
+function updateGate(){el.run.disabled=attempted||running||!(el.c1.checked&&el.c2.checked&&el.c3.checked)||!(window.isSecureContext&&navigator.bluetooth);}
+[el.c1,el.c2,el.c3].forEach(x=>x.addEventListener("change",updateGate));
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function stopError(){const e=new Error("Sesija je prekinuta od korisnika.");e.name="AbortError";return e;}
+function requireNotStopped(){if(stopRequested)throw stopError();}
+
+async function writeGatt(ch,bytes){
+  const v=Uint8Array.from(bytes);
+  if(ch.properties?.write&&ch.writeValueWithResponse)return ch.writeValueWithResponse(v);
+  if(ch.properties?.writeWithoutResponse&&ch.writeValueWithoutResponse)return ch.writeValueWithoutResponse(v);
+  if(ch.writeValue)return ch.writeValue(v);
+  if(ch.writeValueWithResponse)return ch.writeValueWithResponse(v);
+  if(ch.writeValueWithoutResponse)return ch.writeValueWithoutResponse(v);
+  throw new Error("Write metoda nije dostupna");
+}
+function queueWrite(ch,b){const op=gattQueue.catch(()=>{}).then(()=>writeGatt(ch,b));gattQueue=op.catch(()=>{});return op;}
+
+function itsAssembler(){return{expected:0,next:1,chunks:[]};}
+function pushIts(a,p){
+  const b=Array.from(p??[]); if(b.length<2)return{status:"invalid",reason:"short-packet"};
+  const total=b[0],seq=b[1];
+  if(seq===1){if(total<1)return{status:"invalid",reason:"invalid-total"};a.expected=total;a.next=2;a.chunks=[b.slice(2)];}
+  else{if(total!==0||a.expected<2||seq!==a.next){a.expected=0;a.next=1;a.chunks=[];return{status:"invalid",reason:"out-of-order"};}a.chunks.push(b.slice(2));a.next++;}
+  if(seq<a.expected)return{status:"pending"};
+  const message=a.chunks.flat();a.expected=0;a.next=1;a.chunks=[];return{status:"complete",message};
+}
+
+function parseDdp(message){
+  const b=Array.from(message??[]);if(b.length<6)return{valid:false,reason:"short-message",data:[]};
+  const n=b[3];if(b.length!==4+n+1)return{valid:false,reason:"length-mismatch",data:[]};
+  if(checksum(b.slice(0,-1))!==b.at(-1))return{valid:false,reason:"checksum",data:[]};
+  if(b[1]!==0xf0||b[2]!==0xee)return{valid:false,reason:"address",data:[]};
+  const data=b.slice(4,4+n);return{valid:true,reason:null,sid:data[0]??null,data};
+}
+function classify(message,req,trep=null){
+  const p=parseDdp(message);if(!p.valid)return{valid:false,reason:p.reason,matches:false};
+  const negative=p.sid===0x7f&&p.data[1]===req,nrc=negative?(p.data[2]??null):null;
+  const rt=p.sid===0x76?(p.data[1]??null):null;
+  const positive=p.sid===(POS[req]??((req+0x40)&0xff))&&(trep===null||rt===trep);
+  return{valid:true,matches:positive||negative,positive,negative,responsePending:negative&&nrc===0x78,nrc,trep:rt,parsed:p};
+}
+function buildAck(code){return withChecksum([0x80,0xee,0xf0,0x04,0x83,0x76,(code>>8)&0xff,code&0xff]);}
+
+function validateTlv(bytes){
+  let o=0,count=0;
+  while(o<bytes.length){
+    if(bytes.length-o<5)return{valid:false,count,reason:"truncated-header"};
+    const len=(bytes[o+3]<<8)|bytes[o+4];
+    if(len===0xffff)return{valid:false,count,reason:"reserved-length-ffff"};
+    if(o+5+len>bytes.length)return{valid:false,count,reason:"truncated-value"};
+    count++;o+=5+len;
+    if(count>5000)return{valid:false,count,reason:"too-many-objects"};
+  }
+  return{valid:o===bytes.length,count,reason:o===bytes.length?null:"length"};
+}
+
+async function run(){
+  if(running||attempted)return;
+  attempted=true;running=true;stopRequested=false;cardFile=null;gattQueue=Promise.resolve();logs=[];el.log.textContent="";
+  el.run.disabled=true;el.stop.disabled=false;el.save.disabled=true;el.device.textContent="—";el.card.textContent="—";el.tlv.textContent="—";el.status.textContent="U TOKU";
+
+  let device=null,peerClosed=false,serverCredits=0,lastVuResponseAt=0,messageHandler=null,communicationStarted=false,uploadStarted=false,cardTransferActive=false;
+  let sendSimpleFn=null,sendAppFn=null;
+  const waiters=[];
+  const rejectWaiters=e=>{while(waiters.length){const w=waiters.shift();clearTimeout(w.timer);w.reject(e);}};
+  const release=()=>{while(serverCredits>0&&waiters.length){const w=waiters.shift();serverCredits--;clearTimeout(w.timer);w.resolve();}};
+  const consume=async(ms=7000)=>{
+    if(peerClosed)throw new Error("Tahograf je zatvorio Download flow control");
+    if(serverCredits>0){serverCredits--;return;}
+    await new Promise((resolve,reject)=>{const w={resolve,reject,timer:0};w.timer=setTimeout(()=>{const i=waiters.indexOf(w);if(i>=0)waiters.splice(i,1);reject(new Error("Server credit timeout"));},ms);waiters.push(w);});
+  };
+
+  try{
+    if(!window.isSecureContext||!navigator.bluetooth)throw new Error("Web Bluetooth nije dostupan preko ovog origin-a.");
+    device=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:[SVC]});
+    el.device.textContent=device.name||"Tahograf";
+    if(!device.gatt)throw new Error("GATT nije dostupan");
+    const server=await device.gatt.connect();
+    const services=await server.getPrimaryServices();
+    const svc=services.find(s=>s.uuid.toLowerCase()===SVC);
+    if(!svc)throw new Error("Download servis nije pronađen");
+    const chars=await svc.getCharacteristics();
+    const fifo=chars.find(c=>c.uuid.toLowerCase()===FIFO_UUID),credits=chars.find(c=>c.uuid.toLowerCase()===CREDITS_UUID);
+    if(!fifo||!credits)throw new Error("Download FIFO/Credits nisu pronađeni");
+    creditsRef=credits;
+
+    const ia=itsAssembler();
+    credits.addEventListener("characteristicvaluechanged",ev=>{
+      const v=ev.target?.value;if(!v?.byteLength)return;
+      const x=v.getUint8(0);
+      if(x===0xff){peerClosed=true;const e=new Error("VU je zatvorio flow-control");rejectWaiters(e);abortCurrent?.();return;}
+      if(x===0)return;serverCredits+=x;log("info",`Server credit +${x}; dostupno ${serverCredits}.`);release();
+    });
+    fifo.addEventListener("characteristicvaluechanged",ev=>{
+      const v=ev.target?.value;if(!v?.byteLength)return;
+      const packet=Array.from(new Uint8Array(v.buffer,v.byteOffset,v.byteLength));
+      void queueWrite(credits,[1]).catch(()=>{});
+      const r=pushIts(ia,packet);
+      if(r.status==="invalid"){log("fail",`ITS paket nije validan: ${r.reason}`);abortCurrent?.();return;}
+      if(r.status==="complete")messageHandler?.(r.message);
+    });
+
+    await credits.startNotifications();await fifo.startNotifications();await queueWrite(credits,[1]);
+    log("pass","Download BLE FIFO/Credits uključeni; prvi client credit dodeljen.");
+
+    const waitP3=async(ignoreStop=false)=>{if(!ignoreStop)requireNotStopped();if(lastVuResponseAt>0){const rem=DDP_P3_GUARD_MS-(performance.now()-lastVuResponseAt);if(rem>0)await sleep(rem);}if(!ignoreStop)requireNotStopped();};
+    const sendApp=async(msg,ignoreStop=false)=>{await waitP3(ignoreStop);await consume();if(!ignoreStop)requireNotStopped();await queueWrite(fifo,[1,1,...msg]);};
+    sendAppFn=sendApp;
+
+    const sendSimple=(msg,req,trep=null,timeoutMs=7000,ignoreStop=false)=>{
+      if(messageHandler)return Promise.reject(new Error("Paralelni DDP zahtev nije dozvoljen"));
+      return new Promise((resolve,reject)=>{
+        let done=false,timer=0;
+        const clean=()=>{clearTimeout(timer);if(messageHandler===handler)messageHandler=null;abortCurrent=null;};
+        const ok=x=>{if(done)return;done=true;clean();resolve(x);};
+        const bad=e=>{if(done)return;done=true;clean();reject(e);};
+        const arm=()=>{clearTimeout(timer);timer=setTimeout(()=>ok(null),timeoutMs);};
+        const handler=response=>{
+          const c=classify(response,req,trep);if(!c.valid){bad(new Error(`DDP invalid: ${c.reason}`));return;}if(!c.matches)return;
+          lastVuResponseAt=performance.now();
+          if(c.responsePending){log("info",`SID 0x${req.toString(16).toUpperCase()} RESPONSE PENDING; čekam bez retransmisije.`);arm();return;}
+          ok({message:response,classification:c});
+        };
+        messageHandler=handler;abortCurrent=()=>bad(stopError());arm();void sendApp(msg,ignoreStop).catch(bad);
+      });
+    };
+    sendSimpleFn=sendSimple;
+
+    const requirePositive=(label,res,req)=>{
+      if(!res)throw new Error(`${label}: TIMEOUT`);
+      if(res.classification.negative){const n=Number(res.classification.nrc??0).toString(16).padStart(2,"0").toUpperCase();throw new Error(`${label}: NRC 0x${n}`);}
+      if(!res.classification.positive)throw new Error(`${label}: neočekivan odgovor`);
+      const p=res.classification.parsed;
+      if(req===0x81&&!(p.data[0]===0xc1&&p.data[1]===0xea&&p.data[2]===0x8f))throw new Error("StartCommunication parametri nisu C1 EA 8F");
+      if(req===0x10&&!(p.data[0]===0x50&&p.data[1]===0x81))throw new Error("StartDiagnosticSession parametar nije 81");
+      if(req===0x35&&!(p.data[0]===0x75&&p.data[1]===0x00&&p.data[2]===0xff))throw new Error("RequestUpload parametri nisu 75 00 FF");
+      log("pass",`${label}: POSITIVE.`);return res;
+    };
+
+    requirePositive("DDP StartCommunication",await sendSimple(START_COMM,0x81),0x81);communicationStarted=true;
+    requirePositive("DDP StartDiagnosticSession 0x81",await sendSimple(START_DIAG,0x10),0x10);
+    requirePositive("DDP RequestUpload",await sendSimple(REQUEST_UPLOAD,0x35),0x35);uploadStarted=true;
+
+    log("info","Šaljem jedini Card Download zahtev: TREP 06, slot 1. Nema TREP00/31 i nema retry-ja.");
+    cardTransferActive=true;
+
+    const transfer=await new Promise((resolve,reject)=>{
+      let done=false,timer=0,multipart=false,expectedCounter=1,submessages=0,total=0;
+      const chunks=[];
+      const clean=()=>{clearTimeout(timer);if(messageHandler===handler)messageHandler=null;abortCurrent=null;};
+      const finish=x=>{if(done)return;done=true;clean();resolve(x);};
+      const fail=e=>{if(done)return;done=true;clean();reject(e);};
+      const arm=()=>{clearTimeout(timer);timer=setTimeout(()=>finish(null),CARD_IDLE_TIMEOUT_MS);};
+
+      const handler=response=>{
+        const p=parseDdp(response);
+        if(!p.valid){fail(new Error(`Card transfer DDP invalid: ${p.reason}`));return;}
+        if(p.sid===0x7f&&p.data[1]===0x36){
+          lastVuResponseAt=performance.now();
+          const nrc=p.data[2]??null;
+          if(nrc===0x78){log("info","Card Download RESPONSE PENDING; čekam bez retransmisije.");arm();return;}
+          const n=Number(nrc??0).toString(16).padStart(2,"0").toUpperCase();
+          fail(new Error(`Card Download TREP 06: NRC 0x${n}`));return;
+        }
+        if(p.sid!==0x76||p.data[1]!==0x06)return;
+        lastVuResponseAt=performance.now();
+
+        const dataLen=response[3]??0;
+        if(!multipart&&dataLen<0xff){
+          const payload=p.data.slice(2);chunks.push(Uint8Array.from(payload));total+=payload.length;submessages=1;
+          finish({chunks,total,submessages});return;
+        }
+        if(p.data.length<4){fail(new Error("Card transfer: nema submessage counter"));return;}
+        multipart=true;
+        const counter=((p.data[2]??0)<<8)|(p.data[3]??0);
+        if(counter!==expectedCounter){fail(new Error(`Card transfer: očekivan counter ${expectedCounter}, dobijen ${counter}`));return;}
+        const payload=p.data.slice(4);chunks.push(Uint8Array.from(payload));total+=payload.length;submessages++;
+        if(submessages===1||submessages%25===0)log("info",`Card transfer: ${submessages} submessage, ${total} B primljeno.`);
+
+        if(dataLen<0xff){finish({chunks,total,submessages});return;}
+        if(counter===0xffff){fail(new Error("Card transfer: counter overflow"));return;}
+        expectedCounter=counter+1;arm();
+        void sendApp(buildAck(expectedCounter)).catch(fail);
+      };
+
+      messageHandler=handler;abortCurrent=()=>fail(stopError());arm();void sendApp(CARD_SLOT1).catch(fail);
+    });
+
+    cardTransferActive=false;
+    if(!transfer)throw new Error("Card Download TREP 06: TIMEOUT (20 min bez završnog odgovora)");
+
+    const merged=new Uint8Array(transfer.total);let pos=0;
+    for(const c of transfer.chunks){merged.set(c,pos);pos+=c.length;}
+    const tlv=validateTlv(merged);
+    el.card.textContent=`${transfer.submessages} submessage · ${merged.length} B`;
+    el.tlv.textContent=tlv.valid?`PASS · ${tlv.count} TLV objekata`:`FAIL · ${tlv.reason}`;
+    if(!tlv.valid)throw new Error(`Card payload primljen, ali TLV validacija nije prošla: ${tlv.reason}`);
+
+    cardFile=merged;
+    log("pass",`Driver Card transfer kompletan: ${transfer.submessages} submessage, ${merged.length} B; TLV objekata ${tlv.count}.`);
+    log("info","Sadržaj nije prikazan u logu. Fajl je samo u memoriji dok ne pritisneš SAČUVAJ.");
+
+    requirePositive("DDP RequestTransferExit",await sendSimple(TRANSFER_EXIT,0x37),0x37);uploadStarted=false;
+    requirePositive("DDP StopCommunication",await sendSimple(STOP_COMM,0x82),0x82);communicationStarted=false;
+
+    el.status.textContent="PASS";el.save.disabled=false;
+    log("pass","0.32c PASS — driver kartica je preuzeta preko VU. Možeš sačuvati .ddd kandidat.");
+  }catch(e){
+    const stopped=e?.name==="AbortError";el.status.textContent=stopped?"PREKINUTO":"STOP / FAIL";log(stopped?"info":"fail",e instanceof Error?e.message:String(e));
+
+    if(sendAppFn&&cardTransferActive&&!peerClosed){
+      try{await sendAppFn(buildAck(0xffff),true);log("info","Card transfer abort ACK FFFF poslat.");}catch(err){log("warn",`Abort ACK FFFF nije potvrđen za slanje: ${err instanceof Error?err.message:String(err)}`);}
+      cardTransferActive=false;
+    }
+    if(sendSimpleFn&&!peerClosed){
+      stopRequested=false;
+      if(messageHandler){try{abortCurrent?.();}catch{}messageHandler=null;abortCurrent=null;}
+      if(uploadStarted){
+        try{const r=await sendSimpleFn(TRANSFER_EXIT,0x37,null,3000,true);if(r?.classification?.positive){uploadStarted=false;log("info","Recovery: RequestTransferExit POSITIVE.");}else log("warn","Recovery: RequestTransferExit nije potvrđen.");}catch(err){log("warn",`Recovery exit: ${err instanceof Error?err.message:String(err)}`);}
+      }
+      if(communicationStarted){
+        try{const r=await sendSimpleFn(STOP_COMM,0x82,null,3000,true);if(r?.classification?.positive){communicationStarted=false;log("info","Recovery: StopCommunication POSITIVE.");}else log("warn","Recovery: StopCommunication nije potvrđen.");}catch(err){log("warn",`Recovery stop: ${err instanceof Error?err.message:String(err)}`);}
+      }
+    }
+  }finally{
+    abortCurrent=null;stopRequested=false;
+    if(creditsRef){try{await queueWrite(creditsRef,[0xff]);log("info","BLE flow-control zatvoren sa 0xFF.");}catch{}}
+    try{if(device?.gatt?.connected)device.gatt.disconnect();}catch{}
+    creditsRef=null;running=false;el.stop.disabled=true;updateGate();
+    if(attempted)el.run.textContent="JEDAN POKUŠAJ ZAVRŠEN — RELOAD ZA NOVU SESIJU";
+  }
+}
+
+el.stop.addEventListener("click",()=>{if(!running||stopRequested)return;stopRequested=true;log("info","Prekid zatražen; ne šaljem novi card-download zahtev.");abortCurrent?.();});
+el.run.addEventListener("click",run);
+
+el.save.addEventListener("click",()=>{
+  if(!cardFile)return;
+  const d=new Date(),pad=n=>String(n).padStart(2,"0");
+  const name=`TachoCommand-driver-card-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.ddd`;
+  const blob=new Blob([cardFile],{type:"application/octet-stream"});
+  const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);
+  log("info",`Card file sačuvan kao ${name}.`);
+});
+
+el.copy.addEventListener("click",async()=>{
+  const report=[
+    `TachoCommand ${APP_VERSION}`,`source=${SOURCE_BASELINE}`,`secureContext=${window.isSecureContext}`,
+    `device=${el.device.textContent}`,`cardTransfer=${el.card.textContent}`,`tlv=${el.tlv.textContent}`,`status=${el.status.textContent}`,"",
+    ...logs.map(x=>`[${x.t}] ${x.level.toUpperCase()}: ${x.msg}`)
+  ].join("\n");
+  try{await navigator.clipboard.writeText(report);log("info","Sanitizovani log kopiran.");}
+  catch{log("warn","Clipboard nije dostupan; označi log ručno.");}
+});
+
+el.secure.textContent=(window.isSecureContext&&!!navigator.bluetooth)?"PASS":"NIJE HTTPS / NEMA WEB BLUETOOTH";
+updateGate();
+</script>
+</body>
+</html>

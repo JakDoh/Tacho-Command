@@ -61,3 +61,17 @@ npm run validate:artifact
 - The interface foundation supports exactly Serbian (Latin), English, and German.
 - Timer updates derive elapsed seconds from timestamps so browser throttling does not silently lose active time.
 - Production hardware data is still blocked behind the physical-device validation gate.
+
+## Golden field evidence
+
+The byte-exact [0.32c Driver Card Slot 1 field artifact](docs/field-evidence/2026-09-16/README.md) preserves the first confirmed end-to-end BLE/DDP driver-card download from a physical Continental VDO DTCO 4.1a / GEN2 V2.
+
+- 269 submessages
+- 67,295 bytes
+- 61 TLV objects
+- positive transfer exit and communication stop
+- full 56-day offline-analysis coverage
+- SHA-256: `cd9caab9829cd1523c68b5cc8725edf81c42ba27c45135a6d00934f49d092908`
+
+The raw driver-card `.ddd` is not stored because it may contain private driver data. CI verifies that the golden HTML artifact never changes silently.
+
