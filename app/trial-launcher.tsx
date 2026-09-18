@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { trackProductAnalytics } from "../lib/product-analytics-client.js";
 
 type Props = {
   label: string;
@@ -21,11 +22,14 @@ export default function TrialLauncher({
   const start = async () => {
     setStarting(true);
     setError(false);
+    void trackProductAnalytics("trial_start", { surface: "landing" });
     try {
       const response = await fetch("/api/trial", { method: "POST" });
       if (!response.ok) throw new Error("Trial unavailable");
+      void trackProductAnalytics("trial_success", { surface: "landing" });
       window.location.assign("/app");
     } catch {
+      void trackProductAnalytics("trial_error", { surface: "landing" });
       setError(true);
       setStarting(false);
     }

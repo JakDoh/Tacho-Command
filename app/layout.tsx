@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "./landing-oled.css";
 import ServiceWorkerRegister from "./service-worker-register";
+import ProductAnalyticsObserver from "./product-analytics-observer";
 
 export const metadata: Metadata = {
   title: "TachoCommand — OLED cockpit za profesionalne vozače",
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="sr">
       <body>
         <ServiceWorkerRegister />
+        <ProductAnalyticsObserver />
         {children}
       </body>
     </html>

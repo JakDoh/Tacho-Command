@@ -16,6 +16,13 @@ const migrationSql1 = fs.readFileSync(
 const snapshot1 = JSON.parse(
   fs.readFileSync(new URL("../drizzle/meta/0001_snapshot.json", import.meta.url), "utf8"),
 );
+const migrationSql2 = fs.readFileSync(
+  new URL("../drizzle/0002_product_analytics_events.sql", import.meta.url),
+  "utf8",
+);
+const snapshot2 = JSON.parse(
+  fs.readFileSync(new URL("../drizzle/meta/0002_snapshot.json", import.meta.url), "utf8"),
+);
 const journal = JSON.parse(
   fs.readFileSync(new URL("../drizzle/meta/_journal.json", import.meta.url), "utf8"),
 );
@@ -93,7 +100,7 @@ test("initial telemetry migration contains exactly the privacy-safe storage colu
 
 test("schema follows latest snapshot while initial migration stays immutable", () => {
   const schemaColumns = schemaStorageColumns(schemaSource);
-  const snapshotColumns = Object.keys(snapshot1.tables.technical_telemetry_events.columns);
+  const snapshotColumns = Object.keys(snapshot2.tables.technical_telemetry_events.columns);
 
   assert.deepEqual(schemaColumns, latestColumns);
   assert.deepEqual(snapshotColumns, latestColumns);
@@ -126,13 +133,32 @@ test("initial telemetry migration creates retention and session indexes", () => 
 
 test("drizzle journal registers telemetry migrations in order", () => {
   assert.equal(journal.dialect, "sqlite");
-  assert.equal(journal.entries.length, 2);
+  assert.equal(journal.entries.length, 3);
   assert.equal(journal.entries[0].idx, 0);
   assert.equal(journal.entries[0].tag, "0000_technical_telemetry_events");
   assert.equal(journal.entries[0].breakpoints, true);
   assert.equal(journal.entries[1].idx, 1);
   assert.equal(journal.entries[1].tag, "0001_technical_telemetry_attempt_code");
   assert.equal(journal.entries[1].breakpoints, true);
+  assert.equal(journal.entries[2].idx, 2);
+  assert.equal(journal.entries[2].tag, "0002_product_analytics_events");
+  assert.equal(journal.entries[2].breakpoints, true);
+});
+
+test("product analytics migration is separate and privacy-minimal", () => {
+  assert.ok(snapshot2.tables.product_analytics_events);
+  assert.deepEqual(
+    Object.keys(snapshot2.tables.product_analytics_events.columns),
+    ["id", "visit_id", "event", "surface", "locale", "source", "created_at"],
+  );
+  assert.match(migrationSql2, /CREATE TABLE `product_analytics_events`/);
+  assert.match(migrationSql2, /product_analytics_created_at_idx/);
+  assert.match(migrationSql2, /product_analytics_visit_idx/);
+  assert.match(migrationSql2, /product_analytics_event_idx/);
+  assert.match(migrationSql2, /product_analytics_surface_idx/);
+  for (const forbidden of forbiddenFields) {
+    assert.doesNotMatch(migrationSql2, new RegExp(`\\b${forbidden}\\b`, "i"));
+  }
 });
 
 test("telemetry D1 binding is explicitly named DB once migration prep is complete", () => {

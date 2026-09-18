@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import TrialLauncher from "./trial-launcher";
+import { trackProductAnalytics } from "../lib/product-analytics-client.js";
 
 type Locale = "sr" | "en" | "de";
 
@@ -170,6 +171,7 @@ export default function LandingPage() {
   const changeLocale = (next: Locale) => {
     setLocale(next);
     window.localStorage.setItem("tachocommand-locale", next);
+    void trackProductAnalytics("locale_change", { locale: next, surface: "landing" });
   };
 
   const todayRows = useMemo(() => [
@@ -201,7 +203,7 @@ export default function LandingPage() {
               <option value="de">DE</option>
             </select>
           </label>
-          <Link className="tcx-app-link" href="/app">{t.open}</Link>
+          <Link className="tcx-app-link" href="/app" onClick={() => void trackProductAnalytics("open_app_click", { locale, surface: "landing" })}>{t.open}</Link>
         </div>
       </header>
 
@@ -213,7 +215,7 @@ export default function LandingPage() {
           <p>{t.heroText}</p>
           <div className="tcx-actions">
             <TrialLauncher label={t.start} loadingLabel={t.starting} errorLabel={t.trialError} className="tcx-primary" />
-            <a className="tcx-secondary" href="#connect">{t.guide}<span>↓</span></a>
+            <a className="tcx-secondary" href="#connect" onClick={() => void trackProductAnalytics("connection_guide_click", { locale, surface: "landing" })}>{t.guide}<span>↓</span></a>
           </div>
           <div className="tcx-hero-trustline">
             <span>✓ Real DTCO 4.1a</span><span>✓ Complete card download</span><span>✓ Gen2 v2</span><span>✓ 56-day parser</span>
