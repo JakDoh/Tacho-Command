@@ -26,9 +26,9 @@ This document is the durable source-of-truth checkpoint for TachoCommand. GitHub
 - anonymous per-attempt support code `TC-XXXXXX` with indexed telemetry lookup;
 - historical physical verification record from 2026-09-17.
 
-## Golden 0.32c transport — locked
+## Golden 0.32c transport — permanently locked
 
-The field-proven Driver Card Slot 1 communication path is immutable unless new telemetry or a controlled physical test gives a concrete reason to change it.
+**Closed decision:** the field-proven 0.32c Driver Card Slot 1 communication/transport path is the most valuable proven asset in TachoCommand and must not be changed again. Future product work must be built around it. If a future incompatibility appears, investigate adapters, detection, UI, recovery, diagnostics, or a separate experimental transport candidate first; do not mutate the golden 0.32c path itself. Any research that needs protocol experimentation must live in a separate isolated artifact/branch and can never silently replace the golden implementation.
 
 Golden artifact:
 
