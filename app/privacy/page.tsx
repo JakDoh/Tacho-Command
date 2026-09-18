@@ -1,4 +1,11 @@
+import type { Metadata } from "next";
 import LegalPage from "../legal-page";
+
+export const metadata: Metadata = {
+  title: "Privatnost",
+  description: "Politika privatnosti za TachoCommand closed beta i anonimnu product analytics/technical telemetry obradu.",
+  alternates: { canonical: "/privacy" },
+};
 
 export default function PrivacyPage() {
   return (
@@ -24,3 +31,4 @@ export default function PrivacyPage() {
     </LegalPage>
   );
 }
+

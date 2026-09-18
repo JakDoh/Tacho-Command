@@ -1,4 +1,11 @@
+import type { Metadata } from "next";
 import LegalPage from "../legal-page";
+
+export const metadata: Metadata = {
+  title: "Impressum",
+  description: "Status projekta i podaci koji će biti kompletirani pre komercijalnog lansiranja TachoCommand-a.",
+  alternates: { canonical: "/impressum" },
+};
 
 export default function ImpressumPage() {
   return (
@@ -10,3 +17,4 @@ export default function ImpressumPage() {
     </LegalPage>
   );
 }
+

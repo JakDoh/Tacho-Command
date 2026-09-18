@@ -5,7 +5,11 @@ import ServiceWorkerRegister from "./service-worker-register";
 import ProductAnalyticsObserver from "./product-analytics-observer";
 
 export const metadata: Metadata = {
-  title: "TachoCommand — OLED cockpit za profesionalne vozače",
+  metadataBase: new URL("https://tachocommand.com"),
+  title: {
+    default: "TachoCommand — OLED cockpit za profesionalne vozače",
+    template: "%s | TachoCommand",
+  },
   description:
     "TachoCommand čita podržanu Smart Tacho 2 driver karticu preko telefona, pretvara Gen2 v2 istoriju u jasan 56-day timeline i prikazuje vožnju, pauze, upozorenja i pravne rule profile bez nagađanja.",
   manifest: "/manifest.webmanifest",

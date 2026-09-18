@@ -1,4 +1,11 @@
+import type { Metadata } from "next";
 import LegalPage from "../legal-page";
+
+export const metadata: Metadata = {
+  title: "Uslovi beta korišćenja",
+  description: "Uslovi korišćenja TachoCommand zatvorene beta verzije za profesionalne vozače.",
+  alternates: { canonical: "/terms" },
+};
 
 export default function TermsPage() {
   return (
@@ -14,3 +21,4 @@ export default function TermsPage() {
     </LegalPage>
   );
 }
+
