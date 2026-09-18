@@ -73,6 +73,9 @@ test("referrer classification stores category only, never URL or query", () => {
 
 test("surface classification separates public landing, app and legal routes", () => {
   assert.equal(productAnalyticsSurfaceForPath("/"), "landing");
+  assert.equal(productAnalyticsSurfaceForPath("/sr"), "landing");
+  assert.equal(productAnalyticsSurfaceForPath("/en"), "landing");
+  assert.equal(productAnalyticsSurfaceForPath("/de"), "landing");
   assert.equal(productAnalyticsSurfaceForPath("/app"), "app");
   assert.equal(productAnalyticsSurfaceForPath("/field-test"), "app");
   assert.equal(productAnalyticsSurfaceForPath("/privacy"), "legal");

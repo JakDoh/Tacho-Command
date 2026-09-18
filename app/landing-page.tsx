@@ -1,11 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import TrialLauncher from "./trial-launcher";
 import { trackProductAnalytics } from "../lib/product-analytics-client.js";
 
-type Locale = "sr" | "en" | "de";
+export type Locale = "sr" | "en" | "de";
+
+type LandingPageProps = Readonly<{
+  initialLocale?: Locale;
+  canonicalLocaleRoute?: boolean;
+}>;
 
 const LANDING_RELEASE = "2026.09.16-oled-field-proof";
 
@@ -153,10 +159,16 @@ const viewBars = [
   [16, 9, 27, 11, 18, 19],
 ];
 
-export default function LandingPage() {
-  const [locale, setLocale] = useState<Locale>("sr");
+export default function LandingPage({ initialLocale = "sr", canonicalLocaleRoute = false }: LandingPageProps) {
+  const router = useRouter();
+  const [locale, setLocale] = useState<Locale>(initialLocale);
 
   useEffect(() => {
+    if (canonicalLocaleRoute) {
+      window.localStorage.setItem("tachocommand-locale", initialLocale);
+      return;
+    }
+
     const saved = window.localStorage.getItem("tachocommand-locale") as Locale | null;
     if (saved && ["sr", "en", "de"].includes(saved)) {
       setLocale(saved);
@@ -165,13 +177,19 @@ export default function LandingPage() {
     const language = navigator.language.toLowerCase();
     if (language.startsWith("de")) setLocale("de");
     else if (language.startsWith("en")) setLocale("en");
-  }, []);
+  }, [canonicalLocaleRoute, initialLocale]);
 
   const t = copy[locale];
   const changeLocale = (next: Locale) => {
-    setLocale(next);
     window.localStorage.setItem("tachocommand-locale", next);
     void trackProductAnalytics("locale_change", { locale: next, surface: "landing" });
+
+    if (canonicalLocaleRoute) {
+      router.push(`/${next}`);
+      return;
+    }
+
+    setLocale(next);
   };
 
   const todayRows = useMemo(() => [
@@ -181,7 +199,7 @@ export default function LandingPage() {
   ], []);
 
   return (
-    <main className="tcx-shell" data-release={LANDING_RELEASE}>
+    <main className="tcx-shell" data-release={LANDING_RELEASE} lang={locale}>
       <header className="tcx-nav">
         <a className="tcx-brand" href="#top" aria-label="TachoCommand home">
           <span className="tcx-brand-mark">TC</span>
