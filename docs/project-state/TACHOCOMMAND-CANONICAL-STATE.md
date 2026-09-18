@@ -182,14 +182,39 @@ This sequence is physically verified up to the **PAIRING** menu.
 
 After the PAIRING screen, continue the guide only with physically verified steps. Do not guess the next OK/button count from memory.
 
-### 3. Phone-side flow
+### 3. What "Geräte verwalten" means
 
-After the tachograph is in pairing mode:
+German `Geräte verwalten` = **Upravljanje uređajima**; in this context: **Upravljanje Bluetooth uređajima**.
 
-1. Bluetooth must be enabled on the phone.
-2. Select the DTCO device in Android Bluetooth settings.
-3. Verify that the pairing PIN shown by the phone and tachograph matches before confirming.
-4. Only after Android-level pairing succeeds should TachoCommand attempt Web Bluetooth connection.
+According to the VDO DTCO 4.1a manual, this menu is for already paired devices. Pressing OK shows paired device names, ▲ / ▼ browses them, and selecting one leads to an `entfernen? Nein` (remove? No) prompt. It is therefore not the normal pairing step.
+
+If the operator's phone is already listed here, treat that as evidence that Android-level pairing already exists. Do not remove it during normal onboarding.
+
+VDO also marks this management menu as available from DTCO 4.1a and requiring a company or workshop card.
+
+### 4. Official VDO continuation for pairing
+
+For a new phone pairing, use the separate Driver 1 Bluetooth pairing path.
+
+After:
+`OK -> ↓ x2 -> VOZAČ 1 -> OK -> ↓ x3 -> BLUETOOTH -> OK -> PAIRING`
+
+continue as follows:
+
+1. Press **OK** on `PAIRING / Koppelung`.
+2. The DTCO displays `Bitte verbinden` (Please connect).
+3. On the phone, open Bluetooth and select the DTCO 4.1x.
+4. A 6-digit PIN appears on both the phone and the tachograph.
+5. Confirm that both PINs are identical.
+6. Confirm `Pair / Koppeln` on the phone.
+7. On DTCO 4.1a, press **↓** to confirm the displayed `Ja`.
+8. Press **OK** to finish pairing.
+9. The DTCO displays `Eingabe gespeichert` (entry saved).
+10. The Bluetooth symbol appears in the top line of the standard display.
+
+VDO notes that removing the driver card makes Bluetooth inactive and reinserting the driver card makes it active again.
+
+Only after Android-level pairing succeeds should TachoCommand attempt Web Bluetooth connection.
 
 The final in-app wording must stay literal, one action per line, for example:
 
