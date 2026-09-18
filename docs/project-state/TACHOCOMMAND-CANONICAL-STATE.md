@@ -1,204 +1,157 @@
 # TachoCommand — Canonical Project State
 
-Updated: 2026-09-16
+Updated: 2026-09-18
 
 ## Purpose
 
-This document is the durable handoff and source-of-truth checkpoint for ongoing TachoCommand product work. Chat history or account memory must not be treated as the only project state.
+This document is the durable source-of-truth checkpoint for TachoCommand. GitHub `main`, golden field evidence, and verified production behavior outrank chat memory or abandoned candidate branches.
 
-## Source-of-truth order
-
-1. GitHub repository and merged `main` history.
-2. This canonical project-state document for current decisions, open gaps and deployment provenance.
-3. Verified field-test evidence and current production/staging behavior.
-4. Chat/account memory only as supporting context.
-
-If any of these disagree, stop and reconcile before mutating production.
-
-## Current GitHub baseline
+## Canonical repository state
 
 - Repository: `canicboban-source/Tacho-Command`
-- Default branch: `main`
-- Current known `main` baseline after landing merge: `022f9d845b4e981c8cea60b1420d6a97bf05878c`
-- PR #35 premium OLED landing: merged.
-- PR #33 deterministic driver-card parser v1: open draft.
-- PR #34 driver safety/compliance engine v1: open draft, stacked on #33.
-- Older BLE/DDP probe PRs remain historical development evidence and are not the current product UX plan.
+- Default and only active integration branch: `main`
+- Canonical `main` before this documentation refresh: `5eabb15b24c0e8f2a0049b786213fd7874d2fb97`
+- Open pull requests after cleanup: **0**
+- Historical branches are preserved as evidence/reference; they are not active integration lanes.
+- Production is not to be overwritten from a historical branch or old candidate.
 
-## Proven field capability
+### Integrated and authoritative on main
 
-The project has already moved beyond protocol feasibility.
+- premium OLED landing and current public product claims;
+- privacy-safe technical telemetry foundation;
+- D1 telemetry storage schema and binding;
+- field-test telemetry instrumentation;
+- telemetry readiness endpoint;
+- byte-exact golden 0.32c Driver Card Slot 1 field artifact;
+- anonymous per-attempt support code `TC-XXXXXX` with indexed telemetry lookup;
+- historical physical verification record from 2026-09-17.
 
-Verified product evidence includes:
+## Golden 0.32c transport — locked
 
-- successful Smart Tacho V2 / VDO DTCO 4.1a driver-card download on slot 1;
+The field-proven Driver Card Slot 1 communication path is immutable unless new telemetry or a controlled physical test gives a concrete reason to change it.
+
+Golden artifact:
+
+`docs/field-evidence/2026-09-16/TachoCommand-0.32c-driver-card-slot1-field-test.html`
+
+SHA-256:
+
+`cd9caab9829cd1523c68b5cc8725edf81c42ba27c45135a6d00934f49d092908`
+
+Proven physical result:
+
+- Continental VDO DTCO 4.1a / GEN2 V2;
+- direct Driver Card Slot 1 TREP 06;
 - 269 transfer submessages;
-- 67,295-byte payload;
-- 61 top-level TLV objects in private validation;
-- 217 daily records;
-- full 56/56-day history window available in the validated field sample;
-- live read-only RDBI path previously proven on the physical setup.
+- 67,295 bytes;
+- 61 top-level TLV objects;
+- positive RequestTransferExit;
+- positive StopCommunication;
+- full 56/56-day offline-analysis coverage.
 
-Do not return the roadmap to 0.32a/0.32b feasibility work unless new evidence specifically requires protocol regression analysis.
+Do not modernize, refactor, reformat, or reuse this artifact as an editable product source. New work must wrap around it or be implemented separately.
 
-## Current public/product state reported and verified by operator
+## Verified product behavior — 2026-09-18
 
-The latest app iteration is referred to as **v37** in the working history.
+Physical product verification now shows:
 
-Operator-verified behavior/state:
+- LIVE values populated from the tachograph;
+- current activity and continuous-driving context;
+- F99A daily and F99B weekly values;
+- Periodi with real current totals;
+- 56/56-day card history rendered as activity timelines;
+- Pažnja screen with no fabricated warning when no current warning exists;
+- Kartica/status screen with successful card-read state;
+- privacy-safe technical diagnostics;
+- telemetry report received end-to-end without driver/card/vehicle/location/raw-data leakage.
 
-- one-time technical-diagnostics acknowledgement screen;
-- minimal anonymous connection telemetry;
-- connection/GATT/read timing, timeout, NRC, disconnect and failure-phase telemetry;
-- normalized tachograph-family reporting rather than full Bluetooth device name;
-- no card values, raw bytes, driver identity, vehicle identity or location in telemetry;
-- automatic technical-event retention target: 60 days;
-- app is currently intentionally open to anyone who has the link while product quality is being completed;
-- production telemetry still needs one full physical end-to-end verification against a tachograph;
-- all six public email addresses have been created through Porkbun and are working:
-  - `info@tachocommand.com`
-  - `support@tachocommand.com`
-  - `privacy@tachocommand.com`
-  - `security@tachocommand.com`
-  - `billing@tachocommand.com`
-  - `sales@tachocommand.com`
+The product has therefore moved beyond basic transport feasibility.
 
-### Important provenance gap
+## Anonymous support code
 
-The currently visible GitHub `main` `/app` source still reflects the older recovery/field-test routing model. The operator-verified v37 app state therefore must be reconciled with its authoritative deployment/source before production UI work is merged.
+Each new technical attempt may carry a support code in the form:
 
-Do **not** overwrite production from an older repo snapshot merely because it is present on `main`.
+`TC-XXXXXX`
 
-## Premium product direction
+Rules:
 
-Primary product goal now: **premium professional driver experience**, not further protocol discovery.
+- generated with secure randomness;
+- ambiguity-free alphabet;
+- no derivation from driver, card, vehicle, Bluetooth name, location, or tachograph values;
+- one code reused for all telemetry events in one attempt;
+- new attempt receives a new code;
+- legacy telemetry without the code remains valid;
+- D1 stores it in nullable `attempt_code` with an index for support lookup.
 
-Target feel:
+The internal UUID session ID remains internal and is not the support code shown to a user.
 
-- calm, precise, premium OLED cockpit;
-- “Swiss instrument” hierarchy rather than dashboard clutter;
-- truth-first empty states, never fake values;
-- immediate clarity for a working driver on a phone;
-- privacy boundary visible but not noisy;
-- warnings separated from legal conclusions;
-- every LIVE metric can explain what it means and where it comes from;
-- real product screenshots only when the production UI actually exists.
+## Archived candidate work
 
-## Premium app information architecture
+The following old PRs were intentionally closed during the 2026-09-18 cleanup. Their branches remain preserved for evidence/reference; none is authoritative:
 
-Persistent primary navigation:
+- PR #30 — 0.32a feasibility probe: superseded by golden 0.32c.
+- PR #32 — 0.32b overview probe: superseded by golden 0.32c.
+- PR #33 — parser v1: archived because audit reproduced a duplicate-minute overlap case; do not merge as-is.
+- PR #34 — compliance v1: archived because it depends on the parser candidate and has intentionally incomplete rule scope.
+- PR #36 — premium shell candidate: archived because it is older than the currently field-tested product UI and is not its authoritative source.
 
-1. `LIVE`
-2. `Periodi`
-3. `56 dana`
-4. `Pažnja`
-5. `Kartica`
+No historical branch was deleted during cleanup.
 
-### LIVE
+## Remaining provenance gap
 
-- connection status;
-- current activity;
-- continuous driving;
-- cumulative break / next-break context;
-- daily driving;
-- weekly driving;
-- last successful read;
-- tap/click explanation for every metric;
-- truthful unavailable state when no physical value is present.
+The exact version-controlled source snapshot that produced the currently field-tested premium app UI is still not present in the visible GitHub `main` history.
 
-### Periodi
+The current repository `/app` code still contains legacy recovery routing, while the physically tested application shows the newer integrated LIVE / Periodi / 56 dana / Pažnja / Kartica product.
 
-- Today;
-- current week;
-- 14 days;
-- only populated from genuine parsed/live data.
+Therefore:
 
-### 56 dana
+- do not deploy `main` over the working product until the exact production source is recovered or reconstructed and verified;
+- do not treat archived PR #36 as that source;
+- keep the production app unchanged while provenance is reconciled.
 
-- real driver-card history only;
-- DRIVING / WORK / AVAILABILITY / REST timeline;
-- no synthetic calendar rows or demo activity data.
+## Known non-transport hardening findings
 
-### Pažnja
+These remain separate tasks and must not be mixed with the golden transport:
 
-Keep separate:
+- legacy Worker `/app` interception versus the current premium app source;
+- service-worker API caching/readiness behavior;
+- service-worker cache cleanup scope;
+- parser duplicate-minute invariant;
+- STOP/cancellation semantics in the older read-only field-test client;
+- independent retention execution rather than cleanup only on ingest;
+- full release/deploy identity and rollback proof.
 
-- preventive warning;
-- reached limit;
-- event requiring legal/profile review.
+## Visual direction after source reconciliation
 
-Do not present unsupported legal verdicts.
+The current premium OLED direction is approved as the base.
 
-### Kartica
+Next visual refinements should be small and instrument-like:
 
-- show only reliable identity/status metadata;
-- do not expose full card number in normal product UI;
-- show validity/read status when reliably parsed;
-- preserve privacy-first product language.
+- slightly thicker and clearer panel borders;
+- stronger separation between primary and secondary surfaces;
+- continuous-driving progress should visually transition **green -> yellow -> red** as the relevant threshold approaches;
+- color must support, not replace, numeric time and text;
+- no alarm-like red while values are safely far from the threshold;
+- no change to protocol behavior, timing, parser semantics, telemetry privacy, or legal interpretation as part of a visual task.
 
-## Premium UI preview
+Suggested visual semantics for the continuous-driving bar:
 
-A separate non-production AppDeploy preview was created solely for visual/product review:
+- early/safe range: green;
+- approaching preventive zone: green-to-yellow;
+- near the applicable limit: yellow-to-red;
+- at/over a confirmed applicable threshold: red, accompanied by explicit text.
 
-- App: `TachoCommand Premium App Preview`
-- App ID: `tachocommand-premium-app-preview-nxwn0l`
-- URL: `https://tachocommand-premium-app-preview-nxwn0l.v2.appdeploy.ai/`
-- BLE calls intentionally disabled.
-- No fake tachograph/card values.
-- Includes working navigation, truthful empty states, metric explanation sheets and a staged connection-flow preview.
-
-This preview is design evidence, not production source-of-truth and not a replacement for the v37 implementation.
-
-## Immediate next work
-
-### Gate 1 — reconcile authoritative v37 source
-
-Before integrating the premium shell:
-
-- identify the exact source/deployment snapshot that produced the operator-verified v37 app;
-- compare it with current GitHub `main`;
-- preserve telemetry, privacy and working hardware flows;
-- bring the authoritative production implementation back under version-controlled provenance.
-
-### Gate 2 — premium app shell integration
-
-After Gate 1:
-
-- port the approved premium information architecture into the authoritative app source;
-- preserve hardware/protocol behavior unchanged unless a separate evidence-backed task requires it;
-- keep LIVE values data-driven;
-- keep empty states truthful;
-- preserve mobile-first behavior.
-
-### Gate 3 — telemetry physical proof
-
-At the next physical tachograph session verify one real path end-to-end:
-
-`connect_start -> gatt_connected -> transport -> TesterPresent -> F923/F925/F903/F99A/F99B -> snapshot_complete`
-
-Verify that stored telemetry does not contain private driver/card/vehicle/location values.
-
-### Gate 4 — product completion
-
-Then finish:
-
-- Periodi;
-- 56-day production UI;
-- Pažnja;
-- Kartica;
-- connection/recovery UX;
-- licensing/access control;
-- payment;
-- final security/product audit;
-- final landing refresh using real production screenshots.
+Exact transition points must come from the selected rule/profile logic rather than being hard-coded as legal conclusions in CSS.
 
 ## Working rules
 
-- One primary engineering lane/account at a time.
-- No parallel code mutation from another chat/account without a documented handoff.
-- GitHub/project-state document wins over chat memory.
-- Small evidence-backed changes only.
-- Do not trade protocol correctness or privacy for visual polish.
-- Do not fabricate history, current values, legal verdicts or compatibility.
-- Keep production open during the current product-hardening phase only as an explicit temporary decision; access/licensing is a later gated task.
-- No destructive production action without explicit verification of target and rollback/provenance.
+1. `main` is the only active integration target.
+2. Golden 0.32c is locked.
+3. No destructive deletion without classification and evidence preservation.
+4. Historical branches may remain as archives, but no parallel product work starts from them.
+5. New feature work starts from current `main`.
+6. One focused change per PR/task.
+7. No production deploy until source/deploy provenance is explicit.
+8. Privacy-safe telemetry never includes driver identity, card number, vehicle identity, location, full Bluetooth name, raw protocol bytes, or tachograph values.
+9. Never fabricate history, current values, compatibility, warnings, or legal verdicts.
+10. Visual polish must not alter transport, parser, telemetry, or compliance behavior.
