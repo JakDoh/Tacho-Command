@@ -2,45 +2,9 @@
 
 import { useMemo, useState } from "react";
 import styles from "./field-proven-premium-ui.module.css";
+import type { FieldProvenProductState } from "../../lib/field-proven-product-state.js";
 
 export type ProductTab = "live" | "periods" | "history" | "attention" | "card";
-export type ActivityKind = "DRIVING" | "WORK" | "AVAILABILITY" | "REST" | "UNKNOWN";
-export type TimelineKind = "drive" | "work" | "availability" | "rest";
-
-export type TimelineSegment = Readonly<{
-  kind: TimelineKind;
-  percent: number;
-}>;
-
-export type HistoryDay = Readonly<{
-  dateLabel: string;
-  drivingMinutes: number;
-  segments: readonly TimelineSegment[];
-}>;
-
-export type FieldProvenProductState = Readonly<{
-  live: boolean;
-  driverName: string | null;
-  cardLast4: string | null;
-  tachographLabel: string | null;
-  lastLiveReadLabel: string | null;
-  currentActivity: ActivityKind;
-  continuousDrivingMinutes: number | null;
-  continuousProgressPercent: number | null;
-  continuousRemainingLabel: string | null;
-  todayDrivingMinutes: number | null;
-  weekDrivingMinutes: number | null;
-  fortnightDrivingMinutes: number | null;
-  historyDaysAvailable: number;
-  historyDays: readonly HistoryDay[];
-  attentionTitle: string | null;
-  attentionBody: string | null;
-  cardReadComplete: boolean;
-  slotLabel: string | null;
-  telemetrySentCount: number | null;
-  attemptCode: string | null;
-  localeLabel: string;
-}>;
 
 const nav: readonly Readonly<{ id: ProductTab; label: string; glyph: string }>[] = Object.freeze([
   Object.freeze({ id: "live", label: "LIVE", glyph: "●" }),
@@ -129,7 +93,7 @@ function LiveScreen({ state }: Readonly<{ state: FieldProvenProductState }>) {
         <div className={styles.progressScale}>
           <span>0:00</span>
           <span>{state.continuousRemainingLabel ? "Preostalo " + state.continuousRemainingLabel : "Bez potvrđenog praga"}</span>
-          <span>4:30</span>
+          <span>{state.continuousThresholdLabel ?? "—"}</span>
         </div>
         <div className={styles.nextLine}>
           <strong>Sledeće:</strong>

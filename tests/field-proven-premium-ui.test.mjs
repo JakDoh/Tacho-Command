@@ -4,6 +4,7 @@ import test from "node:test";
 
 const client = await readFile(new URL("../app/app/field-proven-premium-ui.tsx", import.meta.url), "utf8");
 const css = await readFile(new URL("../app/app/field-proven-premium-ui.module.css", import.meta.url), "utf8");
+const stateContract = await readFile(new URL("../lib/field-proven-product-state.d.ts", import.meta.url), "utf8");
 
 test("field-proven UI reconstruction exposes all observed product tabs", () => {
   for (const label of ["LIVE", "Periodi", "56 dana", "Pažnja", "Kartica"]) {
@@ -29,7 +30,8 @@ test("reconstruction stays data-driven and contains no personal field fixture", 
     assert.equal(client.includes(forbidden), false, forbidden + " must not be hard-coded");
   }
   assert.ok(client.includes("FieldProvenProductState"));
-  assert.ok(client.includes("historyDays:"));
+  assert.ok(client.includes('from "../../lib/field-proven-product-state.js"'));
+  assert.ok(stateContract.includes("historyDays:"));
 });
 
 test("reconstruction cannot touch the proven communication motor", () => {
