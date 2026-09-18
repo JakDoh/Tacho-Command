@@ -137,14 +137,83 @@
 
 .historyList { display: grid; gap: 10px; }
 .historyRow {
-  display: grid; grid-template-columns: 88px 1fr 96px; align-items: center; gap: 13px;
-  padding: 15px 16px; border-radius: 17px;
+  position: relative; width: 100%; display: grid; grid-template-columns: 88px 1fr 96px; align-items: center; gap: 13px;
+  padding: 15px 38px 15px 16px; border-radius: 17px; color: inherit; text-align: left; cursor: pointer;
 }
+.historyRow:hover { border-color: rgba(113, 216, 242, 0.48); }
+.historyRow:focus-visible { outline: 2px solid var(--tc-cyan); outline-offset: 2px; }
 .historyRow > strong { color: #c7d2d8; font-size: 13px; }
-.historyRow > strong:last-child { text-align: right; }
+.historyRow > strong:nth-of-type(2) { text-align: right; }
+.historyChevron {
+  position: absolute; right: 15px; top: 50%; transform: translateY(-50%);
+  color: #6f8e9e; font-size: 24px; line-height: 1;
+}
 .timeline { height: 16px; display: flex; overflow: hidden; border-radius: 99px; background: #132f40; }
 .timeline span { height: 100%; }
 .emptyPanel { padding: 28px 20px; border-radius: 20px; color: #7f949f; text-align: center; }
+
+.dayDetailTopline { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.dayDetailTopline small { color: var(--tc-cyan); font-size: 11px; font-weight: 900; letter-spacing: 0.12em; }
+.backButton {
+  min-height: 44px; padding: 0 15px; border: var(--tc-panel-line) solid var(--tc-line);
+  border-radius: 14px; color: #b9d7e3; background: rgba(10, 34, 48, 0.8); font: inherit; font-weight: 800;
+}
+.backButton:focus-visible { outline: 2px solid var(--tc-cyan); outline-offset: 2px; }
+
+.dayTimelinePanel, .daySummaryCard, .dayEventsPanel, .daySequencePanel {
+  border: var(--tc-panel-line) solid var(--tc-line);
+  background: linear-gradient(145deg, rgba(11, 30, 43, 0.96), rgba(8, 24, 35, 0.96));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.015);
+}
+.dayTimelinePanel { padding: 22px 18px 18px; border-radius: 23px; }
+.dayTimelineHeader { display: flex; align-items: center; justify-content: space-between; color: #7f96a3; font-size: 11px; }
+.dayTimelineHeader strong { color: #c4d5dd; letter-spacing: 0.1em; }
+.dayTimelineTrack {
+  position: relative; height: 28px; margin-top: 19px; overflow: visible; border-radius: 6px; background: #102b3a;
+  box-shadow: inset 0 0 0 1px rgba(102, 196, 232, 0.12);
+}
+.dayTimelineTrack > span { position: absolute; top: 0; bottom: 0; min-width: 1px; }
+.dayTimelineTrack > i {
+  position: absolute; z-index: 4; top: -7px; bottom: -7px; width: 2px; transform: translateX(-1px);
+  border-radius: 2px;
+}
+.cardInsertedMarker { background: #f4f7f8; box-shadow: 0 0 0 2px rgba(88, 226, 173, 0.35); }
+.cardRemovedMarker { background: #f4f7f8; box-shadow: 0 0 0 2px rgba(255, 120, 113, 0.3); }
+
+.dayRuler { position: relative; height: 24px; margin-top: 7px; border-top: 1px solid rgba(125, 160, 177, 0.32); }
+.dayRuler i { position: absolute; top: 0; width: 1px; background: #718d9c; transform: translateX(-0.5px); }
+.hourTick { height: 15px; opacity: 0.9; }
+.halfHourTick { height: 10px; opacity: 0.65; }
+.quarterHourTick { height: 6px; opacity: 0.42; }
+.dayHourLabels { display: flex; justify-content: space-between; color: #6f8794; font-size: 10px; font-variant-numeric: tabular-nums; }
+
+.daySummaryGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.daySummaryCard { min-width: 0; padding: 17px; border-radius: 18px; }
+.daySummaryCard > div { display: flex; align-items: center; gap: 9px; color: #859ba7; font-size: 11px; }
+.daySummaryCard i { width: 24px; height: 6px; border-radius: 99px; flex: 0 0 auto; }
+.daySummaryCard strong { display: block; margin-top: 12px; font-size: 18px; font-variant-numeric: tabular-nums; }
+
+.dayEventsPanel, .daySequencePanel { padding: 19px; border-radius: 21px; }
+.dayEventsPanel > span, .daySequencePanel > span {
+  display: block; color: #78909d; font-size: 11px; font-weight: 900; letter-spacing: 0.12em;
+}
+.dayEventsPanel > div {
+  display: grid; grid-template-columns: 72px 1fr; gap: 12px; align-items: center;
+  padding: 13px 0; border-bottom: 1px solid var(--tc-line-soft);
+}
+.dayEventsPanel > div:last-child { border-bottom: 0; padding-bottom: 0; }
+.dayEventsPanel time, .daySequenceRow time { color: #7cdaf1; font-variant-numeric: tabular-nums; }
+.dayEventsPanel p, .daySequencePanel > p { margin: 13px 0 0; color: #8297a2; font-size: 13px; line-height: 1.5; }
+
+.daySequenceRow {
+  display: grid; grid-template-columns: 104px 1fr auto; gap: 12px; align-items: center;
+  padding: 14px 0; border-bottom: 1px solid var(--tc-line-soft);
+}
+.daySequenceRow:last-child { border-bottom: 0; padding-bottom: 0; }
+.daySequenceRow > div { min-width: 0; }
+.daySequenceRow strong { display: block; font-size: 13px; }
+.daySequenceRow small { display: block; margin-top: 4px; color: #8fa5b0; font-size: 11px; }
+.daySequenceRow > span { color: #c9d7dd; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 .okPanel, .attentionPanel {
   display: grid; grid-template-columns: 86px 1fr; align-items: center; gap: 20px; padding: 27px; border-radius: 25px;
@@ -209,6 +278,8 @@
   .screenTopline { align-items: flex-start; }
   .screenTopline small { text-align: right; }
   .historyRow { grid-template-columns: 80px 1fr 82px; gap: 10px; }
+  .dayTimelinePanel { padding-inline: 14px; }
+  .daySequenceRow { grid-template-columns: 94px 1fr auto; gap: 9px; }
   .okPanel, .attentionPanel { grid-template-columns: 72px 1fr; padding: 22px; }
   .okIcon, .attentionIcon { width: 62px; height: 62px; border-radius: 20px; font-size: 38px; }
 }
@@ -219,7 +290,11 @@
   .content { padding-inline: 14px; }
   .statusGrid { gap: 9px; }
   .statusGrid section { padding: 16px; }
-  .historyRow { grid-template-columns: 66px 1fr 72px; padding-inline: 12px; }
+  .historyRow { grid-template-columns: 66px 1fr 72px; padding: 13px 34px 13px 12px; }
   .historyRow > strong { font-size: 11px; }
+  .daySummaryGrid { gap: 8px; }
+  .daySummaryCard { padding: 14px; }
+  .daySequenceRow { grid-template-columns: 82px 1fr; }
+  .daySequenceRow > span { grid-column: 2; justify-self: start; margin-top: -6px; }
   .bottomNav button small { font-size: 10px; }
 }

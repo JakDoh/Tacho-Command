@@ -140,6 +140,39 @@ test("stored snapshot can feed the existing product-state adapter after restart"
   assert.equal(state.historyDays.length, 2);
 });
 
+test("snapshot preserves day-detail positions, labels and card events", () => {
+  const storage = memoryStorage();
+  const card = completeCard({
+    historyDaysAvailable: 1,
+    historyDays: [
+      {
+        dateIso: "2026-09-18",
+        dateLabel: "18. sep",
+        drivingMinutes: 90,
+        events: [
+          { kind: "card-inserted", minute: 287 },
+          { kind: "card-removed", minute: 910 },
+        ],
+        segments: [
+          { kind: "work", minutes: 11, startMinute: 287, endMinute: 298, cardStatus: "inserted", label: "Provera vozila" },
+          { kind: "drive", minutes: 90, startMinute: 298, endMinute: 388, cardStatus: "inserted" },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(saveLastGoodCardSnapshot(storage, card, "2026-09-18T06:02:00+02:00").status, "saved");
+  const loaded = loadLastGoodCardSnapshot(storage);
+  assert.deepEqual(loaded.card.historyDays[0].events.map((event) => [event.kind, event.minute]), [
+    ["card-inserted", 287],
+    ["card-removed", 910],
+  ]);
+  assert.equal(loaded.card.historyDays[0].segments[0].startMinute, 287);
+  assert.equal(loaded.card.historyDays[0].segments[0].endMinute, 298);
+  assert.equal(loaded.card.historyDays[0].segments[0].cardStatus, "inserted");
+  assert.equal(loaded.card.historyDays[0].segments[0].label, "Provera vozila");
+});
+
 test("corrupt or unknown-version storage fails closed without inventing history", () => {
   assert.equal(loadLastGoodCardSnapshot(memoryStorage("{broken-json")), null);
   assert.equal(

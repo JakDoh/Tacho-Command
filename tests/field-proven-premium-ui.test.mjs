@@ -65,3 +65,18 @@ test("visual source uses clearer panel lines and state-driven continuous-driving
   assert.ok(client.includes("styles.progressWarning"));
   assert.ok(client.includes("styles.progressLimit"));
 });
+
+test("history rows expose a 24-hour day detail without inventing missing card events", () => {
+  assert.ok(client.includes("DETALJ DANA"));
+  assert.ok(client.includes("Velike crte su sati, srednje 30 min, male 15 min."));
+  assert.ok(client.includes("Kartica ubačena"));
+  assert.ok(client.includes("Kartica izvađena"));
+  assert.ok(client.includes("TachoCommand ga ne izmišlja."));
+  assert.ok(client.includes("Provera vozila"));
+  assert.ok(client.includes("segment.startMinute"));
+  assert.ok(client.includes("segment.endMinute"));
+  assert.ok(css.includes(".dayRuler"));
+  assert.ok(css.includes(".hourTick"));
+  assert.ok(css.includes(".halfHourTick"));
+  assert.ok(css.includes(".quarterHourTick"));
+});

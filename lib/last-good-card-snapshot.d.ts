@@ -5,6 +5,15 @@ export declare const LAST_GOOD_CARD_SNAPSHOT_MAX_DAYS: 56;
 export type LastGoodCardHistorySegment = Readonly<{
   kind: "drive" | "work" | "availability" | "rest";
   minutes: number;
+  startMinute?: number | null;
+  endMinute?: number | null;
+  cardStatus?: "inserted" | "not-inserted" | null;
+  label?: string | null;
+}>;
+
+export type LastGoodCardHistoryEvent = Readonly<{
+  kind: "card-inserted" | "card-removed";
+  minute: number;
 }>;
 
 export type LastGoodCardHistoryDay = Readonly<{
@@ -12,6 +21,9 @@ export type LastGoodCardHistoryDay = Readonly<{
   dateLabel: string;
   drivingMinutes: number;
   segments: readonly LastGoodCardHistorySegment[];
+  events?: readonly LastGoodCardHistoryEvent[];
+  cardInsertedMinute?: number | null;
+  cardRemovedMinute?: number | null;
 }>;
 
 export type LastGoodCardState = Readonly<{

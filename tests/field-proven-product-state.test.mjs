@@ -84,8 +84,52 @@ test("adapter maps parsed card history into display percentages without parsing 
   assert.equal(state.historyDaysAvailable, 56);
   assert.equal(state.historyDays.length, 1);
   assert.equal(state.historyDays[0].segments.length, 3);
+  assert.deepEqual(state.historyDays[0].activityTotals, {
+    drive: 120,
+    work: 60,
+    availability: 0,
+    rest: 1260,
+  });
+  assert.equal(state.historyDays[0].segments[0].minutes, 120);
+  assert.equal(state.historyDays[0].segments[0].startMinute, 0);
+  assert.equal(state.historyDays[0].segments[0].endMinute, 120);
   const total = state.historyDays[0].segments.reduce((sum, segment) => sum + segment.percent, 0);
   assert.ok(Math.abs(total - 100) < 0.000001);
+});
+
+test("adapter preserves absolute daily positions and card events for day detail", () => {
+  const state = createFieldProvenProductState({
+    card: {
+      cardReadComplete: true,
+      historyDaysAvailable: 1,
+      historyDays: [
+        {
+          dateLabel: "18. sep",
+          drivingMinutes: 90,
+          events: [
+            { kind: "card-inserted", minute: 287 },
+            { kind: "card-removed", minute: 910 },
+          ],
+          segments: [
+            { kind: "rest", minutes: 287, startMinute: 0, endMinute: 287, cardStatus: "not-inserted" },
+            { kind: "work", minutes: 11, startMinute: 287, endMinute: 298, cardStatus: "inserted", label: "Provera vozila" },
+            { kind: "drive", minutes: 90, startMinute: 298, endMinute: 388, cardStatus: "inserted" },
+            { kind: "rest", minutes: 522, startMinute: 388, endMinute: 910, cardStatus: "inserted" },
+            { kind: "rest", minutes: 530, startMinute: 910, endMinute: 1440, cardStatus: "not-inserted" },
+          ],
+        },
+      ],
+    },
+  });
+
+  const day = state.historyDays[0];
+  assert.deepEqual(day.events.map((event) => [event.kind, event.minute]), [
+    ["card-inserted", 287],
+    ["card-removed", 910],
+  ]);
+  assert.equal(day.segments[1].label, "Provera vozila");
+  assert.equal(day.segments[1].startMinute, 287);
+  assert.equal(day.segments[1].endMinute, 298);
 });
 
 test("adapter bounds support-code and identity display fields", () => {
@@ -121,7 +165,7 @@ test("adapter source is a pure state boundary and cannot issue tachograph or tel
 });
 
 test("premium UI consumes the shared state contract and no longer hard-codes 4:30", () => {
-  assert.match(uiSource, /import type \{ FieldProvenProductState \}/);
+  assert.match(uiSource, /import type \{[^}]*FieldProvenProductState[^}]*\}/);
   assert.match(uiSource, /continuousThresholdLabel/);
   assert.equal(uiSource.includes("<span>4:30</span>"), false);
 });

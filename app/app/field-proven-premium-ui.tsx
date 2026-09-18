@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import styles from "./field-proven-premium-ui.module.css";
-import type { FieldProvenProductState } from "../../lib/field-proven-product-state.js";
+import type { FieldProvenActivity, FieldProvenHistoryDay, FieldProvenHistorySegment, FieldProvenProductState, FieldProvenTimelineKind } from "../../lib/field-proven-product-state.js";
 
 export type ProductTab = "live" | "periods" | "history" | "attention" | "card";
 
@@ -14,7 +14,7 @@ const nav: readonly Readonly<{ id: ProductTab; label: string; glyph: string }>[]
   Object.freeze({ id: "card", label: "Kartica", glyph: "◇" }),
 ]);
 
-const ACTIVITY_SR: Readonly<Record<ActivityKind, string>> = Object.freeze({
+const ACTIVITY_SR: Readonly<Record<FieldProvenActivity, string>> = Object.freeze({
   DRIVING: "VOŽNJA",
   WORK: "RAD",
   AVAILABILITY: "RASPOLOŽIVOST",
@@ -31,6 +31,35 @@ function formatMinutes(value: number | null): string {
 function clampPercent(value: number | null): number {
   if (value === null || !Number.isFinite(value)) return 0;
   return Math.min(100, Math.max(0, value));
+}
+
+const TIMELINE_SR: Readonly<Record<FieldProvenTimelineKind, string>> = Object.freeze({
+  drive: "VOŽNJA",
+  work: "RAD",
+  availability: "RASPOLOŽIVOST",
+  rest: "ODMOR / PAUZA",
+});
+
+const HISTORY_EVENT_SR = Object.freeze({
+  "card-inserted": "Kartica ubačena",
+  "card-removed": "Kartica izvađena",
+});
+
+function formatClockMinute(value: number): string {
+  const safe = Math.min(1440, Math.max(0, Math.round(value)));
+  if (safe === 1440) return "24:00";
+  return String(Math.floor(safe / 60)).padStart(2, "0") + ":" + String(safe % 60).padStart(2, "0");
+}
+
+function segmentContext(day: FieldProvenHistoryDay, segment: FieldProvenHistorySegment): string | null {
+  if (segment.label) return segment.label;
+  const insertedHere = day.events.some(
+    (event) => event.kind === "card-inserted" && event.minute === segment.startMinute,
+  );
+  if (insertedHere && segment.kind === "work" && segment.minutes >= 7 && segment.minutes <= 15) {
+    return "Provera vozila";
+  }
+  return null;
 }
 
 function IdentityHeader({ state }: Readonly<{ state: FieldProvenProductState }>) {
@@ -161,15 +190,123 @@ function PeriodsScreen({ state }: Readonly<{ state: FieldProvenProductState }>) 
   );
 }
 
+function HistoryDayDetail({
+  day,
+  onBack,
+}: Readonly<{ day: FieldProvenHistoryDay; onBack: () => void }>) {
+  const ticks = Array.from({ length: 97 }, (_, index) => index);
+  const summary = [
+    ["drive", "Vožnja"],
+    ["work", "Rad"],
+    ["availability", "Raspoloživost"],
+    ["rest", "Odmor / pauza"],
+  ] as const;
+
+  return (
+    <div className={styles.screen}>
+      <div className={styles.dayDetailTopline}>
+        <button type="button" className={styles.backButton} onClick={onBack}>← 56 dana</button>
+        <small>DETALJ DANA</small>
+      </div>
+
+      <div className={styles.pageIntro}>
+        <h1>{day.dateLabel}</h1>
+        <p>24-časovni zapis aktivnosti sa tahografske kartice. Velike crte su sati, srednje 30 min, male 15 min.</p>
+      </div>
+
+      <section className={styles.dayTimelinePanel}>
+        <div className={styles.dayTimelineHeader}>
+          <span>00:00</span><strong>24 h</strong><span>24:00</span>
+        </div>
+        <div className={styles.dayTimelineTrack} aria-label={"24-časovna linija za " + day.dateLabel}>
+          {day.segments.map((segment, index) => {
+            const left = (segment.startMinute / 1440) * 100;
+            const width = ((segment.endMinute - segment.startMinute) / 1440) * 100;
+            return (
+              <span
+                key={day.dateLabel + "-detail-" + String(index)}
+                className={styles[segment.kind]}
+                style={{ left: String(left) + "%", width: String(Math.max(0, width)) + "%" }}
+                title={TIMELINE_SR[segment.kind] + " · " + formatClockMinute(segment.startMinute) + "–" + formatClockMinute(segment.endMinute)}
+              />
+            );
+          })}
+          {day.events.map((event, index) => (
+            <i
+              key={event.kind + "-" + String(event.minute) + "-" + String(index)}
+              className={event.kind === "card-inserted" ? styles.cardInsertedMarker : styles.cardRemovedMarker}
+              style={{ left: String((event.minute / 1440) * 100) + "%" }}
+              aria-label={HISTORY_EVENT_SR[event.kind] + " u " + formatClockMinute(event.minute)}
+              title={HISTORY_EVENT_SR[event.kind] + " · " + formatClockMinute(event.minute)}
+            />
+          ))}
+        </div>
+        <div className={styles.dayRuler} aria-hidden="true">
+          {ticks.map((tick) => (
+            <i
+              key={tick}
+              className={tick % 4 === 0 ? styles.hourTick : tick % 2 === 0 ? styles.halfHourTick : styles.quarterHourTick}
+              style={{ left: String((tick / 96) * 100) + "%" }}
+            />
+          ))}
+        </div>
+        <div className={styles.dayHourLabels} aria-hidden="true">
+          <span>00</span><span>06</span><span>12</span><span>18</span><span>24</span>
+        </div>
+      </section>
+
+      <div className={styles.daySummaryGrid}>
+        {summary.map(([kind, label]) => (
+          <section key={kind} className={styles.daySummaryCard}>
+            <div><i className={styles[kind]} /><span>{label}</span></div>
+            <strong>{formatMinutes(day.activityTotals[kind])}</strong>
+          </section>
+        ))}
+      </div>
+
+      <section className={styles.dayEventsPanel}>
+        <span>DOGAĐAJI KARTICE</span>
+        {day.events.length > 0 ? day.events.map((event, index) => (
+          <div key={event.kind + "-row-" + String(index)}>
+            <time>{formatClockMinute(event.minute)}</time>
+            <strong>{HISTORY_EVENT_SR[event.kind]}</strong>
+          </div>
+        )) : <p>Ovaj dnevni zapis nema potvrđen marker ubacivanja ili vađenja kartice. TachoCommand ga ne izmišlja.</p>}
+      </section>
+
+      <section className={styles.daySequencePanel}>
+        <span>TOK DANA</span>
+        {day.segments.length === 0 ? <p>Nema obrađenih aktivnosti za ovaj dan.</p> : day.segments.map((segment, index) => {
+          const context = segmentContext(day, segment);
+          return (
+            <div className={styles.daySequenceRow} key={day.dateLabel + "-sequence-" + String(index)}>
+              <time>{formatClockMinute(segment.startMinute)}–{formatClockMinute(segment.endMinute)}</time>
+              <div>
+                <strong>{TIMELINE_SR[segment.kind]}</strong>
+                {context ? <small>{context}</small> : null}
+              </div>
+              <span>{formatMinutes(segment.minutes)}</span>
+            </div>
+          );
+        })}
+      </section>
+    </div>
+  );
+}
+
 function HistoryScreen({ state }: Readonly<{ state: FieldProvenProductState }>) {
   const visibleDays = state.historyDays.slice(0, 56);
+  const [selectedDayIndex, setSelectedDayIndex] = useState<number | null>(null);
+  const selectedDay = selectedDayIndex === null ? null : visibleDays[selectedDayIndex] ?? null;
+
+  if (selectedDay) return <HistoryDayDetail day={selectedDay} onBack={() => setSelectedDayIndex(null)} />;
 
   return (
     <div className={styles.screen}>
       <div className={styles.screenTopline}><span>ISTORIJA KARTICE</span><small>{state.historyDaysAvailable}/56 dana</small></div>
       <div className={styles.pageIntro}>
         <h1>Svaki dan, u jednoj liniji.</h1>
-        <p>Stvarna istorija VOŽNJE, RADA, RASPOLOŽIVOSTI i ODMORA. Demo podaci se ne prikazuju.</p>
+        <p>Stvarna istorija VOŽNJE, RADA, RASPOLOŽIVOSTI i ODMORA. Dodirni dan za 24-časovni detalj.</p>
       </div>
 
       <div className={styles.legend}>
@@ -183,20 +320,23 @@ function HistoryScreen({ state }: Readonly<{ state: FieldProvenProductState }>) 
         <section className={styles.emptyPanel}>Kartica još nema obrađenu istoriju za prikaz.</section>
       ) : (
         <div className={styles.historyList}>
-          {visibleDays.map((day) => (
-            <section className={styles.historyRow} key={day.dateLabel}>
+          {visibleDays.map((day, index) => (
+            <button
+              type="button"
+              className={styles.historyRow}
+              key={day.dateLabel + "-" + String(index)}
+              onClick={() => setSelectedDayIndex(index)}
+              aria-label={"Otvori detalj za " + day.dateLabel}
+            >
               <strong>{day.dateLabel}</strong>
-              <div className={styles.timeline} aria-label={"Aktivnosti za " + day.dateLabel}>
-                {day.segments.map((segment, index) => (
-                  <span
-                    key={day.dateLabel + "-" + String(index)}
-                    className={styles[segment.kind]}
-                    style={{ width: String(clampPercent(segment.percent)) + "%" }}
-                  />
+              <div className={styles.timeline} aria-hidden="true">
+                {day.segments.map((segment, segmentIndex) => (
+                  <span key={day.dateLabel + "-" + String(segmentIndex)} className={styles[segment.kind]} style={{ width: String(clampPercent(segment.percent)) + "%" }} />
                 ))}
               </div>
               <strong>{formatMinutes(day.drivingMinutes)}</strong>
-            </section>
+              <span className={styles.historyChevron} aria-hidden="true">›</span>
+            </button>
           ))}
         </div>
       )}

@@ -1,14 +1,30 @@
 export type FieldProvenActivity = "DRIVING" | "WORK" | "AVAILABILITY" | "REST" | "UNKNOWN";
 export type FieldProvenContinuousBand = "neutral" | "safe" | "warning" | "limit";
 export type FieldProvenTimelineKind = "drive" | "work" | "availability" | "rest";
+export type FieldProvenHistoryCardStatus = "inserted" | "not-inserted";
+export type FieldProvenHistoryEventKind = "card-inserted" | "card-removed";
+
+export type FieldProvenHistoryEvent = Readonly<{
+  kind: FieldProvenHistoryEventKind;
+  minute: number;
+}>;
+
+export type FieldProvenHistorySegment = Readonly<{
+  kind: FieldProvenTimelineKind;
+  minutes: number;
+  percent: number;
+  startMinute: number;
+  endMinute: number;
+  cardStatus: FieldProvenHistoryCardStatus | null;
+  label: string | null;
+}>;
 
 export type FieldProvenHistoryDay = Readonly<{
   dateLabel: string;
   drivingMinutes: number;
-  segments: readonly Readonly<{
-    kind: FieldProvenTimelineKind;
-    percent: number;
-  }>[];
+  activityTotals: Readonly<Record<FieldProvenTimelineKind, number>>;
+  events: readonly FieldProvenHistoryEvent[];
+  segments: readonly FieldProvenHistorySegment[];
 }>;
 
 export type FieldProvenProductState = Readonly<{
