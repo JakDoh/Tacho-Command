@@ -160,21 +160,45 @@ Exact transition points must come from the selected rule/profile logic rather th
 
 Before public release, TachoCommand must include a literal, non-technical step-by-step guide for first-time phone pairing. The guide must be written for a driver who has never paired the tachograph before.
 
-Official VDO DTCO 4.1a menu sequence verified on 2026-09-18:
+Physical DTCO 4.1a button sequence verified by the operator on 2026-09-18:
 
-1. On the tachograph, enable permission to publish ITS data for Driver 1:
-   `Entry -> Driver 1 -> Settings -> Publish ITS data -> Yes`.
-2. On the phone, switch Bluetooth on.
-3. On the tachograph, open the Driver 1 Bluetooth menu:
-   `Driver 1 -> Bluetooth -> Pairing`.
-4. Confirm with OK.
-5. Select the DTCO device in the phone Bluetooth menu.
-6. Verify that the 6-digit PIN shown on the phone and tachograph is identical, then confirm pairing.
-7. Only after Android-level pairing succeeds should TachoCommand attempt Web Bluetooth connection.
+### 1. Enable ITS data
 
-The final in-app wording should be even more literal, for example:
-`Pritisni strelicu dole ... puta -> OK -> ...`
-but exact button-press counts must be verified on the physical DTCO 4.1a before publishing. Do not guess button counts from memory.
+From the normal tachograph screen:
+
+`OK -> ↓ x2 -> VOZAČ 1 -> OK -> ↓ x2 -> PODEŠAVANJA -> OK -> ITS PODACI -> OK -> OK`
+
+Result: **ITS data enabled**.
+
+This exact physical button count is now verified and may be used in the in-app guide.
+
+### 2. Open Bluetooth pairing
+
+From the normal tachograph screen:
+
+`OK -> ↓ x2 -> VOZAČ 1 -> OK -> ↓ x3 -> BLUETOOTH -> OK -> PAIRING`
+
+This sequence is physically verified up to the **PAIRING** menu.
+
+After the PAIRING screen, continue the guide only with physically verified steps. Do not guess the next OK/button count from memory.
+
+### 3. Phone-side flow
+
+After the tachograph is in pairing mode:
+
+1. Bluetooth must be enabled on the phone.
+2. Select the DTCO device in Android Bluetooth settings.
+3. Verify that the pairing PIN shown by the phone and tachograph matches before confirming.
+4. Only after Android-level pairing succeeds should TachoCommand attempt Web Bluetooth connection.
+
+The final in-app wording must stay literal, one action per line, for example:
+
+`Pritisni OK.`
+`Pritisni strelicu dole 2 puta.`
+`Na ekranu piše VOZAČ 1.`
+`Pritisni OK.`
+
+Do not compress these into technical menu paths for the normal driver-facing guide.
 
 Also include a recovery branch:
 - if the phone does not see the tachograph;
