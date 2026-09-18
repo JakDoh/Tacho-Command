@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { createTechnicalTelemetryAttemptCode, normalizeTechnicalTelemetryAttemptCode, sanitizeTechnicalTelemetryEvent } from "../lib/technical-telemetry.js";
+const SESSION_ID="123e4567-e89b-42d3-a456-426614174000";
+const BASE={sessionId:SESSION_ID,event:"connect_start",phase:"bluetooth",outcome:"start",deviceFamily:"unknown"};
+test("support code format and new attempt",()=>{let g=0;const c={getRandomValues(b){for(let i=0;i<b.length;i++)b[i]=g+i+2;g+=17;return b;}};const a=createTechnicalTelemetryAttemptCode(c),d=createTechnicalTelemetryAttemptCode(c);assert.match(a,/^TC-[A-HJKMNP-Z2-9]{6}$/);assert.doesNotMatch(a,/[ILO01]/);assert.notEqual(a,d);});
+test("support code normalization",()=>{assert.equal(normalizeTechnicalTelemetryAttemptCode(" tc-7f2k8m "),"TC-7F2K8M");for(const x of ["TC-12ABCD","TC-ABCLO2","Boban Canic","TC-ABCDEF-EXTRA"])assert.equal(normalizeTechnicalTelemetryAttemptCode(x),null);});
+test("same attempt code survives all events",()=>{const a="TC-7F2K8M";assert.equal(sanitizeTechnicalTelemetryEvent({...BASE,attemptCode:a}).attemptCode,a);assert.equal(sanitizeTechnicalTelemetryEvent({...BASE,attemptCode:a,event:"transport_ready",phase:"transport",outcome:"positive"}).attemptCode,a);});
+test("legacy event remains valid",()=>{const e=sanitizeTechnicalTelemetryEvent(BASE);assert.ok(e);assert.equal(e.attemptCode,null);});
+test("identity-shaped attempt codes fail closed",()=>{for(const x of ["TC-BOB600","Boban Canic","TC-123456"])assert.equal(sanitizeTechnicalTelemetryEvent({...BASE,attemptCode:x}),null);});

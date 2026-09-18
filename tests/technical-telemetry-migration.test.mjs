@@ -9,6 +9,13 @@ const migrationSql = fs.readFileSync(
 const snapshot = JSON.parse(
   fs.readFileSync(new URL("../drizzle/meta/0000_snapshot.json", import.meta.url), "utf8"),
 );
+const migrationSql1 = fs.readFileSync(
+  new URL("../drizzle/0001_technical_telemetry_attempt_code.sql", import.meta.url),
+  "utf8",
+);
+const snapshot1 = JSON.parse(
+  fs.readFileSync(new URL("../drizzle/meta/0001_snapshot.json", import.meta.url), "utf8"),
+);
 const journal = JSON.parse(
   fs.readFileSync(new URL("../drizzle/meta/_journal.json", import.meta.url), "utf8"),
 );
@@ -20,9 +27,24 @@ const schemaSource = fs.readFileSync(
   "utf8",
 );
 
-const expectedColumns = [
+const initialColumns = [
   "id",
   "session_id",
+  "event",
+  "phase",
+  "outcome",
+  "did",
+  "duration_ms",
+  "nrc",
+  "device_family",
+  "error_code",
+  "created_at",
+];
+
+const latestColumns = [
+  "id",
+  "session_id",
+  "attempt_code",
   "event",
   "phase",
   "outcome",
@@ -58,9 +80,9 @@ function schemaStorageColumns(source) {
 test("initial telemetry migration contains exactly the privacy-safe storage columns", () => {
   const table = snapshot.tables.technical_telemetry_events;
   assert.ok(table, "technical_telemetry_events snapshot must exist");
-  assert.deepEqual(Object.keys(table.columns), expectedColumns);
+  assert.deepEqual(Object.keys(table.columns), initialColumns);
 
-  for (const column of expectedColumns) {
+  for (const column of initialColumns) {
     assert.match(migrationSql, new RegExp(`\\b${column}\\b`));
   }
   for (const forbidden of forbiddenFields) {
@@ -69,12 +91,12 @@ test("initial telemetry migration contains exactly the privacy-safe storage colu
   }
 });
 
-test("schema, snapshot, and initial migration cannot silently drift", () => {
+test("schema follows latest snapshot while initial migration stays immutable", () => {
   const schemaColumns = schemaStorageColumns(schemaSource);
-  const snapshotColumns = Object.keys(snapshot.tables.technical_telemetry_events.columns);
+  const snapshotColumns = Object.keys(snapshot1.tables.technical_telemetry_events.columns);
 
-  assert.deepEqual(schemaColumns, expectedColumns);
-  assert.deepEqual(snapshotColumns, expectedColumns);
+  assert.deepEqual(schemaColumns, latestColumns);
+  assert.deepEqual(snapshotColumns, latestColumns);
 
   const createTableBody = migrationSql
     .slice(migrationSql.indexOf("CREATE TABLE"), migrationSql.indexOf(");"))
@@ -84,7 +106,13 @@ test("schema, snapshot, and initial migration cannot silently drift", () => {
     .map((line) => line.match(/^`([^`]+)`/)?.[1])
     .filter(Boolean);
 
-  assert.deepEqual(createTableBody, expectedColumns);
+  assert.deepEqual(createTableBody, initialColumns);
+});
+
+test("attempt-code migration is additive and nullable for legacy rows", () => {
+  assert.match(migrationSql1, /ADD `attempt_code` text/);
+  assert.match(migrationSql1, /technical_telemetry_attempt_code_idx/);
+  assert.equal(snapshot1.tables.technical_telemetry_events.columns.attempt_code.notNull, false);
 });
 
 test("initial telemetry migration creates retention and session indexes", () => {
@@ -96,12 +124,15 @@ test("initial telemetry migration creates retention and session indexes", () => 
   );
 });
 
-test("drizzle journal registers exactly the initial telemetry migration", () => {
+test("drizzle journal registers telemetry migrations in order", () => {
   assert.equal(journal.dialect, "sqlite");
-  assert.equal(journal.entries.length, 1);
+  assert.equal(journal.entries.length, 2);
   assert.equal(journal.entries[0].idx, 0);
   assert.equal(journal.entries[0].tag, "0000_technical_telemetry_events");
   assert.equal(journal.entries[0].breakpoints, true);
+  assert.equal(journal.entries[1].idx, 1);
+  assert.equal(journal.entries[1].tag, "0001_technical_telemetry_attempt_code");
+  assert.equal(journal.entries[1].breakpoints, true);
 });
 
 test("telemetry D1 binding is explicitly named DB once migration prep is complete", () => {

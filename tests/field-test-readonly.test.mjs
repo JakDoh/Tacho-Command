@@ -76,6 +76,14 @@ test("technical telemetry is buffered during BLE and posted only after the bound
   assert.doesNotMatch(clientSource, /actualValue\s*:/);
 });
 
+test("field candidate creates one anonymous support code per attempt and reuses it for telemetry", () => {
+  assert.match(clientSource, /createTechnicalTelemetryAttemptCode\(window\.crypto\)/);
+  assert.match(clientSource, /attemptCodeRef\.current = attemptCode/);
+  assert.match(clientSource, /sessionId,[\s\S]*?attemptCode,[\s\S]*?event,/);
+  assert.match(clientSource, /attemptCode:\s*attemptCodeRef\.current/);
+  assert.match(clientSource, /Šifra pokušaja:/);
+});
+
 test("field candidate exposes a copyable diagnostic log", () => {
   assert.match(clientSource, /Kopiraj dnevnik/);
   assert.match(clientSource, /navigator\.clipboard\.writeText/);

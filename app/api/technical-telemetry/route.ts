@@ -57,6 +57,7 @@ export async function POST(request: Request) {
     await db.insert(technicalTelemetryEvents).values(
       events.map((event) => ({
         sessionId: event.sessionId,
+        attemptCode: event.attemptCode,
         event: event.event,
         phase: event.phase,
         outcome: event.outcome,

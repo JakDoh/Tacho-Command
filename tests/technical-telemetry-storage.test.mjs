@@ -8,6 +8,7 @@ const schemaSource = fs.readFileSync(new URL("../db/schema.ts", import.meta.url)
 test("technical telemetry storage table contains only allow-listed technical fields", () => {
   for (const field of [
     "sessionId",
+    "attemptCode",
     "event",
     "phase",
     "outcome",
@@ -42,6 +43,7 @@ test("ingest route sanitizes before storage and performs 60-day retention cleanu
   assert.match(routeSource, /technicalTelemetryRetentionCutoffEpochSeconds/);
   assert.match(routeSource, /db\.delete\(technicalTelemetryEvents\)\.where\(lt\(technicalTelemetryEvents\.createdAt, cutoff\)\)/);
   assert.match(routeSource, /db\.insert\(technicalTelemetryEvents\)\.values/);
+  assert.match(routeSource, /attemptCode:\s*event\.attemptCode/);
   assert.match(routeSource, /retentionDays:\s*TECHNICAL_TELEMETRY_RETENTION_DAYS/);
 
   const deletePosition = routeSource.indexOf("db.delete(technicalTelemetryEvents)");

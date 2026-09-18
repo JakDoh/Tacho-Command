@@ -34,6 +34,7 @@ test("technical telemetry keeps the public contract minimal and privacy-safe", (
   assert.deepEqual(event, {
     schema: "tc-tech-v1",
     sessionId: SESSION_ID,
+    attemptCode: null,
     event: "did_read",
     phase: "live_read",
     outcome: "positive",

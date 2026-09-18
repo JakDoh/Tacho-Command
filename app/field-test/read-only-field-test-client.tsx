@@ -13,6 +13,7 @@ import {
   parseDriverWorkingState,
   RHMI_DIDS,
 } from "../../lib/tacho-rhmi.js";
+import { createTechnicalTelemetryAttemptCode } from "../../lib/technical-telemetry.js";
 import { postTechnicalTelemetry } from "../../lib/technical-telemetry-client.js";
 import { createUdsResponseCollector } from "../../lib/tacho-uds.js";
 
@@ -77,6 +78,7 @@ export default function ReadOnlyFieldTestClient() {
   const [breakSec, setBreakSec] = useState<number | null>(null);
   const [dailyDrivingSec, setDailyDrivingSec] = useState<number | null>(null);
   const [weeklyDrivingSec, setWeeklyDrivingSec] = useState<number | null>(null);
+  const [attemptCode, setAttemptCode] = useState("—");
   const [telemetryStatus, setTelemetryStatus] = useState("nije poslato");
   const [logs, setLogs] = useState<LogEntry[]>([]);
 
@@ -84,6 +86,7 @@ export default function ReadOnlyFieldTestClient() {
   const creditsRef = useRef<BleCharacteristic | null>(null);
   const gattWriteQueueRef = useRef<Promise<void>>(Promise.resolve());
   const sessionIdRef = useRef<string | null>(null);
+  const attemptCodeRef = useRef<string | null>(null);
 
   const queueGattWrite = (char: BleCharacteristic, bytes: number[]) => {
     const operation = gattWriteQueueRef.current
@@ -110,6 +113,9 @@ export default function ReadOnlyFieldTestClient() {
     setWeeklyDrivingSec(null);
     setTelemetryStatus("prikuplja se do kraja prolaza");
 
+    const attemptCode = createTechnicalTelemetryAttemptCode(window.crypto);
+    setAttemptCode(attemptCode);
+    attemptCodeRef.current = attemptCode;
     const sessionId = window.crypto.randomUUID();
     sessionIdRef.current = sessionId;
     const telemetryEvents: TelemetryEvent[] = [];
@@ -123,6 +129,7 @@ export default function ReadOnlyFieldTestClient() {
     ) => {
       telemetryEvents.push({
         sessionId,
+        attemptCode,
         event,
         phase,
         outcome,
@@ -132,6 +139,7 @@ export default function ReadOnlyFieldTestClient() {
     };
 
     addTechnicalEvent("connect_start", "bluetooth", "start");
+    addLog("info", `Šifra pokušaja: ${attemptCode}`);
 
     try {
       const bluetooth = (navigator as Navigator & {
@@ -394,6 +402,7 @@ export default function ReadOnlyFieldTestClient() {
       const result = await postTechnicalTelemetry([
         {
           sessionId: sessionIdRef.current,
+          attemptCode: attemptCodeRef.current,
           event: "disconnected",
           phase: "teardown",
           outcome: "disconnected",
@@ -431,6 +440,7 @@ export default function ReadOnlyFieldTestClient() {
       </p>
 
       <div style={{ marginBottom: 8, fontSize: 14 }}>Uređaj: <strong>{deviceName}</strong></div>
+      <div style={{ marginBottom: 8, fontSize: 14 }}>Šifra pokušaja: <strong>{attemptCode}</strong></div>
       <div style={{ marginBottom: 14, fontSize: 14 }}>Tehnička telemetrija: <strong>{telemetryStatus}</strong></div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 12 }}>

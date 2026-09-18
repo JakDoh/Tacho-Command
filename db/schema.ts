@@ -5,6 +5,7 @@ export const technicalTelemetryEvents = sqliteTable(
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
     sessionId: text("session_id").notNull(),
+    attemptCode: text("attempt_code"),
     event: text("event").notNull(),
     phase: text("phase").notNull(),
     outcome: text("outcome").notNull(),
@@ -18,5 +19,6 @@ export const technicalTelemetryEvents = sqliteTable(
   (table) => [
     index("technical_telemetry_created_at_idx").on(table.createdAt),
     index("technical_telemetry_session_idx").on(table.sessionId),
+    index("technical_telemetry_attempt_code_idx").on(table.attemptCode),
   ],
 );
