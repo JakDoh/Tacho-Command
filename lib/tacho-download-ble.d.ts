@@ -15,8 +15,10 @@ export function createBleDdpTransport(input: {
   receiveWindow?: number;
   mtuPayload?: number;
   creditTimeoutMs?: number;
+  onProgress?: (progress: { percent: number; phase: string; detail: string; bytesTransferred: number }) => void;
 }): Readonly<{
   ledger: { serverCredits: number; clientCredits: number; closed: boolean; failure: string | null };
+  onProgress?: ((progress: { percent: number; phase: string; detail: string; bytesTransferred: number }) => void) | null;
   start(): Promise<void>;
   send(message: readonly number[]): Promise<void>;
   receive(timeoutMs: number): Promise<readonly number[] | null>;
