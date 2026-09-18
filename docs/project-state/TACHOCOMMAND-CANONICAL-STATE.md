@@ -155,3 +155,32 @@ Exact transition points must come from the selected rule/profile logic rather th
 8. Privacy-safe telemetry never includes driver identity, card number, vehicle identity, location, full Bluetooth name, raw protocol bytes, or tachograph values.
 9. Never fabricate history, current values, compatibility, warnings, or legal verdicts.
 10. Visual polish must not alter transport, parser, telemetry, or compliance behavior.
+
+## Pending product task — ultra-simple DTCO 4.1a phone pairing guide
+
+Before public release, TachoCommand must include a literal, non-technical step-by-step guide for first-time phone pairing. The guide must be written for a driver who has never paired the tachograph before.
+
+Official VDO DTCO 4.1a menu sequence verified on 2026-09-18:
+
+1. On the tachograph, enable permission to publish ITS data for Driver 1:
+   `Entry -> Driver 1 -> Settings -> Publish ITS data -> Yes`.
+2. On the phone, switch Bluetooth on.
+3. On the tachograph, open the Driver 1 Bluetooth menu:
+   `Driver 1 -> Bluetooth -> Pairing`.
+4. Confirm with OK.
+5. Select the DTCO device in the phone Bluetooth menu.
+6. Verify that the 6-digit PIN shown on the phone and tachograph is identical, then confirm pairing.
+7. Only after Android-level pairing succeeds should TachoCommand attempt Web Bluetooth connection.
+
+The final in-app wording should be even more literal, for example:
+`Pritisni strelicu dole ... puta -> OK -> ...`
+but exact button-press counts must be verified on the physical DTCO 4.1a before publishing. Do not guess button counts from memory.
+
+Also include a recovery branch:
+- if the phone does not see the tachograph;
+- if ITS data permission is not enabled;
+- if Android Nearby devices/Bluetooth permission is denied;
+- if pairing already exists but Web Bluetooth does not list the device.
+
+This onboarding task is UI/help only and must not alter the golden 0.32c transport.
+
