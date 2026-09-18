@@ -68,6 +68,12 @@ function IdentityHeader({ state }: Readonly<{ state: FieldProvenProductState }>)
 
 function LiveScreen({ state }: Readonly<{ state: FieldProvenProductState }>) {
   const progress = clampPercent(state.continuousProgressPercent);
+  const progressBandClass = {
+    neutral: styles.progressNeutral,
+    safe: styles.progressSafe,
+    warning: styles.progressWarning,
+    limit: styles.progressLimit,
+  }[state.continuousBand];
 
   return (
     <div className={styles.screen}>
@@ -88,7 +94,10 @@ function LiveScreen({ state }: Readonly<{ state: FieldProvenProductState }>) {
           <strong>{formatMinutes(state.continuousDrivingMinutes)}</strong>
         </div>
         <div className={styles.progressTrack} aria-label="Napredak neprekidne vožnje">
-          <span className={styles.progressFill} style={{ width: String(progress) + "%" }} />
+          <span
+            className={styles.progressFill + " " + progressBandClass}
+            style={{ width: String(progress) + "%" }}
+          />
         </div>
         <div className={styles.progressScale}>
           <span>0:00</span>

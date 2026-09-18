@@ -1,7 +1,7 @@
 :root {
   --tc-bg: #061019;
   --tc-bg-deep: #040b12;
-  --tc-panel-line: 1px;
+  --tc-panel-line: 1.5px;
   --tc-line: rgba(102, 196, 232, 0.28);
   --tc-line-soft: rgba(102, 196, 232, 0.17);
   --tc-text: #f4f7f8;
@@ -97,8 +97,19 @@
 .progressTrack { height: 10px; margin-top: 18px; }
 .progressFill, .slimTrack > span {
   display: block; height: 100%; min-width: 2px; border-radius: inherit;
-  background: linear-gradient(90deg, #58e2b0, #67dceb);
 }
+.progressFill { transition: width 220ms ease, background 180ms ease, box-shadow 180ms ease; }
+.progressNeutral { background: linear-gradient(90deg, #466f82, #5bc3e5); }
+.progressSafe { background: linear-gradient(90deg, #43cf94, var(--tc-green)); }
+.progressWarning {
+  background: linear-gradient(90deg, var(--tc-green) 0%, var(--tc-yellow) 100%);
+  box-shadow: 0 0 10px rgba(240, 195, 91, 0.12);
+}
+.progressLimit {
+  background: linear-gradient(90deg, var(--tc-yellow) 0%, var(--tc-red) 100%);
+  box-shadow: 0 0 12px rgba(255, 120, 113, 0.16);
+}
+.slimTrack > span { background: linear-gradient(90deg, #58e2b0, #67dceb); }
 .progressScale { display: flex; justify-content: space-between; gap: 10px; margin-top: 9px; color: #748995; font-size: 11px; }
 .nextLine {
   display: flex; gap: 5px; margin-top: 20px; padding-top: 18px; color: #8ea2ad;

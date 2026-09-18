@@ -49,8 +49,19 @@ test("reconstruction cannot touch the proven communication motor", () => {
   }
 });
 
-test("visual source centralizes panel-line thickness for later controlled refinement", () => {
-  assert.ok(css.includes("--tc-panel-line: 1px"));
+test("visual source uses clearer panel lines and state-driven continuous-driving colors", () => {
+  assert.ok(css.includes("--tc-panel-line: 1.5px"));
   assert.ok(css.includes("border: var(--tc-panel-line)"));
   assert.ok(css.includes(".progressFill"));
+  for (const visualClass of [
+    ".progressNeutral",
+    ".progressSafe",
+    ".progressWarning",
+    ".progressLimit",
+  ]) {
+    assert.ok(css.includes(visualClass), visualClass + " must be present");
+  }
+  assert.ok(client.includes("state.continuousBand"));
+  assert.ok(client.includes("styles.progressWarning"));
+  assert.ok(client.includes("styles.progressLimit"));
 });
