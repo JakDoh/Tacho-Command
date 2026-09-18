@@ -6,6 +6,7 @@ import {
   verifyAdminAccessKey,
   verifyAdminSessionToken,
 } from "../../../../lib/admin-auth.js";
+import { isAdminRequestHost } from "../../../../lib/admin-host.js";
 
 const json = (body: unknown, init: ResponseInit = {}) =>
   Response.json(body, {
@@ -22,6 +23,7 @@ const adminSecrets = () => ({
 });
 
 export async function GET(request: Request) {
+  if (!isAdminRequestHost(request)) return json({ status: "not_found" }, { status: 404 });
   const { signingSecret } = adminSecrets();
   if (!signingSecret) return json({ status: "unavailable" }, { status: 503 });
 
@@ -35,6 +37,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  if (!isAdminRequestHost(request)) return json({ status: "not_found" }, { status: 404 });
   const { accessKey, signingSecret } = adminSecrets();
   if (!accessKey || !signingSecret) return json({ status: "unavailable" }, { status: 503 });
 
@@ -63,6 +66,7 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  if (!isAdminRequestHost(request)) return json({ status: "not_found" }, { status: 404 });
   const { signingSecret } = adminSecrets();
   if (!signingSecret) return json({ status: "unavailable" }, { status: 503 });
 

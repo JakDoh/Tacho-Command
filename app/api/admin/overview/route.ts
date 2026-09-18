@@ -3,6 +3,7 @@ import {
   readCookieValue,
   verifyAdminSessionToken,
 } from "../../../../lib/admin-auth.js";
+import { isAdminRequestHost } from "../../../../lib/admin-host.js";
 
 type CountRow = Readonly<{ key?: string; count?: number | string | null }>;
 type DayRow = Readonly<{
@@ -42,6 +43,7 @@ async function authorized(request: Request) {
 }
 
 export async function GET(request: Request) {
+  if (!isAdminRequestHost(request)) return json({ status: "not_found" }, { status: 404 });
   if (!(await authorized(request))) {
     const configured = Boolean(process.env.ADMIN_SIGNING_SECRET?.trim());
     return json({ status: configured ? "unauthorized" : "unavailable" }, { status: configured ? 401 : 503 });

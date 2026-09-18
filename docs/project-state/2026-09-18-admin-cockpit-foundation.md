@@ -22,7 +22,9 @@ The session cookie is:
 
 The route is also marked `noindex, nofollow, noimageindex`.
 
-For the future `admin.tachocommand.com` binding, Cloudflare Access or an equivalent edge identity gate should sit in front of this application-level session as an additional layer. This commit does not bind DNS or a custom domain.
+The application now treats `admin.tachocommand.com` as the canonical production admin hostname. The root of that hostname redirects to `/admin`, while `/admin` and `/api/admin/*` return no admin surface on other production hosts. Localhost is permitted only in non-production development for testing.
+
+DNS/custom-domain activation is still a deployment operation and is intentionally not implied by the code change. Once the production hosting target is confirmed, `admin.tachocommand.com` should be pointed at that exact deployment and protected by an edge identity gate such as Cloudflare Access in addition to the application-level session.
 
 ## Read-only overview
 

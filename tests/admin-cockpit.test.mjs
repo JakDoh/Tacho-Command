@@ -6,6 +6,8 @@ const dashboard = fs.readFileSync(new URL("../app/admin/admin-dashboard.tsx", im
 const layout = fs.readFileSync(new URL("../app/admin/layout.tsx", import.meta.url), "utf8");
 const overview = fs.readFileSync(new URL("../app/api/admin/overview/route.ts", import.meta.url), "utf8");
 const session = fs.readFileSync(new URL("../app/api/admin/session/route.ts", import.meta.url), "utf8");
+const adminPage = fs.readFileSync(new URL("../app/admin/page.tsx", import.meta.url), "utf8");
+const homePage = fs.readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
 
 test("admin surface is noindex and does not render sensitive product data", () => {
   assert.match(layout, /index:\s*false/);
@@ -38,4 +40,15 @@ test("admin login uses env secrets and strict HttpOnly session cookie", () => {
   assert.match(session, /HttpOnly; Secure; SameSite=Strict/);
   assert.doesNotMatch(session, /console\.(log|warn|error)/);
   assert.doesNotMatch(session, /accessKey.*Response\.json/);
+});
+
+
+test("admin surface and APIs are bound to admin.tachocommand.com", () => {
+  assert.match(adminPage, /isAdminHost/);
+  assert.match(adminPage, /notFound\(\)/);
+  assert.match(homePage, /redirect\("\/admin"\)/);
+  assert.match(session, /isAdminRequestHost/);
+  assert.match(overview, /isAdminRequestHost/);
+  assert.match(session, /status:\s*"not_found"/);
+  assert.match(overview, /status:\s*"not_found"/);
 });
