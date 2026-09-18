@@ -250,11 +250,25 @@ export default function FieldTestClient() {
     bytesTransferred: 0,
   });
 
-  const [dailyRecords, setDailyRecords] = useState<DailyActivityRecord[]>([]);
-  const [places, setPlaces] = useState<PlaceRecord[]>([]);
-  const [selectedDayIndex, setSelectedDayIndex] = useState<number>(0);
-  const [rulesEvaluation, setRulesEvaluation] = useState<DrivingEvaluation | null>(null);
-  const [cryptoReport, setCryptoReport] = useState<CryptoReport | null>(null);
+  const dailyRecordsState = useState<DailyActivityRecord[]>([]);
+  const dailyRecords = dailyRecordsState[0];
+  const setDailyRecords = dailyRecordsState[1];
+
+  const placesState = useState<PlaceRecord[]>([]);
+  const places = placesState[0];
+  const setPlaces = placesState[1];
+
+  const selectedDayIndexState = useState<number>(0);
+  const selectedDayIndex = selectedDayIndexState[0];
+  const setSelectedDayIndex = selectedDayIndexState[1];
+
+  const rulesEvaluationState = useState<DrivingEvaluation | null>(null);
+  const rulesEvaluation = rulesEvaluationState[0];
+  const setRulesEvaluation = rulesEvaluationState[1];
+
+  const cryptoReportState = useState<CryptoReport | null>(null);
+  const cryptoReport = cryptoReportState[0];
+  const setCryptoReport = cryptoReportState[1];
 
   const [devModeArmed, setDevModeArmed] = useState(() => {
     if (typeof window !== "undefined") {
@@ -367,18 +381,27 @@ export default function FieldTestClient() {
         throw new Error("Metoda zápisu není k dispozici");
       };
 
-      const transport = createBleDdpTransport({ device, fifo, credits, write, receiveWindow: 8 });
-
-      (transport as unknown as { onProgress: (p: ProgressState) => void }).onProgress = (p: ProgressState) => {
-        setProgress(p);
-      };
+      const transport = createBleDdpTransport({
+        device,
+        fifo,
+        credits,
+        write,
+        receiveWindow: 8,
+        onProgress: (p: ProgressState) => {
+          setProgress(p);
+        },
+      });
 
       try {
         await transport.start();
         add("Indikace", "PASS");
         add("Řízení toku dat", "PASS", `server kredit ${transport.ledger.serverCredits}`);
 
-        const result = await runDdpCardDownload(transport);
+        const result = await runDdpCardDownload(transport, {
+          onProgress: (p: ProgressState) => {
+            setProgress(p);
+          },
+        });
 
         if (result.status === "complete" && result.cardData) {
           const data = Uint8Array.from(result.cardData);
