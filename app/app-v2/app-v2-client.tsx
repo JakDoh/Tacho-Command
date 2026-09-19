@@ -9,6 +9,8 @@ import {
 } from "../../lib/last-good-card-snapshot.js";
 import { formatTachoCommandVersionLine } from "../../lib/product-version.js";
 import { createAppV2LiveSession } from "../../lib/app-v2-live-session.js";
+import { beginAppV2CardRead, createAppV2CardSession } from "../../lib/app-v2-card-session.js";
+import { runBrowserAppV2GoldenCardRead } from "../../lib/app-v2-card-transport-controller-bridge.js";
 import { openBrowserAppV2FieldTransport } from "../../lib/app-v2-field-transport.js";
 import { runAppV2FieldSession } from "../../lib/app-v2-field-session.js";
 import styles from "./app-v2.module.css";
@@ -35,6 +37,7 @@ export default function AppV2Client() {
   const [liveRunState, setLiveRunState] = useState<LiveRunState>("idle");
   const [liveSession, setLiveSession] = useState(() => createAppV2LiveSession());
   const [lastLiveSnapshot, setLastLiveSnapshot] = useState<Readonly<Record<string, unknown>> | null>(null);
+  const [cardSession, setCardSession] = useState(() => createAppV2CardSession());
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -53,6 +56,10 @@ export default function AppV2Client() {
 
         setCardState(restoredCard);
         setCapturedAtIso(snapshot.capturedAtIso);
+        setCardSession(createAppV2CardSession({
+          currentCard: restoredCard,
+          capturedAtIso: snapshot.capturedAtIso,
+        }));
         setRestoreState("restored");
       } catch {
         setRestoreState("invalid");
@@ -71,7 +78,7 @@ export default function AppV2Client() {
   const restoredLabel = formatRestoreTime(capturedAtIso);
 
   const runLiveRead = async () => {
-    if (liveRunState === "running") return;
+    if (liveRunState === "running" || cardSession.busy) return;
     setLiveRunState("running");
     setLiveSession(createAppV2LiveSession({ phase: "connecting" }));
 
@@ -92,6 +99,27 @@ export default function AppV2Client() {
 
     setLiveSession(result.session);
     setLiveRunState("error");
+  };
+
+  const runCardRead = async () => {
+    if (cardSession.busy || liveRunState === "running") return;
+
+    const readingSession = beginAppV2CardRead(cardSession);
+    setCardSession(readingSession);
+
+    const result = await runBrowserAppV2GoldenCardRead({
+      session: readingSession,
+      storage: window.localStorage,
+      capturedAtIso: new Date().toISOString(),
+    });
+
+    if (result.session) setCardSession(result.session);
+
+    if (result.status === "accepted" && result.session?.currentCard) {
+      setCardState(result.session.currentCard);
+      setCapturedAtIso(result.session.capturedAtIso);
+      setRestoreState("restored");
+    }
   };
 
   return (
@@ -136,14 +164,33 @@ export default function AppV2Client() {
           </small>
         </div>
 
+        <div className={styles.liveBoundary}>
+          <span>CARD SESSION</span>
+          <strong>{cardSession.statusLabel}</strong>
+          <small>
+            {cardSession.errorText
+              ?? (cardSession.busy
+                ? "Prethodno dobro očitavanje ostaje prikazano dok novi full-card read ne bude potvrđen."
+                : "Kompletan read mora proći transport, parser, validaciju i persistence pre zamene stanja.")}
+          </small>
+        </div>
+
         <div className={styles.deckActions}>
           <button
             type="button"
             className={styles.primaryAction}
             onClick={runLiveRead}
-            disabled={liveRunState === "running"}
+            disabled={liveRunState === "running" || cardSession.busy}
           >
             {liveRunState === "running" ? "Očitavam…" : "Poveži i očitaj LIVE"}
+          </button>
+          <button
+            type="button"
+            className={styles.primaryAction}
+            onClick={runCardRead}
+            disabled={cardSession.busy || liveRunState === "running"}
+          >
+            {cardSession.busy ? "Čitam karticu…" : "Očitaj kompletnu karticu"}
           </button>
           <span className={styles.versionLine}>{formatTachoCommandVersionLine()}</span>
         </div>
@@ -156,8 +203,8 @@ export default function AppV2Client() {
       <aside className={styles.truthStrip}>
         <span>APP V2 CANDIDATE</span>
         <p>
-          Golden 0.32c card-transfer transport nije deo ovog izvora. Ovaj kandidat sada integriše
-          premium prikaz, last-good restore i zaseban read-only LIVE transport kroz kontrolisani lifecycle.
+          App V2 sada povezuje premium prikaz, last-good restore, zaseban read-only LIVE transport i
+          golden-compatible full-card transport kandidat kroz isti fail-closed controller. Full-card kandidat još nije field-proven.
         </p>
       </aside>
     </div>
