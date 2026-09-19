@@ -132,6 +132,67 @@ test("canonical parser prefers Gen2 Driver_Activity_Data when both generations e
   assert.equal(result.days[0].segments[1].activity, "driving");
 });
 
+test("canonical parser preserves a wrapped daily record across the circular activity buffer", () => {
+  const first = dailyRecord({
+    date: "2026-09-18",
+    changes: [
+      changeWord({ activity: 0, minute: 0 }),
+      changeWord({ activity: 2, minute: 300 }),
+    ],
+  });
+  const second = dailyRecord({
+    previous: first.length,
+    date: "2026-09-19",
+    changes: [
+      changeWord({ activity: 0, minute: 0 }),
+      changeWord({ activity: 3, minute: 480 }),
+    ],
+  });
+
+  const buffer = new Uint8Array(64);
+  const oldest = 50;
+  for (let index = 0; index < first.length; index += 1) {
+    buffer[(oldest + index) % buffer.length] = first[index];
+  }
+  const newest = (oldest + first.length) % buffer.length;
+  for (let index = 0; index < second.length; index += 1) {
+    buffer[(newest + index) % buffer.length] = second[index];
+  }
+
+  const block = Uint8Array.from([
+    ...be16(oldest),
+    ...be16(newest),
+    ...buffer,
+  ]);
+  const result = parseAppV2CardPayload(tlv([0x05,0x04,0x02], block));
+
+  assert.equal(result.days.length, 2);
+  assert.equal(result.days[0].date, "2026-09-18");
+  assert.equal(result.days[1].date, "2026-09-19");
+  assert.equal(result.days[1].segments[1].activity, "driving");
+});
+
+test("canonical parser does not invent activity for card-out intervals with unknown following activity", () => {
+  const record = dailyRecord({
+    changes: [
+      changeWord({ card: 0, status: 0, activity: 0, minute: 0 }),
+      changeWord({ card: 1, status: 0, activity: 3, minute: 120 }),
+      changeWord({ card: 0, status: 0, activity: 2, minute: 180 }),
+    ],
+  });
+
+  const result = parseAppV2CardPayload(driverActivityPayload(record));
+  assert.deepEqual(result.days[0].segments.map((segment) => [
+    segment.activity,
+    segment.startMinute,
+    segment.endMinute,
+    segment.cardStatus,
+  ]), [
+    ["rest", 0, 120, "inserted"],
+    ["work", 180, 1440, "inserted"],
+  ]);
+});
+
 test("canonical parser rejects payloads without Driver_Activity_Data", () => {
   const payload = tlv([0x05, 0x01, 0x02], Uint8Array.from([1, 2, 3]));
 
