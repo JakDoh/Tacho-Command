@@ -185,3 +185,30 @@
     text-align: center;
   }
 }
+
+
+.liveBoundary {
+  display: grid;
+  gap: 5px;
+  padding: 16px 18px;
+  border: 1px solid rgba(113, 216, 242, 0.2);
+  border-radius: 18px;
+  background: rgba(5, 20, 29, 0.82);
+}
+
+.liveBoundary span {
+  color: #71d8f2;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+
+.liveBoundary strong {
+  font-size: 15px;
+}
+
+.liveBoundary small {
+  color: #718995;
+  font-size: 11px;
+  line-height: 1.45;
+}

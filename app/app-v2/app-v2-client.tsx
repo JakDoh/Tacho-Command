@@ -9,6 +9,7 @@ import {
   loadLastGoodCardSnapshot,
 } from "../../lib/last-good-card-snapshot.js";
 import { formatTachoCommandVersionLine } from "../../lib/product-version.js";
+import { createAppV2LiveSession } from "../../lib/app-v2-live-session.js";
 import styles from "./app-v2.module.css";
 
 type RestoreState = "checking" | "restored" | "empty" | "invalid";
@@ -63,6 +64,7 @@ export default function AppV2Client() {
   }), [cardState]);
 
   const restoredLabel = formatRestoreTime(capturedAtIso);
+  const liveSession = useMemo(() => createAppV2LiveSession(), []);
 
   return (
     <div className={styles.stage}>
@@ -88,6 +90,12 @@ export default function AppV2Client() {
             </strong>
             <small>{restoredLabel ? "Sačuvano " + restoredLabel : "Bez izmišljanja podataka"}</small>
           </div>
+        </div>
+
+        <div className={styles.liveBoundary}>
+          <span>LIVE SESSION</span>
+          <strong>{liveSession.statusLabel}</strong>
+          <small>Transport je odvojen od App V2 shell-a; ovaj sloj samo prima provereno stanje.</small>
         </div>
 
         <div className={styles.deckActions}>
