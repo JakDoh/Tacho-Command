@@ -99,3 +99,29 @@ test("PWA opens the OLED TachoCommand shell while legacy recovery remains explic
   assert.match(workerSource, /recovered=031/);
   assert.doesNotMatch(`${appRecovery}\n${workerSource}`, /recovered=016/);
 });
+
+
+test("field candidate includes the physically verified DTCO 4.1a pairing guide without changing transport", () => {
+  for (const phrase of [
+    "Prvi put povezuješ telefon?",
+    "ITS PODACI",
+    "PAIRING / Koppelung",
+    "Bitte verbinden",
+    "6-cifreni PIN",
+    "Eingabe gespeichert",
+    "Poveži tahograf",
+    "nRF Connect for Mobile",
+    "pokreni Scan",
+    "probaj Connect",
+  ]) {
+    assert.ok(clientSource.includes(phrase), phrase + " must be present");
+  }
+
+  const guideStart = clientSource.indexOf("function DtcoPairingGuide()");
+  const guideEnd = clientSource.indexOf("export default function ReadOnlyFieldTestClient()", guideStart);
+  assert.ok(guideStart >= 0 && guideEnd > guideStart);
+  const guideSource = clientSource.slice(guideStart, guideEnd);
+  for (const forbidden of ["requestDevice", "queueGattWrite", "buildReadDataByIdentifier", "postTechnicalTelemetry"]) {
+    assert.equal(guideSource.includes(forbidden), false, forbidden + " must not be part of pairing help");
+  }
+});

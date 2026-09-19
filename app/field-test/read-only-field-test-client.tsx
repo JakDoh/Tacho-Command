@@ -69,8 +69,103 @@ const telemetryStatusLabel = (status: string, accepted: number) => {
   return "odbijeno";
 };
 
+function DtcoPairingGuide() {
+  const stepStyle = { marginBottom: 8, lineHeight: 1.45 } as const;
+  const sectionStyle = { marginTop: 14, paddingTop: 14, borderTop: "1px solid #d1d5db" } as const;
+
+  return (
+    <section
+      aria-label="DTCO 4.1a Bluetooth uputstvo"
+      style={{ marginTop: 14, padding: 16, border: "1px solid #cbd5e1", borderRadius: 12, background: "#f8fafc", color: "#111827" }}
+    >
+      <h2 style={{ margin: "0 0 6px", fontSize: 18 }}>Prvi put povezuješ telefon?</h2>
+      <p style={{ margin: "0 0 12px", fontSize: 14 }}>
+        Uradi redom. Ako je telefon već uparen i vidiš ga u „Geräte verwalten“, nemoj ga brisati.
+      </p>
+
+      <div style={sectionStyle}>
+        <h3 style={{ margin: "0 0 10px", fontSize: 15 }}>1. Uključi ITS podatke</h3>
+        <ol style={{ margin: 0, paddingLeft: 22, fontSize: 14 }}>
+          <li style={stepStyle}>Pritisni OK.</li>
+          <li style={stepStyle}>Pritisni strelicu dole 2 puta.</li>
+          <li style={stepStyle}>Na ekranu piše VOZAČ 1.</li>
+          <li style={stepStyle}>Pritisni OK.</li>
+          <li style={stepStyle}>Pritisni strelicu dole 2 puta.</li>
+          <li style={stepStyle}>Na ekranu piše PODEŠAVANJA.</li>
+          <li style={stepStyle}>Pritisni OK.</li>
+          <li style={stepStyle}>Na ekranu piše ITS PODACI.</li>
+          <li style={stepStyle}>Pritisni OK.</li>
+          <li style={stepStyle}>Pritisni OK još jednom da potvrdiš.</li>
+        </ol>
+      </div>
+
+      <div style={sectionStyle}>
+        <h3 style={{ margin: "0 0 10px", fontSize: 15 }}>2. Upari telefon sa DTCO 4.1a</h3>
+        <ol style={{ margin: 0, paddingLeft: 22, fontSize: 14 }}>
+          <li style={stepStyle}>Vrati se na normalni ekran tahografa.</li>
+          <li style={stepStyle}>Pritisni OK.</li>
+          <li style={stepStyle}>Pritisni strelicu dole 2 puta.</li>
+          <li style={stepStyle}>Na ekranu piše VOZAČ 1.</li>
+          <li style={stepStyle}>Pritisni OK.</li>
+          <li style={stepStyle}>Pritisni strelicu dole 3 puta.</li>
+          <li style={stepStyle}>Na ekranu piše BLUETOOTH.</li>
+          <li style={stepStyle}>Pritisni OK.</li>
+          <li style={stepStyle}>Na ekranu piše PAIRING / Koppelung.</li>
+          <li style={stepStyle}>Pritisni OK.</li>
+          <li style={stepStyle}>Tahograf prikazuje Bitte verbinden.</li>
+          <li style={stepStyle}>Na telefonu otvori Bluetooth i izaberi DTCO 4.1x.</li>
+          <li style={stepStyle}>Proveri da je isti 6-cifreni PIN na telefonu i tahografu.</li>
+          <li style={stepStyle}>Na telefonu potvrdi Pair / Koppeln.</li>
+          <li style={stepStyle}>Na tahografu pritisni strelicu dole da potvrdiš Ja.</li>
+          <li style={stepStyle}>Pritisni OK.</li>
+          <li style={stepStyle}>Tahograf prikazuje Eingabe gespeichert.</li>
+          <li style={stepStyle}>Proveri da se Bluetooth simbol pojavio u gornjoj liniji ekrana.</li>
+        </ol>
+      </div>
+
+      <div style={sectionStyle}>
+        <h3 style={{ margin: "0 0 10px", fontSize: 15 }}>3. Poveži TachoCommand</h3>
+        <ol style={{ margin: 0, paddingLeft: 22, fontSize: 14 }}>
+          <li style={stepStyle}>Vrati se u TachoCommand.</li>
+          <li style={stepStyle}>Tek sada dodirni Poveži tahograf.</li>
+          <li style={stepStyle}>U Chrome Bluetooth prozoru izaberi svoj DTCO.</li>
+        </ol>
+      </div>
+
+      <div style={sectionStyle}>
+        <h3 style={{ margin: "0 0 10px", fontSize: 15 }}>Ako ne radi</h3>
+        <details style={{ marginBottom: 8 }}>
+          <summary>Telefon ne vidi tahograf</summary>
+          <p style={{ fontSize: 14 }}>Proveri da je kartica vozača ubačena, da je Bluetooth simbol aktivan i ponovi PAIRING korake iznad.</p>
+        </details>
+        <details style={{ marginBottom: 8 }}>
+          <summary>ITS podaci nisu uključeni</summary>
+          <p style={{ fontSize: 14 }}>Vrati se na korak 1 i uključi ITS PODACI pre povezivanja aplikacije.</p>
+        </details>
+        <details style={{ marginBottom: 8 }}>
+          <summary>Chrome nema Bluetooth dozvolu</summary>
+          <p style={{ fontSize: 14 }}>U Android dozvolama za Chrome dozvoli Bluetooth / Uređaje u blizini, pa se vrati u TachoCommand.</p>
+        </details>
+        <details style={{ marginBottom: 8 }}>
+          <summary>Telefon je već uparen, ali ga TachoCommand ne prikazuje</summary>
+          <p style={{ fontSize: 14 }}>Ne briši uređaj iz Geräte verwalten. Zatvori Chrome izbor uređaja, proveri da je Bluetooth simbol aktivan i ponovo dodirni Poveži tahograf.</p>
+        </details>
+        <details>
+          <summary>Pomoćno: nRF Connect for Mobile</summary>
+          <p style={{ fontSize: 14 }}>
+            Ako uređaji neće da se povežu, nRF Connect for Mobile može da posluži samo kao pomoćna provera:
+            pokreni Scan, pronađi DTCO i probaj Connect da vidiš da li ga telefon uopšte vidi preko Bluetooth LE.
+            Ne menjaj servise i ne šalji podatke iz nRF Connect-a. Pre povratka u TachoCommand prekini tu pomoćnu vezu.
+          </p>
+        </details>
+      </div>
+    </section>
+  );
+}
+
 export default function ReadOnlyFieldTestClient() {
   const [running, setRunning] = useState(false);
+  const [showPairingGuide, setShowPairingGuide] = useState(false);
   const [connected, setConnected] = useState(false);
   const [deviceName, setDeviceName] = useState("—");
   const [activity, setActivity] = useState("unknown");
@@ -432,6 +527,20 @@ export default function ReadOnlyFieldTestClient() {
           </button>
         )}
       </div>
+
+      {!connected ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setShowPairingGuide((visible) => !visible)}
+            aria-expanded={showPairingGuide}
+            style={{ marginTop: 12 }}
+          >
+            {showPairingGuide ? "Sakrij Bluetooth uputstvo" : "Prvi put? Bluetooth uputstvo"}
+          </button>
+          {showPairingGuide ? <DtcoPairingGuide /> : null}
+        </>
+      ) : null}
 
       <p style={{ padding: 12, background: "#f3f4f6", borderRadius: 10, fontSize: 13 }}>
         Ovaj kandidat šalje po jedan read-only zahtev za F923, F925, F903, F99A i F99B.
