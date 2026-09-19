@@ -45,7 +45,8 @@ const HISTORY_EVENT_SR = Object.freeze({
   "card-removed": "Kartica izvađena",
 });
 
-function formatClockMinute(value: number): string {
+function formatClockMinute(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return "—";
   const safe = Math.min(1440, Math.max(0, Math.round(value)));
   if (safe === 1440) return "24:00";
   return String(Math.floor(safe / 60)).padStart(2, "0") + ":" + String(safe % 60).padStart(2, "0");
@@ -53,7 +54,7 @@ function formatClockMinute(value: number): string {
 
 function segmentContext(day: FieldProvenHistoryDay, segment: FieldProvenHistorySegment): string | null {
   if (segment.label) return segment.label;
-  const insertedHere = day.events.some(
+  const insertedHere = segment.startMinute !== null && day.events.some(
     (event) => event.kind === "card-inserted" && event.minute === segment.startMinute,
   );
   if (insertedHere && segment.kind === "work" && segment.minutes >= 7 && segment.minutes <= 15) {
@@ -214,12 +215,18 @@ function HistoryDayDetail({
         <p>24-časovni zapis aktivnosti sa tahografske kartice. Velike crte su sati, srednje 30 min, male 15 min.</p>
       </div>
 
+      {!day.timingComplete ? (
+        <section className={styles.emptyPanel}>
+          Apsolutna vremena za ovaj dan nisu potvrđena. TachoCommand prikazuje trajanja aktivnosti, ali ne izmišlja poziciju na 24-časovnoj liniji.
+        </section>
+      ) : (
       <section className={styles.dayTimelinePanel}>
         <div className={styles.dayTimelineHeader}>
           <span>00:00</span><strong>24 h</strong><span>24:00</span>
         </div>
         <div className={styles.dayTimelineTrack} aria-label={"24-časovna linija za " + day.dateLabel}>
           {day.segments.map((segment, index) => {
+            if (segment.startMinute === null || segment.endMinute === null) return null;
             const left = (segment.startMinute / 1440) * 100;
             const width = ((segment.endMinute - segment.startMinute) / 1440) * 100;
             return (
@@ -254,6 +261,7 @@ function HistoryDayDetail({
           <span>00</span><span>06</span><span>12</span><span>18</span><span>24</span>
         </div>
       </section>
+      )}
 
       <div className={styles.daySummaryGrid}>
         {summary.map(([kind, label]) => (
@@ -280,7 +288,7 @@ function HistoryDayDetail({
           const context = segmentContext(day, segment);
           return (
             <div className={styles.daySequenceRow} key={day.dateLabel + "-sequence-" + String(index)}>
-              <time>{formatClockMinute(segment.startMinute)}–{formatClockMinute(segment.endMinute)}</time>
+              <time>{segment.startMinute === null || segment.endMinute === null ? "Vreme nije potvrđeno" : formatClockMinute(segment.startMinute) + "–" + formatClockMinute(segment.endMinute)}</time>
               <div>
                 <strong>{TIMELINE_SR[segment.kind]}</strong>
                 {context ? <small>{context}</small> : null}

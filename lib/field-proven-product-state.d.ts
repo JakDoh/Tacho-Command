@@ -13,8 +13,8 @@ export type FieldProvenHistorySegment = Readonly<{
   kind: FieldProvenTimelineKind;
   minutes: number;
   percent: number;
-  startMinute: number;
-  endMinute: number;
+  startMinute: number | null;
+  endMinute: number | null;
   cardStatus: FieldProvenHistoryCardStatus | null;
   label: string | null;
 }>;
@@ -23,6 +23,7 @@ export type FieldProvenHistoryDay = Readonly<{
   dateLabel: string;
   drivingMinutes: number;
   activityTotals: Readonly<Record<FieldProvenTimelineKind, number>>;
+  timingComplete: boolean;
   events: readonly FieldProvenHistoryEvent[];
   segments: readonly FieldProvenHistorySegment[];
 }>;

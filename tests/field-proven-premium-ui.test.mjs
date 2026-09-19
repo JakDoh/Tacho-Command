@@ -80,3 +80,11 @@ test("history rows expose a 24-hour day detail without inventing missing card ev
   assert.ok(css.includes(".halfHourTick"));
   assert.ok(css.includes(".quarterHourTick"));
 });
+
+
+test("day detail refuses to draw a fake 24-hour position when timing provenance is missing", () => {
+  assert.ok(client.includes("Apsolutna vremena za ovaj dan nisu potvrđena."));
+  assert.ok(client.includes("TachoCommand prikazuje trajanja aktivnosti, ali ne izmišlja poziciju na 24-časovnoj liniji."));
+  assert.ok(client.includes("Vreme nije potvrđeno"));
+  assert.ok(client.includes("day.timingComplete"));
+});

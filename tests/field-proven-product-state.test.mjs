@@ -58,7 +58,7 @@ test("adapter stays neutral when no rule/profile threshold is supplied", () => {
   assert.equal(state.continuousBand, "neutral");
 });
 
-test("adapter maps parsed card history into display percentages without parsing raw card bytes", () => {
+test("adapter preserves duration-only history without inventing absolute timestamps", () => {
   const state = createFieldProvenProductState({
     card: {
       driverName: "Synthetic Driver",
@@ -91,8 +91,9 @@ test("adapter maps parsed card history into display percentages without parsing 
     rest: 1260,
   });
   assert.equal(state.historyDays[0].segments[0].minutes, 120);
-  assert.equal(state.historyDays[0].segments[0].startMinute, 0);
-  assert.equal(state.historyDays[0].segments[0].endMinute, 120);
+  assert.equal(state.historyDays[0].timingComplete, false);
+  assert.equal(state.historyDays[0].segments[0].startMinute, null);
+  assert.equal(state.historyDays[0].segments[0].endMinute, null);
   const total = state.historyDays[0].segments.reduce((sum, segment) => sum + segment.percent, 0);
   assert.ok(Math.abs(total - 100) < 0.000001);
 });
@@ -127,6 +128,7 @@ test("adapter preserves absolute daily positions and card events for day detail"
     ["card-inserted", 287],
     ["card-removed", 910],
   ]);
+  assert.equal(day.timingComplete, true);
   assert.equal(day.segments[1].label, "Provera vozila");
   assert.equal(day.segments[1].startMinute, 287);
   assert.equal(day.segments[1].endMinute, 298);
@@ -168,4 +170,28 @@ test("premium UI consumes the shared state contract and no longer hard-codes 4:3
   assert.match(uiSource, /import type \{[^}]*FieldProvenProductState[^}]*\}/);
   assert.match(uiSource, /continuousThresholdLabel/);
   assert.equal(uiSource.includes("<span>4:30</span>"), false);
+});
+
+
+test("adapter rejects one-sided absolute segment timing instead of guessing the missing edge", () => {
+  const state = createFieldProvenProductState({
+    card: {
+      cardReadComplete: true,
+      historyDaysAvailable: 1,
+      historyDays: [{
+        dateLabel: "18. sep",
+        drivingMinutes: 30,
+        segments: [
+          { kind: "drive", minutes: 30, startMinute: 300 },
+          { kind: "rest", minutes: 1410 },
+        ],
+      }],
+    },
+  });
+
+  assert.equal(state.historyDays[0].segments.length, 1);
+  assert.equal(state.historyDays[0].segments[0].kind, "rest");
+  assert.equal(state.historyDays[0].segments[0].startMinute, null);
+  assert.equal(state.historyDays[0].segments[0].endMinute, null);
+  assert.equal(state.historyDays[0].timingComplete, false);
 });
