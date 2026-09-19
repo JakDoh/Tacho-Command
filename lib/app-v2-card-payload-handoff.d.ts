@@ -12,3 +12,12 @@ export declare function handoffCompletedCardPayload(input?: Readonly<{
   } | null;
   capturedAtIso?: string;
 }>): Promise<AppV2CompletedCardPayloadResult>;
+
+
+export declare function handoffCanonicalAppV2CardPayload(input?: Readonly<{
+  payload?: ArrayBuffer | ArrayBufferView | null;
+  storage?: {
+    setItem: (key: string, value: string) => void;
+  } | null;
+  capturedAtIso?: string;
+}>): Promise<AppV2CompletedCardPayloadResult>;

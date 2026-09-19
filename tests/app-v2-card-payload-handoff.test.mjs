@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { handoffCompletedCardPayload } from "../lib/app-v2-card-payload-handoff.js";
+import { handoffCanonicalAppV2CardPayload, handoffCompletedCardPayload } from "../lib/app-v2-card-payload-handoff.js";
 
 function memoryStorage() {
   const data = new Map();
@@ -98,4 +98,78 @@ test("handoff contains no card transport protocol or raw parser implementation",
   ]) {
     assert.equal(source.includes(forbidden), false, forbidden + " must stay outside completed payload handoff");
   }
+});
+
+
+const be16 = (value) => [(value >> 8) & 0xff, value & 0xff];
+const be32 = (value) => [
+  (value >>> 24) & 0xff,
+  (value >>> 16) & 0xff,
+  (value >>> 8) & 0xff,
+  value & 0xff,
+];
+const changeWord = ({ card = 0, activity = 0, minute = 0 }) =>
+  ((card & 1) << 13) | ((activity & 3) << 11) | (minute & 0x07ff);
+
+function canonicalPayload() {
+  const date = Math.floor(Date.parse("2026-09-19T00:00:00Z") / 1000);
+  const changes = [
+    changeWord({ activity: 0, minute: 0 }),
+    changeWord({ activity: 2, minute: 300 }),
+    changeWord({ activity: 3, minute: 330 }),
+  ];
+  const recordLength = 12 + changes.length * 2;
+  const record = Uint8Array.from([
+    ...be16(0),
+    ...be16(recordLength),
+    ...be32(date),
+    0x00, 0x01,
+    0x00, 0x00,
+    ...changes.flatMap((word) => be16(word)),
+  ]);
+  const buffer = new Uint8Array(64);
+  buffer.set(record, 0);
+  const activityValue = Uint8Array.from([
+    ...be16(0),
+    ...be16(0),
+    ...buffer,
+  ]);
+  return Uint8Array.from([
+    0x05, 0x04, 0x02,
+    ...be16(activityValue.length),
+    ...activityValue,
+  ]);
+}
+
+test("canonical card handoff runs payload through the canonical parser and last-good pipeline", async () => {
+  const result = await handoffCanonicalAppV2CardPayload({
+    payload: canonicalPayload(),
+    storage: memoryStorage(),
+    capturedAtIso: "2026-09-19T09:35:00.000Z",
+  });
+
+  assert.equal(result.status, "accepted");
+  assert.equal(result.card.historyDays.length, 1);
+  assert.equal(result.card.historyDays[0].drivingMinutes, 1110);
+  assert.equal(result.card.lastCardReadAtIso, "2026-09-19T09:35:00.000Z");
+});
+
+test("canonical card handoff rejects duplicate-minute payload before storage", async () => {
+  let writes = 0;
+  const payload = canonicalPayload();
+  const bytes = Uint8Array.from(payload);
+  const valueStart = 5 + 4;
+  const recordStart = valueStart;
+  const duplicateWord = changeWord({ activity: 3, minute: 300 });
+  const thirdChangeOffset = recordStart + 12 + 4;
+  bytes[thirdChangeOffset] = (duplicateWord >> 8) & 0xff;
+  bytes[thirdChangeOffset + 1] = duplicateWord & 0xff;
+
+  const result = await handoffCanonicalAppV2CardPayload({
+    payload: bytes,
+    storage: { setItem: () => { writes += 1; } },
+  });
+
+  assert.equal(result.status, "parser_error");
+  assert.equal(writes, 0);
 });
