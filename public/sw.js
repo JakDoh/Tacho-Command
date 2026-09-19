@@ -1,5 +1,5 @@
-const CACHE_NAME = "tachocommand-shell-v32-oled-landing";
-const CORE_ASSETS = ["/", "/field-test", "/manifest.webmanifest", "/favicon.svg"];
+const CACHE_NAME = "tachocommand-shell-v46-app-v2";
+const CORE_ASSETS = ["/", "/app", "/manifest.webmanifest", "/favicon.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS)));

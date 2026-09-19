@@ -30,8 +30,8 @@ test("is installable as a portrait standalone TachoCommand PWA", () => {
   assert.equal(manifest.short_name, "TachoCommand");
   assert.equal(manifest.display, "standalone");
   assert.equal(manifest.orientation, "portrait-primary");
-  assert.equal(manifest.start_url, "/");
-  assert.equal(manifest.id, "/");
+  assert.equal(manifest.start_url, "/app");
+  assert.equal(manifest.id, "/app");
   assert.doesNotMatch(manifest.name, /Core Field Test|0\.31/);
   assert.ok(manifest.icons.length > 0);
 });
@@ -40,7 +40,7 @@ test("offline cache is same-origin and falls back to the TachoCommand shell", ()
   assert.match(serviceWorker, /url\.origin !== self\.location\.origin/);
   assert.match(serviceWorker, /request\.mode === "navigate"/);
   assert.match(serviceWorker, /caches\.match\("\/"\)/);
-  assert.match(serviceWorker, /"\/field-test"/);
+  assert.match(serviceWorker, /"\/app"/);
   assert.doesNotMatch(serviceWorker, /caches\.match\(url\.pathname === "\/app"/);
 });
 

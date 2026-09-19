@@ -90,15 +90,15 @@ test("field candidate exposes a copyable diagnostic log", () => {
   assert.match(clientSource, /navigator\.clipboard\.writeText/);
 });
 
-test("PWA opens the OLED TachoCommand shell while legacy recovery remains explicitly versioned", () => {
-  assert.equal(manifest.start_url, "/");
+test("PWA opens App V2 while field-test stays separately available", () => {
+  assert.equal(manifest.start_url, "/app");
   assert.equal(manifest.short_name, "TachoCommand");
   assert.doesNotMatch(manifest.name, /Core Field Test|0\.31|RHMI|0\.16/);
-  assert.match(serviceWorker, /tachocommand-shell-v32-oled-landing/);
+  assert.match(serviceWorker, /tachocommand-shell-v46-app-v2/);
   assert.match(serviceWorker, /caches\.match\("\/"\)/);
-  assert.match(appRecovery, /recovered=031/);
-  assert.match(workerSource, /recovered=031/);
-  assert.doesNotMatch(`${appRecovery}\n${workerSource}`, /recovered=016/);
+  assert.match(appRecovery, /AppV2Client/);
+  assert.doesNotMatch(appRecovery, /recovered=031/);
+  assert.doesNotMatch(workerSource, /LEGACY_APP_RECOVERY_HTML|recovered=031/);
 });
 
 

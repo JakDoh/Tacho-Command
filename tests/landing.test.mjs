@@ -17,7 +17,7 @@ test("public root tells the field-proven 2026-09-16 product story", () => {
   assert.match(landing, /56 \/ 56/);
   assert.match(landing, /67\.295 B/);
   assert.match(landing, /data-release=\{LANDING_RELEASE\}/);
-  assert.match(appPage, /window\.location\.replace/);
+  assert.match(appPage, /AppV2Client/);
 });
 
 test("landing offers SR, EN and DE without fabricating field screenshots", () => {
@@ -53,11 +53,11 @@ test("beginner install guide documents Chrome home-screen installation and direc
 
 test("PWA identity opens the TachoCommand shell instead of the legacy field-test start URL", () => {
   assert.equal(manifest.name, "TachoCommand — Driver Cockpit");
-  assert.equal(manifest.id, "/");
-  assert.equal(manifest.start_url, "/");
+  assert.equal(manifest.id, "/app");
+  assert.equal(manifest.start_url, "/app");
   assert.equal(manifest.display, "standalone");
   assert.equal(manifest.theme_color, "#020304");
-  assert.match(serviceWorker, /tachocommand-shell-v32-oled-landing/);
-  assert.match(serviceWorker, /CORE_ASSETS = \["\/", "\/field-test"/);
+  assert.match(serviceWorker, /tachocommand-shell-v46-app-v2/);
+  assert.match(serviceWorker, /CORE_ASSETS = \["\/", "\/app"/);
   assert.match(serviceWorker, /caches\.match\("\/"\)/);
 });

@@ -7,11 +7,11 @@ const client = await readFile(new URL("../app/app-v2/app-v2-client.tsx", import.
 const css = await readFile(new URL("../app/app-v2/app-v2.module.css", import.meta.url), "utf8");
 const legacyApp = await readFile(new URL("../app/app/page.tsx", import.meta.url), "utf8");
 
-test("app v2 is isolated from the legacy app route", () => {
+test("production app route now composes the App V2 client directly", () => {
   assert.ok(page.includes("AppV2Client"));
   assert.ok(client.includes("APP V2 · FIELD-PROVEN CARD PATH"));
-  assert.ok(legacyApp.includes("window.location.replace"));
-  assert.equal(legacyApp.includes("AppV2Client"), false);
+  assert.ok(legacyApp.includes("AppV2Client"));
+  assert.equal(legacyApp.includes("window.location.replace"), false);
 });
 
 test("app v2 restores only the last fully good parsed card snapshot", () => {
