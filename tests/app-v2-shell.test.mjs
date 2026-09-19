@@ -24,6 +24,7 @@ test("app v2 restores only the last fully good parsed card snapshot", () => {
 
 test("app v2 composes the premium instrument and shared release identity", () => {
   assert.ok(client.includes("FieldProvenPremiumUi"));
+  assert.ok(client.includes("runAppV2LiveAttemptWithTelemetry"));
   assert.ok(client.includes("formatTachoCommandVersionLine"));
   assert.ok(client.includes("Instrument spreman. Podaci ostaju tvoji."));
   assert.ok(css.includes(".commandDeck"));

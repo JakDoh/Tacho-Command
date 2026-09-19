@@ -12,7 +12,7 @@ import { createAppV2LiveSession } from "../../lib/app-v2-live-session.js";
 import { beginAppV2CardRead, createAppV2CardSession } from "../../lib/app-v2-card-session.js";
 import { runBrowserAppV2GoldenCardRead } from "../../lib/app-v2-card-transport-controller-bridge.js";
 import { openBrowserAppV2FieldTransport } from "../../lib/app-v2-field-transport.js";
-import { runAppV2FieldSession } from "../../lib/app-v2-field-session.js";
+import { runAppV2LiveAttemptWithTelemetry } from "../../lib/app-v2-technical-telemetry-bridge.js";
 import styles from "./app-v2.module.css";
 
 type RestoreState = "checking" | "restored" | "empty" | "invalid";
@@ -69,11 +69,23 @@ export default function AppV2Client() {
     return () => window.clearTimeout(timer);
   }, []);
 
-  const state = useMemo(() => createFieldProvenProductState({
-    live: liveRunState === "running" ? { connected: false } : lastLiveSnapshot ?? { connected: false },
-    card: cardState ?? {},
-    localeLabel: "SR · Srpski",
-  }), [cardState, lastLiveSnapshot, liveRunState]);
+  const state = useMemo(() => {
+    const latestDiagnostics = liveSession.productLive ?? {};
+    const stableLive = lastLiveSnapshot ?? { connected: false };
+
+    return createFieldProvenProductState({
+      live: liveRunState === "running"
+        ? { connected: false }
+        : {
+            ...stableLive,
+            attemptCode: latestDiagnostics.attemptCode ?? stableLive.attemptCode,
+            telemetryAcceptedCount:
+              latestDiagnostics.telemetryAcceptedCount ?? stableLive.telemetryAcceptedCount,
+          },
+      card: cardState ?? {},
+      localeLabel: "SR · Srpski",
+    });
+  }, [cardState, lastLiveSnapshot, liveRunState, liveSession]);
 
   const restoredLabel = formatRestoreTime(capturedAtIso);
 
@@ -82,22 +94,37 @@ export default function AppV2Client() {
     setLiveRunState("running");
     setLiveSession(createAppV2LiveSession({ phase: "connecting" }));
 
-    const result = await runAppV2FieldSession({
+    const result = await runAppV2LiveAttemptWithTelemetry({
       openTransport: () => openBrowserAppV2FieldTransport(),
     });
 
     if (result.status === "live") {
-      setLastLiveSnapshot({ ...result.session.productLive, connected: false, snapshotConfirmed: true });
+      const confirmedSnapshot = {
+        ...result.session.productLive,
+        connected: false,
+        snapshotConfirmed: true,
+        attemptCode: result.attemptCode,
+        telemetryAcceptedCount: result.telemetryAcceptedCount,
+      };
+      setLastLiveSnapshot(confirmedSnapshot);
       setLiveSession(createAppV2LiveSession({
         phase: "disconnected",
         deviceLabel: result.session.productLive.deviceLabel,
         lastLiveReadLabel: result.session.productLive.lastLiveReadLabel,
+        attemptCode: result.attemptCode,
+        telemetryAcceptedCount: result.telemetryAcceptedCount,
       }));
       setLiveRunState("success");
       return;
     }
 
-    setLiveSession(result.session);
+    setLiveSession(createAppV2LiveSession({
+      phase: "error",
+      deviceLabel: result.session.productLive?.deviceLabel,
+      attemptCode: result.attemptCode,
+      telemetryAcceptedCount: result.telemetryAcceptedCount,
+      errorText: result.session.errorText,
+    }));
     setLiveRunState("error");
   };
 

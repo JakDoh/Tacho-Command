@@ -25,10 +25,12 @@ test("confirmed live snapshot remains visible after bounded transport teardown w
   assert.equal(state.weekDrivingMinutes, 240);
 });
 
-test("app v2 wires the browser transport factory through the field lifecycle", async () => {
+test("app v2 wires the browser transport factory through the telemetry bridge and field lifecycle", async () => {
   const client = await readFile(new URL("../app/app-v2/app-v2-client.tsx", import.meta.url), "utf8");
+  const bridge = await readFile(new URL("../lib/app-v2-technical-telemetry-bridge.js", import.meta.url), "utf8");
   assert.ok(client.includes("openBrowserAppV2FieldTransport"));
-  assert.ok(client.includes("runAppV2FieldSession"));
+  assert.ok(client.includes("runAppV2LiveAttemptWithTelemetry"));
+  assert.ok(bridge.includes("runAppV2FieldSession"));
   assert.ok(client.includes("Poveži i očitaj LIVE"));
   assert.ok(client.includes("snapshotConfirmed: true"));
   assert.ok(client.includes("Poslednje LIVE očitavanje potvrđeno"));
