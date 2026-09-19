@@ -76,6 +76,39 @@ test("parser card adapter keeps only the latest 56 normalized days", () => {
   assert.equal(result.historyRangeEndIso, days.at(-1).date);
 });
 
+test("parser card adapter rejects a calendar gap inside the retained 56-day window", () => {
+  const result = normalizeParserCardResult({
+    complete: true,
+    days: [
+      { date: "2026-09-16", segments: [] },
+      { date: "2026-09-18", segments: [] },
+    ],
+  });
+
+  assert.equal(result, null);
+});
+
+test("parser card adapter may ignore an older gap outside the retained 56-day window", () => {
+  const start = Date.parse("2026-07-25T00:00:00.000Z");
+  const retained = Array.from({ length: 56 }, (_, index) => ({
+    date: new Date(start + index * 86400000).toISOString().slice(0, 10),
+    segments: [],
+  }));
+
+  const result = normalizeParserCardResult({
+    complete: true,
+    days: [
+      { date: "2026-07-01", segments: [] },
+      ...retained,
+    ],
+  });
+
+  assert.ok(result);
+  assert.equal(result.historyDaysAvailable, 56);
+  assert.equal(result.historyRangeStartIso, retained[0].date);
+  assert.equal(result.historyRangeEndIso, retained.at(-1).date);
+});
+
 test("parser card adapter contains no raw transport or DDD parser implementation", async () => {
   const source = await readFile(new URL("../lib/app-v2-parser-card-adapter.js", import.meta.url), "utf8");
 
