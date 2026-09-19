@@ -98,6 +98,51 @@ test("adapter preserves duration-only history without inventing absolute timesta
   assert.ok(Math.abs(total - 100) < 0.000001);
 });
 
+test("adapter accepts parser-native activity segments without losing absolute timing", () => {
+  const state = createFieldProvenProductState({
+    card: {
+      cardReadComplete: true,
+      historyDaysAvailable: 1,
+      historyDays: [
+        {
+          dateLabel: "18. sep",
+          drivingMinutes: 90,
+          segments: [
+            { activity: "rest", durationMinutes: 287, startMinute: 0, endMinute: 287, cardStatus: "not-inserted" },
+            { activity: "work", durationMinutes: 11, startMinute: 287, endMinute: 298, cardStatus: "inserted" },
+            { activity: "driving", durationMinutes: 90, startMinute: 298, endMinute: 388, cardStatus: "inserted" },
+            { activity: "availability", durationMinutes: 22, startMinute: 388, endMinute: 410, cardStatus: "inserted" },
+            { activity: "rest", durationMinutes: 1030, startMinute: 410, endMinute: 1440, cardStatus: "inserted" },
+          ],
+        },
+      ],
+    },
+  });
+
+  const day = state.historyDays[0];
+  assert.equal(day.timingComplete, true);
+  assert.deepEqual(day.segments.map((segment) => segment.kind), [
+    "rest",
+    "work",
+    "drive",
+    "availability",
+    "rest",
+  ]);
+  assert.deepEqual(day.segments.map((segment) => [segment.startMinute, segment.endMinute]), [
+    [0, 287],
+    [287, 298],
+    [298, 388],
+    [388, 410],
+    [410, 1440],
+  ]);
+  assert.deepEqual(day.activityTotals, {
+    drive: 90,
+    work: 11,
+    availability: 22,
+    rest: 1317,
+  });
+});
+
 test("adapter preserves absolute daily positions and card events for day detail", () => {
   const state = createFieldProvenProductState({
     card: {
