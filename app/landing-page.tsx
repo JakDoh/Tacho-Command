@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import TrialLauncher from "./trial-launcher";
 import { trackProductAnalytics } from "../lib/product-analytics-client.js";
+import { formatTachoCommandVersionLine } from "../lib/product-version.js";
 
 export type Locale = "sr" | "en" | "de";
 
@@ -373,6 +374,7 @@ export default function LandingPage({ initialLocale = "sr", canonicalLocaleRoute
       <footer className="tcx-footer">
         <div className="tcx-brand"><span className="tcx-brand-mark">TC</span><strong>Tacho<span>Command</span></strong></div>
         <p>{t.footer}</p>
+        <small style={{ opacity: 0.72 }}>{formatTachoCommandVersionLine()}</small>
         <div><Link href="/privacy">{t.legal.privacy}</Link><Link href="/terms">{t.legal.terms}</Link><Link href="/impressum">{t.legal.impressum}</Link></div>
       </footer>
     </main>

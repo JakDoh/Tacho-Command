@@ -12,7 +12,8 @@ const workerSource = await readFile(new URL("../worker/index.ts", import.meta.ur
 test("field-test route uses the read-only core candidate", () => {
   assert.match(pageSource, /read-only-field-test-client/);
   assert.doesNotMatch(pageSource, /from\s+["']\.\/field-test-client["']/);
-  assert.match(clientSource, /0\.31e-rdbi-technical-telemetry/);
+  assert.match(clientSource, /TACHOCOMMAND_VERSIONS\.app/);
+  assert.match(clientSource, /formatTachoCommandVersionLine/);
 });
 
 test("read-only field candidate does not open RHMI or diagnostic sessions", () => {

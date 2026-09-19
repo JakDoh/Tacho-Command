@@ -16,6 +16,7 @@ import {
 import { createTechnicalTelemetryAttemptCode } from "../../lib/technical-telemetry.js";
 import { postTechnicalTelemetry } from "../../lib/technical-telemetry-client.js";
 import { createUdsResponseCollector } from "../../lib/tacho-uds.js";
+import { formatTachoCommandVersionLine, TACHOCOMMAND_VERSIONS } from "../../lib/product-version.js";
 
 type BleCharacteristic = {
   uuid: string;
@@ -42,7 +43,7 @@ type PendingRequest = {
   reject: (error: Error) => void;
 };
 
-const APP_VERSION = "0.31e-rdbi-technical-telemetry";
+const APP_VERSION = TACHOCOMMAND_VERSIONS.app;
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 const formatMinutes = (minutes: number) => {
   const hours = Math.floor(minutes / 60);
@@ -517,7 +518,8 @@ export default function ReadOnlyFieldTestClient() {
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 24 }}>TachoCommand — Core Field Test</h1>
-          <p style={{ margin: "4px 0", color: "#6b7280", fontSize: 13 }}>{APP_VERSION}</p>
+          <p style={{ margin: "4px 0", color: "#6b7280", fontSize: 13 }}>App {APP_VERSION}</p>
+          <p style={{ margin: "2px 0", color: "#6b7280", fontSize: 11 }}>{formatTachoCommandVersionLine()}</p>
         </div>
         {connected ? (
           <button type="button" onClick={stopConnection}>Prekini</button>
