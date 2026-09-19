@@ -30,6 +30,7 @@ export type FieldProvenHistoryDay = Readonly<{
 
 export type FieldProvenProductState = Readonly<{
   live: boolean;
+  liveSnapshotAvailable: boolean;
   driverName: string | null;
   cardLast4: string | null;
   tachographLabel: string | null;

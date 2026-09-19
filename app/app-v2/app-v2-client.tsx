@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import FieldProvenPremiumUi from "../app/field-proven-premium-ui";
 import { createFieldProvenProductState } from "../../lib/field-proven-product-state.js";
@@ -10,9 +9,12 @@ import {
 } from "../../lib/last-good-card-snapshot.js";
 import { formatTachoCommandVersionLine } from "../../lib/product-version.js";
 import { createAppV2LiveSession } from "../../lib/app-v2-live-session.js";
+import { openBrowserAppV2FieldTransport } from "../../lib/app-v2-field-transport.js";
+import { runAppV2FieldSession } from "../../lib/app-v2-field-session.js";
 import styles from "./app-v2.module.css";
 
 type RestoreState = "checking" | "restored" | "empty" | "invalid";
+type LiveRunState = "idle" | "running" | "success" | "error";
 
 function formatRestoreTime(value: string | null) {
   if (!value) return null;
@@ -30,6 +32,9 @@ export default function AppV2Client() {
   const [restoreState, setRestoreState] = useState<RestoreState>("checking");
   const [cardState, setCardState] = useState<Readonly<Record<string, unknown>> | null>(null);
   const [capturedAtIso, setCapturedAtIso] = useState<string | null>(null);
+  const [liveRunState, setLiveRunState] = useState<LiveRunState>("idle");
+  const [liveSession, setLiveSession] = useState(() => createAppV2LiveSession());
+  const [lastLiveSnapshot, setLastLiveSnapshot] = useState<Readonly<Record<string, unknown>> | null>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -58,13 +63,36 @@ export default function AppV2Client() {
   }, []);
 
   const state = useMemo(() => createFieldProvenProductState({
-    live: { connected: false },
+    live: liveRunState === "running" ? { connected: false } : lastLiveSnapshot ?? { connected: false },
     card: cardState ?? {},
     localeLabel: "SR · Srpski",
-  }), [cardState]);
+  }), [cardState, lastLiveSnapshot, liveRunState]);
 
   const restoredLabel = formatRestoreTime(capturedAtIso);
-  const liveSession = useMemo(() => createAppV2LiveSession(), []);
+
+  const runLiveRead = async () => {
+    if (liveRunState === "running") return;
+    setLiveRunState("running");
+    setLiveSession(createAppV2LiveSession({ phase: "connecting" }));
+
+    const result = await runAppV2FieldSession({
+      openTransport: () => openBrowserAppV2FieldTransport(),
+    });
+
+    if (result.status === "live") {
+      setLastLiveSnapshot({ ...result.session.productLive, connected: false, snapshotConfirmed: true });
+      setLiveSession(createAppV2LiveSession({
+        phase: "disconnected",
+        deviceLabel: result.session.productLive.deviceLabel,
+        lastLiveReadLabel: result.session.productLive.lastLiveReadLabel,
+      }));
+      setLiveRunState("success");
+      return;
+    }
+
+    setLiveSession(result.session);
+    setLiveRunState("error");
+  };
 
   return (
     <div className={styles.stage}>
@@ -94,14 +122,29 @@ export default function AppV2Client() {
 
         <div className={styles.liveBoundary}>
           <span>LIVE SESSION</span>
-          <strong>{liveSession.statusLabel}</strong>
-          <small>Transport je odvojen od App V2 shell-a; ovaj sloj samo prima provereno stanje.</small>
+          <strong>
+            {liveRunState === "success"
+              ? "Poslednje LIVE očitavanje potvrđeno"
+              : liveRunState === "running"
+                ? "Povezujem i očitavam…"
+                : liveSession.statusLabel}
+          </strong>
+          <small>
+            {liveRunState === "success"
+              ? "Očitavanje je završeno i transport uredno zatvoren."
+              : liveSession.errorText ?? "Jedan bounded read, zatim čist teardown."}
+          </small>
         </div>
 
         <div className={styles.deckActions}>
-          <Link href="/field-test" className={styles.primaryAction}>
-            Poveži tahograf
-          </Link>
+          <button
+            type="button"
+            className={styles.primaryAction}
+            onClick={runLiveRead}
+            disabled={liveRunState === "running"}
+          >
+            {liveRunState === "running" ? "Očitavam…" : "Poveži i očitaj LIVE"}
+          </button>
           <span className={styles.versionLine}>{formatTachoCommandVersionLine()}</span>
         </div>
       </section>
@@ -113,8 +156,8 @@ export default function AppV2Client() {
       <aside className={styles.truthStrip}>
         <span>APP V2 CANDIDATE</span>
         <p>
-          Golden 0.32c transport nije deo ovog izvora. Ovaj kandidat trenutno integriše
-          premium prikaz, product-state adapter, lokalni last-good restore i release identitet.
+          Golden 0.32c card-transfer transport nije deo ovog izvora. Ovaj kandidat sada integriše
+          premium prikaz, last-good restore i zaseban read-only LIVE transport kroz kontrolisani lifecycle.
         </p>
       </aside>
     </div>
