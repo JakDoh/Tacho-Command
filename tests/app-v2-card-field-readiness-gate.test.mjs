@@ -48,15 +48,16 @@ test("pre-field gate keeps bridge and controller responsibilities intact", async
   assert.doesNotMatch(bridge, /localStorage|saveLastGoodCardSnapshot|parseAppV2CardPayload/);
 });
 
-test("pre-field gate keeps browser card transport a candidate until physical validation", async () => {
+test("field-proof gate keeps browser card transport tied to the validated physical scope", async () => {
   const transport = await readFile(
     new URL("../lib/app-v2-golden-card-browser-transport.js", import.meta.url),
     "utf8",
   );
 
-  assert.match(transport, /transportCandidate: "golden-compatible-0\.32c"/);
-  assert.match(transport, /fieldProven: false/);
-  assert.doesNotMatch(transport, /fieldProven: true/);
+  assert.match(transport, /transport: "golden-0\.32c"/);
+  assert.match(transport, /fieldProven: true/);
+  assert.match(transport, /VDO-DTCO-4\.1a-Android-Chrome-Slot1-2026-09-19/);
+  assert.doesNotMatch(transport, /fieldProven: false/);
 
   assert.match(transport, /APP_V2_GOLDEN_CARD_COMMANDS\.cardSlot1/);
   assert.match(transport, /APP_V2_GOLDEN_CARD_COMMANDS\.transferExit/);

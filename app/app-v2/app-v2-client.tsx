@@ -201,10 +201,9 @@ export default function AppV2Client() {
       </section>
 
       <aside className={styles.truthStrip}>
-        <span>APP V2 CANDIDATE</span>
+        <span>APP V2 · FIELD-PROVEN CARD PATH</span>
         <p>
-          App V2 sada povezuje premium prikaz, last-good restore, zaseban read-only LIVE transport i
-          golden-compatible full-card transport kandidat kroz isti fail-closed controller. Full-card kandidat još nije field-proven.
+          Full-card put je fizički potvrđen 19.09.2026. na VDO DTCO 4.1a kroz Android Chrome / Driver Card Slot 1: 67.295 B, 269 submessages, 61 TLV objekat, Gen2 050402, 217 dnevnih zapisa i 56/56 dana. Ostali uređaji i browseri ostaju van dokazanog scope-a.
         </p>
       </aside>
     </div>

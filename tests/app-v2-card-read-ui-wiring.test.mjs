@@ -38,5 +38,7 @@ test("App V2 keeps card transport details out of UI source", async () => {
     assert.equal(source.includes(forbidden), false, forbidden + " must stay outside UI source");
   }
 
-  assert.match(source, /full-card kandidat još nije field-proven/i);
+  assert.match(source, /FIELD-PROVEN CARD PATH/i);
+  assert.match(source, /VDO DTCO 4\.1a/);
+  assert.match(source, /56\/56 dana/);
 });

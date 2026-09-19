@@ -9,7 +9,7 @@ const legacyApp = await readFile(new URL("../app/app/page.tsx", import.meta.url)
 
 test("app v2 is isolated from the legacy app route", () => {
   assert.ok(page.includes("AppV2Client"));
-  assert.ok(client.includes("APP V2 CANDIDATE"));
+  assert.ok(client.includes("APP V2 · FIELD-PROVEN CARD PATH"));
   assert.ok(legacyApp.includes("window.location.replace"));
   assert.equal(legacyApp.includes("AppV2Client"), false);
 });

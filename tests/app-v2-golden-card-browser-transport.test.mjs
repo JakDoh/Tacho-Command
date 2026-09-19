@@ -88,8 +88,9 @@ test("browser card transport follows bounded golden-compatible full-read sequenc
     p3GuardMs: 0,
   });
 
-  assert.equal(result.fieldProven, false);
-  assert.equal(result.transportCandidate, "golden-compatible-0.32c");
+  assert.equal(result.fieldProven, true);
+  assert.equal(result.transport, "golden-0.32c");
+  assert.equal(result.fieldProofScope, "VDO-DTCO-4.1a-Android-Chrome-Slot1-2026-09-19");
   assert.equal(result.submessages, 2);
   assert.equal(result.tlvCount, 1);
   assert.deepEqual(Array.from(result.payload), payload);
@@ -103,10 +104,11 @@ test("browser card transport follows bounded golden-compatible full-read sequenc
   assert.ok(appMessages.some((msg) => msg[4] === 0x82));
 });
 
-test("browser card transport never marks the candidate field-proven in source", async () => {
+test("browser card transport keeps the scoped physical field-proof marker in source", async () => {
   const { readFile } = await import("node:fs/promises");
   const source = await readFile(new URL("../lib/app-v2-golden-card-browser-transport.js", import.meta.url), "utf8");
-  assert.match(source, /fieldProven: false/);
-  assert.doesNotMatch(source, /fieldProven: true/);
+  assert.match(source, /fieldProven: true/);
+  assert.match(source, /VDO-DTCO-4\.1a-Android-Chrome-Slot1-2026-09-19/);
+  assert.doesNotMatch(source, /fieldProven: false/);
   assert.doesNotMatch(source, /saveLastGoodCardSnapshot|localStorage|parseAppV2CardPayload/);
 });

@@ -3,8 +3,9 @@ export type AppV2GoldenCardTransportResult = Readonly<{
   submessages: number;
   byteLength: number;
   tlvCount: number;
-  transportCandidate: "golden-compatible-0.32c";
-  fieldProven: false;
+  transport: "golden-0.32c";
+  fieldProven: true;
+  fieldProofScope: "VDO-DTCO-4.1a-Android-Chrome-Slot1-2026-09-19";
 }>;
 
 export declare function readAppV2GoldenCardPayload(input?: Readonly<{
