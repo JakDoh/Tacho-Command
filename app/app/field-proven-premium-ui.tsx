@@ -337,10 +337,28 @@ function HistoryScreen({ state }: Readonly<{ state: FieldProvenProductState }>) 
               aria-label={"Otvori detalj za " + day.dateLabel}
             >
               <strong>{day.dateLabel}</strong>
-              <div className={styles.timeline} aria-hidden="true">
-                {day.segments.map((segment, segmentIndex) => (
-                  <span key={day.dateLabel + "-" + String(segmentIndex)} className={styles[segment.kind]} style={{ width: String(clampPercent(segment.percent)) + "%" }} />
-                ))}
+              <div className={styles.historyTimelineWrap}>
+                <div
+                  className={day.timingComplete ? styles.timeline : styles.timelineUnverified}
+                  aria-label={day.timingComplete ? "24-časovna linija za " + day.dateLabel : "24-časovna linija bez potvrđenih apsolutnih vremena za " + day.dateLabel}
+                >
+                  {day.timingComplete ? day.segments.map((segment, segmentIndex) => {
+                    if (segment.startMinute === null || segment.endMinute === null) return null;
+                    return (
+                      <span
+                        key={day.dateLabel + "-" + String(segmentIndex)}
+                        className={styles[segment.kind]}
+                        style={{
+                          left: String((segment.startMinute / 1440) * 100) + "%",
+                          width: String(((segment.endMinute - segment.startMinute) / 1440) * 100) + "%",
+                        }}
+                      />
+                    );
+                  }) : <small>vreme nije potvrđeno</small>}
+                </div>
+                <div className={styles.historyHourLabels} aria-hidden="true">
+                  <span>00</span><span>06</span><span>12</span><span>18</span><span>24</span>
+                </div>
               </div>
               <strong>{formatMinutes(day.drivingMinutes)}</strong>
               <span className={styles.historyChevron} aria-hidden="true">›</span>

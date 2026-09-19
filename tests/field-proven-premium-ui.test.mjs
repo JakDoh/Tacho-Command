@@ -88,3 +88,18 @@ test("day detail refuses to draw a fake 24-hour position when timing provenance 
   assert.ok(client.includes("Vreme nije potvrđeno"));
   assert.ok(client.includes("day.timingComplete"));
 });
+
+test("56-day overview uses a real 00-to-24-hour axis instead of proportional activity packing", () => {
+  assert.ok(client.includes("historyTimelineWrap"));
+  assert.ok(client.includes("historyHourLabels"));
+  assert.ok(client.includes("<span>00</span><span>06</span><span>12</span><span>18</span><span>24</span>"));
+  assert.ok(client.includes("left: String((segment.startMinute / 1440) * 100)"));
+  assert.ok(client.includes("width: String(((segment.endMinute - segment.startMinute) / 1440) * 100)"));
+  assert.equal(client.includes("width: String(clampPercent(segment.percent))"), false);
+  assert.ok(client.includes("day.timingComplete ? styles.timeline : styles.timelineUnverified"));
+  assert.ok(client.includes("vreme nije potvrđeno"));
+  assert.ok(css.includes(".historyTimelineWrap"));
+  assert.ok(css.includes(".historyHourLabels"));
+  assert.ok(css.includes(".timeline > span { position: absolute"));
+});
+

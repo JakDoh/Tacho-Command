@@ -148,8 +148,23 @@
   position: absolute; right: 15px; top: 50%; transform: translateY(-50%);
   color: #6f8e9e; font-size: 24px; line-height: 1;
 }
-.timeline { height: 16px; display: flex; overflow: hidden; border-radius: 99px; background: #132f40; }
-.timeline span { height: 100%; }
+.historyTimelineWrap { min-width: 0; }
+.timeline, .timelineUnverified {
+  position: relative; height: 18px; overflow: hidden; border-radius: 5px; background-color: #132f40;
+  background-image: linear-gradient(to right, transparent 24.7%, rgba(124, 171, 192, 0.24) 25%, transparent 25.3%, transparent 49.7%, rgba(124, 171, 192, 0.24) 50%, transparent 50.3%, transparent 74.7%, rgba(124, 171, 192, 0.24) 75%, transparent 75.3%);
+  box-shadow: inset 0 0 0 1px rgba(102, 196, 232, 0.12);
+}
+.timeline > span { position: absolute; top: 0; bottom: 0; min-width: 1px; }
+.timelineUnverified {
+  display: grid; place-items: center; background-color: #102734;
+}
+.timelineUnverified small {
+  color: #718995; font-size: 8px; font-weight: 700; letter-spacing: 0.04em; white-space: nowrap;
+}
+.historyHourLabels {
+  display: flex; justify-content: space-between; margin-top: 4px; padding-inline: 1px;
+  color: #617b89; font-size: 8px; line-height: 1; font-variant-numeric: tabular-nums;
+}
 .emptyPanel { padding: 28px 20px; border-radius: 20px; color: #7f949f; text-align: center; }
 
 .dayDetailTopline { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
