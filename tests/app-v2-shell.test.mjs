@@ -7,9 +7,9 @@ const client = await readFile(new URL("../app/app-v2/app-v2-client.tsx", import.
 const css = await readFile(new URL("../app/app-v2/app-v2.module.css", import.meta.url), "utf8");
 const legacyApp = await readFile(new URL("../app/app/page.tsx", import.meta.url), "utf8");
 
-test("production app route now composes the App V2 client directly", () => {
+test("production app route composes the proven client behind the V3 presentation", () => {
   assert.ok(page.includes("AppV2Client"));
-  assert.ok(client.includes("APP V2 · FIELD-PROVEN CARD PATH"));
+  assert.ok(client.includes("runBrowserAppV2GoldenCardRead"));
   assert.ok(legacyApp.includes("AppV2Client"));
   assert.equal(legacyApp.includes("window.location.replace"), false);
 });
@@ -18,18 +18,17 @@ test("app v2 restores only the last fully good parsed card snapshot", () => {
   assert.ok(client.includes("loadLastGoodCardSnapshot"));
   assert.ok(client.includes("cardStateFromLastGoodCardSnapshot"));
   assert.ok(client.includes("createFieldProvenProductState"));
-  assert.ok(client.includes("Poslednje dobro očitavanje vraćeno"));
-  assert.ok(client.includes("Bez izmišljanja podataka"));
+  assert.ok(client.includes("restoreState"));
+  assert.ok(client.includes("restoredLabel"));
 });
 
 test("app v2 composes the premium instrument and shared release identity", () => {
   assert.ok(client.includes("FieldProvenPremiumUi"));
   assert.ok(client.includes("runAppV2LiveAttemptWithTelemetry"));
   assert.ok(client.includes("formatTachoCommandVersionLine"));
-  assert.ok(client.includes("Instrument spreman. Podaci ostaju tvoji."));
-  assert.ok(css.includes(".commandDeck"));
+  assert.ok(client.includes("onConnect: runLiveRead"));
   assert.ok(css.includes(".instrumentFrame"));
-  assert.ok(css.includes(".primaryAction"));
+  assert.equal(css.includes("linear-gradient"), false);
 });
 
 test("app v2 shell cannot implement or mutate the golden transport", () => {

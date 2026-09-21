@@ -50,6 +50,22 @@ function driverActivityPayload(record, tagBytes = [0x05, 0x04, 0x02]) {
   return tlv(tagBytes, block);
 }
 
+function cardText(value) {
+  const bytes = new Uint8Array(36).fill(0x20);
+  bytes[0] = 1;
+  bytes.set(new TextEncoder().encode(value).slice(0, 35), 1);
+  return bytes;
+}
+
+function driverIdentityPayload() {
+  const value = new Uint8Array(143).fill(0);
+  value[0] = 0x25;
+  value.set(new TextEncoder().encode("SRB1234567890123"), 1);
+  value.set(cardText("TESTOVIC"), 65);
+  value.set(cardText("TEST DRIVER"), 101);
+  return tlv([0x05, 0x20, 0x02], value);
+}
+
 test("canonical parser converts strict Gen2 activity data into parser-native days", () => {
   const record = dailyRecord({
     changes: [
@@ -74,6 +90,22 @@ test("canonical parser converts strict Gen2 activity data into parser-native day
     ["work", 300, 330],
     ["driving", 330, 1440],
   ]);
+});
+
+test("canonical parser extracts local-only driver identity and masked card suffix", () => {
+  const record = dailyRecord({
+    changes: [changeWord({ activity: 0, minute: 0 })],
+  });
+  const payload = Uint8Array.from([
+    ...driverIdentityPayload(),
+    ...driverActivityPayload(record),
+  ]);
+
+  const result = parseAppV2CardPayload(payload);
+
+  assert.equal(result.driverName, "TEST DRIVER TESTOVIC");
+  assert.equal(result.cardLast4, "0123");
+  assert.equal(JSON.stringify(result).includes("SRB1234567890123"), false);
 });
 
 test("canonical parser rejects duplicate-minute activity changes before segments are built", () => {

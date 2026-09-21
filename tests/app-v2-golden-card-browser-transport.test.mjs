@@ -80,12 +80,14 @@ test("browser card transport follows bounded golden-compatible full-read sequenc
   const bluetooth = {
     requestDevice: async () => ({ name: "DTCO", gatt }),
   };
+  const progress = [];
 
   const result = await readAppV2GoldenCardPayload({
     bluetooth,
     requestTimeoutMs: 100,
     cardIdleTimeoutMs: 100,
     p3GuardMs: 0,
+    onProgress: (value) => progress.push(value),
   });
 
   assert.equal(result.fieldProven, true);
@@ -94,6 +96,10 @@ test("browser card transport follows bounded golden-compatible full-read sequenc
   assert.equal(result.submessages, 2);
   assert.equal(result.tlvCount, 1);
   assert.deepEqual(Array.from(result.payload), payload);
+  assert.deepEqual(progress, [
+    { submessages: 1, byteLength: 251, complete: false },
+    { submessages: 2, byteLength: 255, complete: true },
+  ]);
 
   assert.equal(gatt.connected, false);
   assert.deepEqual(credits.writes.at(-1), [0xff]);

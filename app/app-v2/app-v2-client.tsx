@@ -17,6 +17,11 @@ import styles from "./app-v2.module.css";
 
 type RestoreState = "checking" | "restored" | "empty" | "invalid";
 type LiveRunState = "idle" | "running" | "success" | "error";
+type CardReadProgress = Readonly<{
+  submessages: number;
+  byteLength: number;
+  complete: boolean;
+}>;
 
 function formatRestoreTime(value: string | null) {
   if (!value) return null;
@@ -38,6 +43,7 @@ export default function AppV2Client() {
   const [liveSession, setLiveSession] = useState(() => createAppV2LiveSession());
   const [lastLiveSnapshot, setLastLiveSnapshot] = useState<Readonly<Record<string, unknown>> | null>(null);
   const [cardSession, setCardSession] = useState(() => createAppV2CardSession());
+  const [cardReadProgress, setCardReadProgress] = useState<CardReadProgress | null>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -133,11 +139,13 @@ export default function AppV2Client() {
 
     const readingSession = beginAppV2CardRead(cardSession);
     setCardSession(readingSession);
+    setCardReadProgress(Object.freeze({ submessages: 0, byteLength: 0, complete: false }));
 
     const result = await runBrowserAppV2GoldenCardRead({
       session: readingSession,
       storage: window.localStorage,
       capturedAtIso: new Date().toISOString(),
+      onProgress: (progress: CardReadProgress) => setCardReadProgress(progress),
     });
 
     if (result.session) setCardSession(result.session);
@@ -146,93 +154,35 @@ export default function AppV2Client() {
       setCardState(result.session.currentCard);
       setCapturedAtIso(result.session.capturedAtIso);
       setRestoreState("restored");
+      return;
     }
   };
 
   return (
     <div className={styles.stage}>
-      <section className={styles.commandDeck} aria-label="TachoCommand App V2 status">
-        <div className={styles.deckLead}>
-          <span className={styles.eyebrow}>TACHOCOMMAND · APP V2</span>
-          <strong>Instrument spreman. Podaci ostaju tvoji.</strong>
-          <p>
-            Novi app source je odvojen od legacy recovery puta. Poslednje potpuno uspešno
-            očitavanje kartice vraća se lokalno pre nove Bluetooth sesije.
-          </p>
-        </div>
-
-        <div className={styles.deckStatus}>
-          <div className={styles.statusOrb} data-state={restoreState} aria-hidden="true" />
-          <div>
-            <span>LOKALNI SNAPSHOT</span>
-            <strong>
-              {restoreState === "checking" && "Proveravam…"}
-              {restoreState === "restored" && "Poslednje dobro očitavanje vraćeno"}
-              {restoreState === "empty" && "Još nema sačuvanog očitavanja"}
-              {restoreState === "invalid" && "Sačuvani zapis nije prihvaćen"}
-            </strong>
-            <small>{restoredLabel ? "Sačuvano " + restoredLabel : "Bez izmišljanja podataka"}</small>
-          </div>
-        </div>
-
-        <div className={styles.liveBoundary}>
-          <span>LIVE SESSION</span>
-          <strong>
-            {liveRunState === "success"
-              ? "Poslednje LIVE očitavanje potvrđeno"
-              : liveRunState === "running"
-                ? "Povezujem i očitavam…"
-                : liveSession.statusLabel}
-          </strong>
-          <small>
-            {liveRunState === "success"
-              ? "Očitavanje je završeno i transport uredno zatvoren."
-              : liveSession.errorText ?? "Jedan bounded read, zatim čist teardown."}
-          </small>
-        </div>
-
-        <div className={styles.liveBoundary}>
-          <span>CARD SESSION</span>
-          <strong>{cardSession.statusLabel}</strong>
-          <small>
-            {cardSession.errorText
-              ?? (cardSession.busy
-                ? "Prethodno dobro očitavanje ostaje prikazano dok novi full-card read ne bude potvrđen."
-                : "Kompletan read mora proći transport, parser, validaciju i persistence pre zamene stanja.")}
-          </small>
-        </div>
-
-        <div className={styles.deckActions}>
-          <button
-            type="button"
-            className={styles.primaryAction}
-            onClick={runLiveRead}
-            disabled={liveRunState === "running" || cardSession.busy}
-          >
-            {liveRunState === "running" ? "Očitavam…" : "Poveži i očitaj LIVE"}
-          </button>
-          <button
-            type="button"
-            className={styles.primaryAction}
-            onClick={runCardRead}
-            disabled={cardSession.busy || liveRunState === "running"}
-          >
-            {cardSession.busy ? "Čitam karticu…" : "Očitaj kompletnu karticu"}
-          </button>
-          <span className={styles.versionLine}>{formatTachoCommandVersionLine()}</span>
-        </div>
-      </section>
-
       <section className={styles.instrumentFrame} aria-label="TachoCommand premium instrument">
-        <FieldProvenPremiumUi state={state} />
+        <FieldProvenPremiumUi
+          state={state}
+          controls={{
+            phase: cardSession.busy
+              ? "card-reading"
+              : liveRunState === "running"
+                ? "connecting"
+                : liveRunState === "error" || cardSession.phase === "error"
+                  ? "error"
+                  : liveRunState === "success"
+                    ? "connected"
+                    : "idle",
+            restoreState,
+            restoredLabel,
+            errorText: cardSession.errorText ?? liveSession.errorText ?? null,
+            cardReadProgress,
+            versionLine: formatTachoCommandVersionLine(),
+            onConnect: runLiveRead,
+            onReadCard: runCardRead,
+          }}
+        />
       </section>
-
-      <aside className={styles.truthStrip}>
-        <span>APP V2 · FIELD-PROVEN CARD PATH</span>
-        <p>
-          Full-card put je fizički potvrđen 19.09.2026. na VDO DTCO 4.1a kroz Android Chrome / Driver Card Slot 1: 67.295 B, 269 submessages, 61 TLV objekat, Gen2 050402, 217 dnevnih zapisa i 56/56 dana. Ostali uređaji i browseri ostaju van dokazanog scope-a.
-        </p>
-      </aside>
     </div>
   );
 }

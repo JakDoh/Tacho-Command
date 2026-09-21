@@ -31,9 +31,8 @@ test("app v2 wires the browser transport factory through the telemetry bridge an
   assert.ok(client.includes("openBrowserAppV2FieldTransport"));
   assert.ok(client.includes("runAppV2LiveAttemptWithTelemetry"));
   assert.ok(bridge.includes("runAppV2FieldSession"));
-  assert.ok(client.includes("Poveži i očitaj LIVE"));
+  assert.ok(client.includes("onConnect: runLiveRead"));
   assert.ok(client.includes("snapshotConfirmed: true"));
-  assert.ok(client.includes("Poslednje LIVE očitavanje potvrđeno"));
 
   for (const forbidden of [
     "navigator.bluetooth",
@@ -48,7 +47,7 @@ test("app v2 wires the browser transport factory through the telemetry bridge an
 
 test("premium UI distinguishes active LIVE from the last confirmed snapshot", async () => {
   const ui = await readFile(new URL("../app/app/field-proven-premium-ui.tsx", import.meta.url), "utf8");
-  assert.ok(ui.includes("POSLEDNJE POTVRĐENO OČITAVANJE"));
+  assert.ok(ui.includes("POSLEDNJE SAČUVANO OČITAVANJE"));
   assert.ok(ui.includes("state.liveSnapshotAvailable"));
   assert.ok(ui.includes("aktivna veza je završena"));
 });

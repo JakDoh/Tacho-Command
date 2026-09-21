@@ -4,7 +4,7 @@ import test from "node:test";
 
 const clientUrl = new URL("../app/app-v2/app-v2-client.tsx", import.meta.url);
 
-test("App V2 command deck routes full-card reads through the controller bridge", async () => {
+test("App V3 presentation routes full-card reads through the proven controller bridge", async () => {
   const source = await readFile(clientUrl, "utf8");
 
   assert.match(source, /runBrowserAppV2GoldenCardRead/);
@@ -19,8 +19,8 @@ test("App V2 prevents concurrent LIVE and CARD Bluetooth sessions", async () => 
 
   assert.match(source, /if \(liveRunState === "running" \|\| cardSession\.busy\) return/);
   assert.match(source, /if \(cardSession\.busy \|\| liveRunState === "running"\) return/);
-  assert.match(source, /disabled=\{liveRunState === "running" \|\| cardSession\.busy\}/);
-  assert.match(source, /disabled=\{cardSession\.busy \|\| liveRunState === "running"\}/);
+  assert.match(source, /cardSession\.busy\s*\? "card-reading"/);
+  assert.match(source, /liveRunState === "running"\s*\? "connecting"/);
 });
 
 test("App V2 keeps card transport details out of UI source", async () => {
@@ -38,7 +38,9 @@ test("App V2 keeps card transport details out of UI source", async () => {
     assert.equal(source.includes(forbidden), false, forbidden + " must stay outside UI source");
   }
 
-  assert.match(source, /FIELD-PROVEN CARD PATH/i);
-  assert.match(source, /VDO DTCO 4\.1a/);
-  assert.match(source, /56\/56 dana/);
+  assert.match(source, /formatTachoCommandVersionLine/);
+  assert.match(source, /onReadCard: runCardRead/);
+  assert.match(source, /onProgress: \(progress: CardReadProgress\) => setCardReadProgress\(progress\)/);
+  assert.match(source, /cardReadProgress,/);
+  assert.match(source, /setRestoreState\("restored"\);\s*return;/);
 });

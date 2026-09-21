@@ -124,7 +124,7 @@ export default function InstallGuide() {
 
   return (
     <>
-      <button className={styles.fab} type="button" onClick={() => setOpen(true)}>
+      <button className={styles.fab} type="button" onClick={() => installPrompt ? void installNow() : setOpen(true)}>
         <span>＋</span>{t.button}
       </button>
       {open && (

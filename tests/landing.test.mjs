@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const landing = await readFile(new URL("../app/landing-page.tsx", import.meta.url), "utf8");
+const landingStyles = await readFile(new URL("../app/landing-oled.css", import.meta.url), "utf8");
 const launcher = await readFile(new URL("../app/trial-launcher.tsx", import.meta.url), "utf8");
 const appPage = await readFile(new URL("../app/app/page.tsx", import.meta.url), "utf8");
 const installGuide = await readFile(new URL("../app/install-guide.tsx", import.meta.url), "utf8");
@@ -41,6 +42,12 @@ test("landing keeps compatibility claims bounded to real field evidence", () => 
   assert.doesNotMatch(landing, /100% Read-Only/);
 });
 
+test("mobile landing hero stays inside narrow phone viewports", () => {
+  assert.match(landingStyles, /\.tcx-hero-copy \{[^}]*width: 100%;[^}]*min-width: 0;/);
+  assert.match(landingStyles, /\.tcx-hero h1 \{[^}]*font-size: clamp\(2\.35rem, 12vw, 3\.5rem\);[^}]*overflow-wrap: anywhere;/);
+  assert.doesNotMatch(landingStyles, /font-size: clamp\(3rem, 16vw, 4\.7rem\)/);
+});
+
 test("beginner install guide documents Chrome home-screen installation and direct PWA prompt", () => {
   assert.match(installGuide, /tri tačke gore desno/);
   assert.match(installGuide, /Install app/);
@@ -51,13 +58,17 @@ test("beginner install guide documents Chrome home-screen installation and direc
   assert.match(installGuide, /tachocommand-locale/);
 });
 
+test("landing install button opens the native Chrome prompt in one tap when available", () => {
+  assert.match(installGuide, /onClick=\{\(\) => installPrompt \? void installNow\(\) : setOpen\(true\)\}/);
+});
+
 test("PWA identity opens the TachoCommand shell instead of the legacy field-test start URL", () => {
   assert.equal(manifest.name, "TachoCommand — Driver Cockpit");
   assert.equal(manifest.id, "/app");
   assert.equal(manifest.start_url, "/app");
   assert.equal(manifest.display, "standalone");
   assert.equal(manifest.theme_color, "#020304");
-  assert.match(serviceWorker, /tachocommand-shell-v46-app-v2/);
+  assert.match(serviceWorker, /tachocommand-shell-v47-app-v3/);
   assert.match(serviceWorker, /CORE_ASSETS = \["\/", "\/app"/);
   assert.match(serviceWorker, /caches\.match\("\/"\)/);
 });

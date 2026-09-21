@@ -14,6 +14,8 @@ export type AppV2CanonicalCardParseResult = Readonly<{
   complete: true;
   generation: "gen1" | "gen2";
   sourceTag: "050400" | "050402";
+  driverName: string | null;
+  cardLast4: string | null;
   days: readonly AppV2CanonicalCardDay[];
 }>;
 

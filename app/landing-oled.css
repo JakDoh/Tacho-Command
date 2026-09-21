@@ -103,7 +103,7 @@
   background-size: 44px 44px;
   mask-image: radial-gradient(circle at 62% 45%, black, transparent 72%);
 }
-.tcx-hero-copy { position: relative; z-index: 2; max-width: 690px; }
+.tcx-hero-copy { position: relative; z-index: 2; width: 100%; max-width: 690px; min-width: 0; }
 .tcx-proof-badge {
   display: inline-flex;
   align-items: center;
@@ -323,7 +323,7 @@
 
 @media (max-width: 680px) {
   .tcx-nav { width: calc(100% - 16px); margin-top: 8px; padding-left: 10px; border-radius: 15px; }.tcx-brand strong { display: none; }.tcx-language > span { display: none; }.tcx-app-link { padding-inline: 10px; }
-  .tcx-hero { width: calc(100% - 18px); min-height: auto; padding: 62px 3px 55px; gap: 20px; }.tcx-hero h1 { font-size: clamp(3rem, 16vw, 4.7rem); }.tcx-hero-copy > p { font-size: .92rem; }.tcx-actions { display: grid; }.tcx-primary, .tcx-secondary { width: 100%; }.tcx-hero-trustline { gap: 6px 10px; }.tcx-device-stage { min-height: 610px; }.tcx-phone { transform: none; }.tcx-floating-a { left: -2%; }.tcx-floating-b { right: -2%; }
+  .tcx-hero { width: calc(100% - 18px); min-height: auto; padding: 62px 3px 55px; gap: 20px; }.tcx-hero h1 { max-width: 100%; font-size: clamp(2.35rem, 12vw, 3.5rem); overflow-wrap: anywhere; }.tcx-hero-copy > p { max-width: 100%; font-size: .92rem; overflow-wrap: anywhere; }.tcx-actions { display: grid; }.tcx-primary, .tcx-secondary { width: 100%; }.tcx-hero-trustline { gap: 6px 10px; }.tcx-device-stage { min-height: 610px; }.tcx-phone { transform: none; }.tcx-floating-a { left: -2%; }.tcx-floating-b { right: -2%; }
   .tcx-proof, .tcx-section, .tcx-connect, .tcx-trust, .tcx-price, .tcx-faq { width: calc(100% - 22px); }.tcx-proof, .tcx-section, .tcx-connect, .tcx-trust, .tcx-price, .tcx-faq { padding-block: 75px; }
   .tcx-proof-grid { grid-template-columns: 1fr 1fr; }.tcx-proof-grid article { padding: 21px 16px; }
   .tcx-value-grid { grid-template-columns: 1fr; }.tcx-value-grid article { min-height: 180px; }.tcx-value-grid h3 { margin-top: 48px; }

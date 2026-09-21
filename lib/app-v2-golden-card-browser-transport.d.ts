@@ -15,6 +15,11 @@ export declare function readAppV2GoldenCardPayload(input?: Readonly<{
   requestTimeoutMs?: number;
   cardIdleTimeoutMs?: number;
   p3GuardMs?: number;
+  onProgress?: (progress: Readonly<{
+    submessages: number;
+    byteLength: number;
+    complete: boolean;
+  }>) => void;
 }>): Promise<AppV2GoldenCardTransportResult>;
 
 export declare function readBrowserAppV2GoldenCardPayload(
@@ -22,5 +27,10 @@ export declare function readBrowserAppV2GoldenCardPayload(
     requestTimeoutMs?: number;
     cardIdleTimeoutMs?: number;
     p3GuardMs?: number;
+    onProgress?: (progress: Readonly<{
+      submessages: number;
+      byteLength: number;
+      complete: boolean;
+    }>) => void;
   }>,
 ): Promise<AppV2GoldenCardTransportResult>;

@@ -6,6 +6,7 @@ const framedPositive = (did, ...data) => [1, 1, 0x62, (did >> 8) & 0xff, did & 0
 
 test("reads only the minimal core driver DID set in order", async () => {
   const seen = [];
+  const pauses = [];
   const replies = new Map([
     [0xf903, framedPositive(0xf903, 0x03)],
     [0xf923, framedPositive(0xf923, 0x01, 0x0e)],
@@ -21,9 +22,12 @@ test("reads only the minimal core driver DID set in order", async () => {
     return replies.get(did) ?? null;
   };
 
-  const result = await readCoreDriverTelemetry(sendUds);
+  const result = await readCoreDriverTelemetry(sendUds, 2000, {
+    sleepImpl: async (ms) => pauses.push(ms),
+  });
 
   assert.deepEqual(seen, [0xf903, 0xf923, 0xf925, 0xf99a, 0xf99b]);
+  assert.deepEqual(pauses, [350, 350, 350, 350]);
   assert.equal(result.activity, "drive");
   assert.equal(result.continuousDrivingSeconds, 270 * 60);
   assert.equal(result.cumulativeBreakSeconds, 45 * 60);
@@ -41,7 +45,9 @@ test("keeps optional daily and weekly values unavailable without corrupting mand
     return [1, 1, 0x7f, 0x22, 0x31];
   };
 
-  const result = await readCoreDriverTelemetry(sendUds);
+  const result = await readCoreDriverTelemetry(sendUds, 2000, {
+    interDidDelayMs: 0,
+  });
 
   assert.equal(result.activity, "rest");
   assert.equal(result.continuousDrivingSeconds, 30 * 60);
