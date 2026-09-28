@@ -31,10 +31,10 @@ test("V3 keeps driver-facing language concise", () => {
 test("V3 separates the primary LIVE action from the occasional card read", () => {
   assert.ok(client.includes("onClick={controls.onConnect}"));
   assert.ok(client.includes("onClick={controls.onReadCard}"));
-  assert.ok(client.includes("Osveži LIVE"));
+  assert.ok(client.includes("LIVE povezano"));
   assert.ok(client.includes("Očitaj karticu"));
   assert.equal(client.includes("Pošalji dijagnostiku"), false);
-  assert.equal(client.includes("Šifra pokušaja:"), false);
+  assert.ok(client.includes("Šifra pokušaja:"));
 });
 
 test("card read shows truthful live transfer counters without a fabricated total", () => {
@@ -78,7 +78,7 @@ test("reconstruction cannot touch the proven communication motor", () => {
   }
 });
 
-test("visual source uses clearer panel lines and state-driven continuous-driving colors", () => {
+test("visual source uses clearer panel lines and confirmed pause colors", () => {
   assert.ok(css.includes("--tc-panel-line: 1.5px"));
   assert.ok(css.includes("border: var(--tc-panel-line)"));
   assert.ok(css.includes(".progressFill"));
@@ -90,9 +90,17 @@ test("visual source uses clearer panel lines and state-driven continuous-driving
   ]) {
     assert.ok(css.includes(visualClass), visualClass + " must be present");
   }
-  assert.ok(client.includes("state.continuousBand"));
+  assert.ok(client.includes("state.cumulativeBreakMinutes"));
+  assert.ok(client.includes("breaks.drivingComplete"));
   assert.ok(client.includes("styles.progressWarning"));
-  assert.ok(client.includes("styles.progressLimit"));
+  assert.ok(client.includes("styles.progressSafe"));
+  assert.ok(client.includes("PAUZE"));
+  assert.ok(client.includes("Vožnja · 45 min / 15 + 30"));
+  assert.ok(client.includes("Radno vreme · pauza nakon najviše 6 h"));
+  assert.ok(client.includes("Puna pauza ostvarena"));
+  assert.ok(client.includes("Tahograf je potvrdio pauzu"));
+  assert.ok(client.includes("Priprema tahografa za očitavanje kartice…"));
+  assert.ok(client.includes("pauza od 3 sekunde"));
 });
 
 test("history rows expose a 24-hour day detail without inventing missing card events", () => {

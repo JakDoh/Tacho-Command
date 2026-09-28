@@ -46,6 +46,8 @@ export type TechnicalTelemetrySanitizedEvent = Readonly<{
   nrc: number | null;
   deviceFamily: TechnicalTelemetryDeviceFamily;
   errorCode: string | null;
+  packetCount: number | null;
+  byteCount: number | null;
 }>;
 
 export const TECHNICAL_TELEMETRY_SCHEMA: "tc-tech-v1";

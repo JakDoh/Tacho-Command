@@ -6,6 +6,7 @@ import {
   createFieldProvenLiveSnapshot,
   createFieldProvenProductState,
 } from "../lib/field-proven-product-state.js";
+import { cardLocalDateIso, cardUtcMinuteEpoch, formatCardLocalTime } from "../lib/card-local-time.js";
 
 const uiSource = await readFile(
   new URL("../app/app/field-proven-premium-ui.tsx", import.meta.url),
@@ -24,6 +25,7 @@ test("adapter maps proven LIVE snapshot values without inventing data", () => {
       lastLiveReadLabel: "06:02",
       activity: "rest",
       continuousDrivingSec: 3600,
+      cumulativeBreakSec: 900,
       dailyDrivingSec: 7200,
       weeklyDrivingSec: 18000,
       telemetryAcceptedCount: 6,
@@ -32,6 +34,7 @@ test("adapter maps proven LIVE snapshot values without inventing data", () => {
     profile: {
       continuousThresholdMinutes: 270,
       continuousWarningMinutes: 255,
+      workBreakThresholdMinutes: 360,
     },
   });
 
@@ -43,8 +46,23 @@ test("adapter maps proven LIVE snapshot values without inventing data", () => {
   assert.equal(state.continuousThresholdLabel, "4 h 30 min");
   assert.equal(state.continuousRemainingLabel, "3 h 30 min");
   assert.equal(state.continuousBand, "safe");
+  assert.equal(state.cumulativeBreakMinutes, 15);
+  assert.equal(state.workBreakThresholdLabel, "6 h 00 min");
+  assert.equal(state.workBreakConfirmed, false);
   assert.equal(state.telemetrySentCount, 6);
   assert.equal(state.attemptCode, "TC-7F2K8M");
+});
+
+test("card UTC activity times render in the Vienna time zone with DST", () => {
+  const summerInsert = cardUtcMinuteEpoch("2026-09-28", 3 * 60 + 34);
+  assert.equal(formatCardLocalTime(summerInsert), "05:34");
+  assert.equal(cardLocalDateIso(summerInsert), "2026-09-28");
+  assert.equal(Math.floor((Date.UTC(2026, 8, 28, 8, 55) - summerInsert) / 60_000), 321);
+
+  const winterInsert = cardUtcMinuteEpoch("2026-12-10", 3 * 60 + 34);
+  assert.equal(formatCardLocalTime(winterInsert), "04:34");
+  assert.equal(cardLocalDateIso(cardUtcMinuteEpoch("2026-09-28", 23 * 60)), "2026-09-29");
+  assert.equal(cardUtcMinuteEpoch("2026-02-30", 60), null);
 });
 
 test("adapter stays neutral when no rule/profile threshold is supplied", () => {
@@ -96,6 +114,19 @@ test("adapter preserves duration-only history without inventing absolute timesta
   assert.equal(state.historyDays[0].segments[0].endMinute, null);
   const total = state.historyDays[0].segments.reduce((sum, segment) => sum + segment.percent, 0);
   assert.ok(Math.abs(total - 100) < 0.000001);
+});
+
+test("adapter presents card history newest day first", () => {
+  const state = createFieldProvenProductState({
+    card: {
+      historyDays: [
+        { dateIso: "2026-09-21", dateLabel: "21.09.", drivingMinutes: 60, segments: [] },
+        { dateIso: "2026-09-22", dateLabel: "22.09.", drivingMinutes: 90, segments: [] },
+      ],
+    },
+  });
+
+  assert.deepEqual(state.historyDays.map((day) => day.dateIso), ["2026-09-22", "2026-09-21"]);
 });
 
 test("adapter accepts parser-native activity segments without losing absolute timing", () => {
@@ -211,9 +242,9 @@ test("adapter source is a pure state boundary and cannot issue tachograph or tel
   }
 });
 
-test("premium UI consumes the shared state contract and no longer hard-codes 4:30", () => {
+test("premium UI consumes the shared confirmed break value", () => {
   assert.match(uiSource, /import type \{[^}]*FieldProvenProductState[^}]*\}/);
-  assert.match(uiSource, /continuousThresholdLabel/);
+  assert.match(uiSource, /cumulativeBreakMinutes/);
   assert.equal(uiSource.includes("<span>4:30</span>"), false);
 });
 

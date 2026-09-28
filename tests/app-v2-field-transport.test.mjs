@@ -27,7 +27,7 @@ function characteristic(uuid, onWrite) {
   };
 }
 
-function bluetoothFixture() {
+function bluetoothFixture({ speedPayload = [0x00, 0x00] } = {}) {
   const writes = [];
   let disconnected = 0;
   let fifo;
@@ -47,8 +47,11 @@ function bluetoothFixture() {
       if (payload[0] === 0x3e) {
         queueMicrotask(() => listeners.get("characteristicvaluechanged")?.(valueEvent([1, 1, 0x7e, payload[1] ?? 0x00])));
       } else if (payload[0] === 0x22) {
+        const data = payload[1] === 0xf9 && payload[2] === 0x02
+          ? speedPayload
+          : [0x00, 0x2a];
         queueMicrotask(() => listeners.get("characteristicvaluechanged")?.(
-          valueEvent([1, 1, 0x62, payload[1], payload[2], 0x00, 0x2a]),
+          valueEvent([1, 1, 0x62, payload[1], payload[2], ...data]),
         ));
       }
     }
@@ -87,12 +90,22 @@ test("transport factory establishes FIFO/Credits, validates TesterPresent and ex
   });
 
   assert.equal(transport.deviceLabel, "DTCO 4.1a");
+  assert.equal(transport.isConnected(), true);
+  assert.equal((await transport.assertStationary()).stationary, true);
   const response = await transport.sendUds([0x22, 0xf9, 0x23], 100);
   assert.deepEqual(response, [1, 1, 0x62, 0xf9, 0x23, 0x00, 0x2a]);
 
   await transport.close();
   assert.equal(fixture.disconnected, 1);
   assert.ok(fixture.writes.some(([kind, bytes]) => kind === "credits" && bytes[0] === 0xff));
+});
+
+test("transport fails closed before LIVE when F902 is non-zero", async () => {
+  const fixture = bluetoothFixture({ speedPayload: [0x00, 0x01] });
+  await assert.rejects(
+    () => openAppV2FieldTransport({ bluetooth: fixture.bluetooth, timeoutMs: 100, settleMs: 0 }),
+    /Vozilo nije na 0 km\/h/,
+  );
 });
 
 test("transport factory serializes GATT writes and rejects concurrent UDS requests", async () => {

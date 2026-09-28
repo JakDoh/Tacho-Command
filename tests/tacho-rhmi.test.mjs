@@ -7,12 +7,24 @@ import {
   describeRhmiStatus,
   parseDriverMinutesDid,
   parseDriverWorkingState,
+  inspectVehicleSpeedDid,
+  classifyStationaryVehicleSpeed,
   RHMI_DIDS,
 } from "../lib/tacho-rhmi.js";
 
 test("builds the published Open Remote HMI routine requests", () => {
   assert.deepEqual(buildOpenRhmiStartRequest(), [0x31, 0x01, 0xf2, 0x11]);
   assert.deepEqual(buildOpenRhmiStatusRequest(), [0x31, 0x03, 0xf2, 0x11]);
+});
+
+test("F902 safety gate allows only the proven exact two-byte zero payload", () => {
+  assert.deepEqual(
+    classifyStationaryVehicleSpeed([1, 1, 0x62, 0xf9, 0x02, 0x00, 0x00]),
+    { valid: true, stationary: true, payload: [0x00, 0x00] },
+  );
+  assert.equal(classifyStationaryVehicleSpeed([1, 1, 0x62, 0xf9, 0x02, 0x00, 0x01]).stationary, false);
+  assert.equal(classifyStationaryVehicleSpeed([1, 1, 0x62, 0xf9, 0x02, 0x00]).valid, false);
+  assert.equal(classifyStationaryVehicleSpeed([1, 1, 0x7f, 0x22, 0x31]).stationary, false);
 });
 
 test("classifies F211 start and status responses without retaining raw bytes", () => {
@@ -49,6 +61,25 @@ test("parses F903 as working state only", () => {
   assert.equal(parsed.activityCode, 3);
   assert.equal("continuousDrivingMinutes" in parsed, false);
   assert.equal("continuousDrivingSeconds" in parsed, false);
+});
+
+test("rejects reserved F903 activity codes instead of confirming UNKNOWN", () => {
+  const parsed = parseDriverWorkingState([1, 1, 0x62, 0xf9, 0x03, 0x04]);
+  assert.equal(parsed.valid, false);
+  assert.equal(parsed.activity, "unknown");
+  assert.equal(parsed.activityCode, 4);
+});
+
+test("inspects F902 framing without guessing its speed encoding", () => {
+  assert.deepEqual(
+    inspectVehicleSpeedDid([1, 1, 0x62, 0xf9, 0x02, 0x00, 0x00]),
+    { valid: true, payload: [0x00, 0x00] },
+  );
+  assert.deepEqual(
+    inspectVehicleSpeedDid([1, 1, 0x62, 0xf9, 0x03, 0x00, 0x00]),
+    { valid: false, payload: [] },
+  );
+  assert.deepEqual(inspectVehicleSpeedDid([1, 1, 0x7f, 0x22, 0x31]), { valid: false, payload: [] });
 });
 
 test("parses proven two-byte minute DIDs conservatively", () => {

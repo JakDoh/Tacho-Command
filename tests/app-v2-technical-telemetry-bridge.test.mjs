@@ -76,6 +76,44 @@ test("production App V2 telemetry posts only after the bounded LIVE transport is
   }
 });
 
+test("persistent LIVE hands the open transport to the UI before telemetry delivery completes", async () => {
+  let telemetryStarted = false;
+  let finishTelemetry;
+  const telemetryPending = new Promise((resolve) => { finishTelemetry = resolve; });
+  const transport = {
+    deviceLabel: "DTCO retained",
+    sendUds: workingSendUds(),
+    isConnected: () => true,
+    close: async () => {},
+  };
+
+  const result = await Promise.race([
+    runAppV2LiveAttemptWithTelemetry({
+      cryptoImpl: deterministicCrypto(),
+      openTransport: async () => transport,
+      postTelemetry: async () => {
+        telemetryStarted = true;
+        return telemetryPending;
+      },
+      keepTransportOpen: true,
+    }),
+    new Promise((_, reject) => setTimeout(
+      () => reject(new Error("persistent LIVE waited for telemetry")),
+      2500,
+    )),
+  ]);
+
+  assert.equal(result.status, "live");
+  assert.equal(result.transport, transport);
+  assert.equal(result.telemetryStatus, "deferred");
+  assert.equal(result.telemetryAcceptedCount, null);
+  assert.equal(result.telemetryEventCount, 9);
+
+  await Promise.resolve();
+  assert.equal(telemetryStarted, true);
+  finishTelemetry({ status: "accepted", accepted: 9 });
+});
+
 test("optional null DID values are not misreported as successful telemetry", async () => {
   let posted = null;
   const sendUds = async (request) => {

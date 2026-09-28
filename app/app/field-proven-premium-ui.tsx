@@ -7,7 +7,7 @@ import type { FieldProvenActivity, FieldProvenHistoryDay, FieldProvenHistorySegm
 export type ProductTab = "live" | "periods" | "history" | "attention" | "card";
 
 type ProductControls = Readonly<{
-  phase: "idle" | "connecting" | "connected" | "card-reading" | "error";
+  phase: "idle" | "connecting" | "connected" | "card-preparing" | "card-reading" | "error";
   restoreState: "checking" | "restored" | "empty" | "invalid";
   restoredLabel: string | null;
   errorText: string | null;
@@ -16,6 +16,7 @@ type ProductControls = Readonly<{
     byteLength: number;
     complete: boolean;
   }> | null;
+  cardAttemptCode: string | null;
   versionLine: string;
   onConnect: () => void;
   onReadCard: () => void;
@@ -46,6 +47,45 @@ function formatMinutes(value: number | null): string {
 function clampPercent(value: number | null): number {
   if (value === null || !Number.isFinite(value)) return 0;
   return Math.min(100, Math.max(0, value));
+}
+
+function pauseStatus(minutes: number | null) {
+  if (minutes === null || !Number.isFinite(minutes) || minutes < 0) {
+    return {
+      drivingLabel: "Nije potvrđeno",
+      drivingDetail: "Poveži tahograf za potvrđenu pauzu",
+      drivingPercent: 0,
+      drivingComplete: false,
+      workLabel: "Nije potvrđeno",
+      workDetail: "Poveži tahograf za potvrđenu pauzu",
+      workPercent: 0,
+      workComplete: false,
+    };
+  }
+
+  const rounded = Math.round(minutes);
+  const drivingComplete = rounded >= 45;
+  const workComplete = rounded >= 30;
+  return {
+    drivingLabel: drivingComplete ? "Puna pauza ostvarena" : "Pauza u toku · " + formatMinutes(rounded),
+    drivingDetail: drivingComplete
+      ? "Novi ciklus vožnje počinje kada tahograf potvrdi VOŽNJU"
+      : rounded >= 15
+        ? "15 min potvrđeno · nastavi do 45 min ili kasnije najmanje 30 min"
+        : "Do pune pauze potrebno je 45 min",
+    drivingPercent: clampPercent((rounded / 45) * 100),
+    drivingComplete,
+    workLabel: workComplete ? "Pauza ostvarena" : "Pauza u toku · " + formatMinutes(rounded),
+    workDetail: rounded >= 45
+      ? "Ispunjeno i za dnevni rad duži od 9 sati"
+      : workComplete
+        ? "Minimum 30 min ispunjen · za više od 9 sati potrebno je 45 min"
+        : rounded >= 15
+          ? "Prvi deo od najmanje 15 min potvrđen"
+          : "Za 6–9 sati rada potrebno je najmanje 30 min",
+    workPercent: clampPercent((rounded / 45) * 100),
+    workComplete,
+  };
 }
 
 const TIMELINE_SR: Readonly<Record<FieldProvenTimelineKind, string>> = Object.freeze({
@@ -123,13 +163,7 @@ function IdentityHeader({ state, controls }: Readonly<{ state: FieldProvenProduc
 }
 
 function LiveScreen({ state, controls }: Readonly<{ state: FieldProvenProductState; controls: ProductControls }>) {
-  const progress = clampPercent(state.continuousProgressPercent);
-  const progressBandClass = {
-    neutral: styles.progressNeutral,
-    safe: styles.progressSafe,
-    warning: styles.progressWarning,
-    limit: styles.progressLimit,
-  }[state.continuousBand];
+  const breaks = pauseStatus(state.cumulativeBreakMinutes);
   const cardProgress = controls.cardReadProgress;
   const cardVisualProgress = cardProgress?.complete
     ? 100
@@ -147,8 +181,9 @@ function LiveScreen({ state, controls }: Readonly<{ state: FieldProvenProductSta
           <span>LIVE VEZA</span>
           <strong>
             {controls.phase === "connecting" && "Povezivanje i LIVE očitavanje…"}
+            {controls.phase === "card-preparing" && "Priprema tahografa za očitavanje kartice…"}
             {controls.phase === "card-reading" && "Sačekajte završetak očitavanja kartice"}
-            {controls.phase === "connected" && "LIVE podaci su sačuvani"}
+            {controls.phase === "connected" && "LIVE veza je aktivna"}
             {controls.phase === "error" && "LIVE očitavanje nije završeno"}
             {controls.phase === "idle" && "Poveži tahograf za LIVE podatke"}
           </strong>
@@ -157,11 +192,12 @@ function LiveScreen({ state, controls }: Readonly<{ state: FieldProvenProductSta
         <button
           type="button"
           onClick={controls.onConnect}
-          disabled={controls.phase === "connecting" || controls.phase === "card-reading"}
+          disabled={controls.phase === "connecting" || controls.phase === "card-preparing" || controls.phase === "card-reading" || controls.phase === "connected"}
         >
           {controls.phase === "connecting" && "Povezujem…"}
+          {controls.phase === "card-preparing" && "Priprema za očitavanje…"}
           {controls.phase === "card-reading" && "Kartica se očitava…"}
-          {controls.phase === "connected" && "Osveži LIVE"}
+          {controls.phase === "connected" && "LIVE povezano"}
           {controls.phase === "error" && "Ponovi LIVE"}
           {controls.phase === "idle" && "Poveži tahograf"}
         </button>
@@ -174,24 +210,37 @@ function LiveScreen({ state, controls }: Readonly<{ state: FieldProvenProductSta
       </section>
 
       <section className={styles.metricPanel}>
-        <div className={styles.metricRow}>
-          <span>Neprekidna vožnja</span>
-          <strong>{formatMinutes(state.continuousDrivingMinutes)}</strong>
+        <div className={styles.pauseHeading}>PAUZE</div>
+        <div className={styles.pauseBlock}>
+          <div className={styles.metricRow}>
+            <span>Vožnja · 45 min / 15 + 30</span>
+            <strong className={breaks.drivingComplete ? styles.pauseComplete : undefined}>{breaks.drivingLabel}</strong>
+          </div>
+          <div className={styles.progressTrack} aria-label="Potvrđena pauza od vožnje">
+            <span className={styles.progressFill + " " + (breaks.drivingComplete ? styles.progressSafe : styles.progressWarning)} style={{ width: String(breaks.drivingPercent) + "%" }} />
+          </div>
+          <div className={styles.progressScale}>
+            <span>0 min</span>
+            <span>{breaks.drivingDetail}</span>
+            <span>45 min</span>
+          </div>
         </div>
-        <div className={styles.progressTrack} aria-label="Napredak neprekidne vožnje">
-          <span
-            className={styles.progressFill + " " + progressBandClass}
-            style={{ width: String(progress) + "%" }}
-          />
-        </div>
-        <div className={styles.progressScale}>
-          <span>0:00</span>
-          <span>{state.continuousRemainingLabel ? "Preostalo " + state.continuousRemainingLabel : "Bez potvrđenog praga"}</span>
-          <span>{state.continuousThresholdLabel ?? "—"}</span>
-        </div>
-        <div className={styles.nextLine}>
-          <strong>Sledeće:</strong>
-          <span>{state.continuousRemainingLabel ? "do osnovnog praga preostaje " + state.continuousRemainingLabel + "." : "prag određuje aktivni profil; nema izmišljenog zaključka."}</span>
+        <div className={styles.pauseBlock}>
+          <div className={styles.metricRow}>
+            <span>Radno vreme · pauza nakon najviše 6 h</span>
+            <strong className={breaks.workComplete ? styles.pauseComplete : undefined}>{breaks.workLabel}</strong>
+          </div>
+          <div className={styles.progressTrack} aria-label="Potvrđena pauza u radnom vremenu">
+            <span className={styles.progressFill + " " + (breaks.workComplete ? styles.progressSafe : styles.progressWarning)} style={{ width: String(breaks.workPercent) + "%" }} />
+          </div>
+          <div className={styles.progressScale}>
+            <span>0 min</span>
+            <span>{breaks.workDetail}</span>
+            <span>30 / 45 min</span>
+          </div>
+          <div className={styles.confirmedBreak}>
+            Tahograf je potvrdio pauzu: <strong>{formatMinutes(state.cumulativeBreakMinutes)}</strong>
+          </div>
         </div>
       </section>
 
@@ -238,14 +287,17 @@ function LiveScreen({ state, controls }: Readonly<{ state: FieldProvenProductSta
               </div>
             </div>
           ) : state.cardReadComplete ? <small>{state.historyDaysAvailable}/56 dana sačuvano</small> : null}
+          {controls.cardAttemptCode ? <small>Šifra pokušaja: <strong>{controls.cardAttemptCode}</strong></small> : null}
+          {controls.phase === "card-preparing" ? <small>LIVE veza se zatvara. Nakon kratke pripremne pauze počinje očitavanje.</small> : null}
         </div>
         <button
           type="button"
           onClick={controls.onReadCard}
-          disabled={controls.phase === "connecting" || controls.phase === "card-reading"}
+          disabled={controls.phase === "connecting" || controls.phase === "card-preparing" || controls.phase === "card-reading"}
         >
-          {controls.phase === "card-reading" ? "Očitavam…" : "Očitaj karticu"}
+          {controls.phase === "card-preparing" ? "Priprema za očitavanje…" : controls.phase === "card-reading" ? "Očitavam…" : "Očitaj karticu"}
         </button>
+          {controls.phase === "card-preparing" ? <small>Posle zatvaranja LIVE veze sledi pauza od 3 sekunde; ukupno vreme zavisi i od završetka aktivnog LIVE zahteva.</small> : null}
       </section>
     </div>
   );
@@ -255,7 +307,7 @@ function PeriodsScreen({ state }: Readonly<{ state: FieldProvenProductState }>) 
   const periods = [
     ["DANAS", formatMinutes(state.todayDrivingMinutes), "Dnevna vožnja"],
     ["OVA NEDELJA", formatMinutes(state.weekDrivingMinutes), "Tekuća nedelja"],
-    ["DVE NEDELJE", formatMinutes(state.fortnightDrivingMinutes), "Iz istorije kartice"],
+    ["DVE NEDELJE", formatMinutes(state.fortnightDrivingMinutes), "Prethodna + tekuća"],
   ] as const;
 
   return (

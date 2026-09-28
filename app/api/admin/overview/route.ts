@@ -11,6 +11,17 @@ type DayRow = Readonly<{
   landing_views?: number | string | null;
   app_opens?: number | string | null;
 }>;
+type TechnicalRow = Readonly<{
+  attempt_code?: string | null;
+  event?: string | null;
+  phase?: string | null;
+  outcome?: string | null;
+  error_code?: string | null;
+  packet_count?: number | string | null;
+  byte_count?: number | string | null;
+  duration_ms?: number | string | null;
+  created_at?: number | string | null;
+}>;
 
 const json = (body: unknown, init: ResponseInit = {}) =>
   Response.json(body, {
@@ -65,6 +76,7 @@ export async function GET(request: Request) {
       dailyRows,
       technicalSummary,
       outcomeCounts,
+      recentTechnicalRows,
     ] = await Promise.all([
       env.DB.prepare(
         "SELECT COUNT(*) AS total_events, COUNT(DISTINCT visit_id) AS sessions, MAX(created_at) AS last_event_at FROM product_analytics_events WHERE created_at >= ?1",
@@ -87,12 +99,26 @@ export async function GET(request: Request) {
       env.DB.prepare(
         "SELECT outcome AS key, COUNT(*) AS count FROM technical_telemetry_events WHERE created_at >= ?1 GROUP BY outcome ORDER BY count DESC",
       ).bind(since30).all(),
+      env.DB.prepare(
+        "SELECT attempt_code, event, phase, outcome, error_code, packet_count, byte_count, duration_ms, created_at FROM technical_telemetry_events WHERE attempt_code IS NOT NULL ORDER BY created_at DESC, id DESC LIMIT 100",
+      ).all(),
     ]);
 
     const productEvents = rowsToCounts((eventCounts.results ?? []) as CountRow[]);
     const sourceEvents = rowsToCounts((sourceCounts.results ?? []) as CountRow[]);
     const localeEvents = rowsToCounts((localeCounts.results ?? []) as CountRow[]);
     const technicalOutcomes = rowsToCounts((outcomeCounts.results ?? []) as CountRow[]);
+    const recentTechnical = ((recentTechnicalRows.results ?? []) as TechnicalRow[]).map((row) => ({
+      attemptCode: typeof row.attempt_code === "string" ? row.attempt_code : "",
+      event: typeof row.event === "string" ? row.event : "unknown",
+      phase: typeof row.phase === "string" ? row.phase : "unknown",
+      outcome: typeof row.outcome === "string" ? row.outcome : "unknown",
+      errorCode: typeof row.error_code === "string" ? row.error_code : null,
+      packetCount: numeric(row.packet_count),
+      byteCount: numeric(row.byte_count),
+      durationMs: numeric(row.duration_ms),
+      createdAt: numeric(row.created_at),
+    })).filter((row) => row.attemptCode && row.createdAt);
 
     return json({
       status: "ready",
@@ -123,11 +149,13 @@ export async function GET(request: Request) {
         totalEvents: numeric(technicalSummary?.total_events),
         lastEventAt: numeric(technicalSummary?.last_event_at) || null,
         outcomes: technicalOutcomes,
+        recent: recentTechnical,
       },
       privacy: {
         aggregateOnly: true,
         productRetentionDays: 90,
         technicalRetentionDays: 60,
+        technicalAttemptDetails: true,
       },
     });
   } catch {

@@ -8,10 +8,20 @@ export type AppV2GoldenCardTransportResult = Readonly<{
   fieldProofScope: "VDO-DTCO-4.1a-Android-Chrome-Slot1-2026-09-19";
 }>;
 
+export declare function selectAppV2GoldenCardDevice(input?: Readonly<{
+  bluetooth?: {
+    requestDevice: (options: unknown) => Promise<unknown>;
+  } | null;
+}>): Promise<unknown>;
+
+export declare function selectBrowserAppV2GoldenCardDevice(): Promise<unknown>;
+
 export declare function readAppV2GoldenCardPayload(input?: Readonly<{
   bluetooth?: {
     requestDevice: (options: unknown) => Promise<unknown>;
   } | null;
+  device?: unknown;
+  disconnectOnFinish?: boolean;
   requestTimeoutMs?: number;
   cardIdleTimeoutMs?: number;
   p3GuardMs?: number;
@@ -24,6 +34,8 @@ export declare function readAppV2GoldenCardPayload(input?: Readonly<{
 
 export declare function readBrowserAppV2GoldenCardPayload(
   options?: Readonly<{
+    device?: unknown;
+    disconnectOnFinish?: boolean;
     requestTimeoutMs?: number;
     cardIdleTimeoutMs?: number;
     p3GuardMs?: number;

@@ -115,6 +115,14 @@
 .activityCard p { margin: 13px 0 0; color: #91a6b1; font-size: 15px; }
 
 .metricPanel { padding: 22px; border-radius: 24px; }
+.pauseHeading { color: var(--tc-cyan); font-size: 12px; font-weight: 800; letter-spacing: .14em; }
+.pauseBlock { padding-top: 18px; }
+.pauseBlock + .pauseBlock { margin-top: 20px; border-top: 1px solid #244756; }
+.pauseBlock .metricRow > span { font-size: 14px; }
+.pauseBlock .metricRow > strong { font-size: 17px; text-align: right; }
+.pauseBlock .metricRow > strong.pauseComplete { color: var(--tc-green); }
+.confirmedBreak { margin-top: 12px; color: #8aa0ab; font-size: 12px; }
+.confirmedBreak strong { color: #dce8ed; }
 .metricRow { display: flex; align-items: baseline; justify-content: space-between; gap: 18px; }
 .metricRow > span { font-size: 16px; }
 .metricRow strong { font-size: 20px; }

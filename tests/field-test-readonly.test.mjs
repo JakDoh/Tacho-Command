@@ -27,14 +27,16 @@ test("read-only field candidate uses shared UDS reassembly and DID parsers", () 
   assert.match(clientSource, /buildReadDataByIdentifier/);
   assert.match(clientSource, /parseDriverWorkingState/);
   assert.match(clientSource, /parseDriverMinutesDid/);
+  assert.match(clientSource, /inspectVehicleSpeedDid/);
   assert.match(clientSource, /TesterPresent potvrđen\. Sačekajte 1 s za stabilizaciju transporta/);
 });
 
 test("field candidate lets the transport settle before the first RDBI and formats durations", () => {
   const testerPresentLog = clientSource.indexOf("TesterPresent potvrđen. Sačekajte 1 s");
   const settlingDelay = clientSource.indexOf("await sleep(1000)", testerPresentLog);
+  const speedProbe = clientSource.indexOf("TACHOGRAPH_VEHICLE_SPEED", settlingDelay);
   const firstRdbi = clientSource.indexOf('probeMinutes("F923"', settlingDelay);
-  assert.ok(testerPresentLog >= 0 && settlingDelay > testerPresentLog && firstRdbi > settlingDelay);
+  assert.ok(testerPresentLog >= 0 && settlingDelay > testerPresentLog && speedProbe > settlingDelay && firstRdbi > speedProbe);
   assert.match(clientSource, /formatMinutes\(parsed\.minutes\)/);
   assert.match(clientSource, /formatSeconds\(dailyDrivingSec\)/);
 });
@@ -48,6 +50,7 @@ test("field candidate serializes every Web Bluetooth GATT write", () => {
 
 test("field candidate runs one bounded observable pass without a telemetry loop", () => {
   assert.match(clientSource, /DRIVER_1_WORKING_STATE/);
+  assert.match(clientSource, /TACHOGRAPH_VEHICLE_SPEED/);
   assert.match(clientSource, /DRIVER_1_CONTINUOUS_DRIVING/);
   assert.match(clientSource, /DRIVER_1_CUMULATIVE_BREAK/);
   assert.match(clientSource, /DRIVER_1_CURRENT_DAILY_DRIVING/);
@@ -57,6 +60,7 @@ test("field candidate runs one bounded observable pass without a telemetry loop"
   assert.match(clientSource, /rezultat: POSITIVE/);
   assert.doesNotMatch(clientSource, /runTelemetry|readCoreDriverTelemetry/);
   assert.doesNotMatch(clientSource, /while\s*\(!stopRef\.current\)/);
+  assert.match(clientSource, /F902 payload ostaje samo u ovom prikazu i ne ulazi u telemetriju/);
 });
 
 test("technical telemetry is buffered during BLE and posted only after the bounded pass", () => {

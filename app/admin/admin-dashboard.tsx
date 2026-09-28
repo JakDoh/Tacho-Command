@@ -28,11 +28,23 @@ type Overview = Readonly<{
     totalEvents: number;
     lastEventAt: number | null;
     outcomes: Readonly<Record<string, number>>;
+    recent: readonly Readonly<{
+      attemptCode: string;
+      event: string;
+      phase: string;
+      outcome: string;
+      errorCode: string | null;
+      packetCount: number;
+      byteCount: number;
+      durationMs: number;
+      createdAt: number;
+    }>[];
   }>;
   privacy: Readonly<{
     aggregateOnly: boolean;
     productRetentionDays: number;
     technicalRetentionDays: number;
+    technicalAttemptDetails: boolean;
   }>;
 }>;
 
@@ -182,7 +194,7 @@ export default function AdminDashboard() {
       <header className={styles.topbar}>
         <div className={styles.brand}><span>TC</span><div><small>PRIVATE CONTROL PLANE</small><strong>TachoCommand Admin</strong></div></div>
         <div className={styles.topActions}>
-          <span className={styles.safeBadge}>AGGREGATE ONLY</span>
+          <span className={styles.safeBadge}>PRIVACY SAFE</span>
           <button type="button" onClick={() => void load()}>Osveži</button>
           <button type="button" onClick={() => void logout()}>Odjava</button>
         </div>
@@ -264,6 +276,19 @@ export default function AdminDashboard() {
             ))}
           </div>
           <p className={styles.meta}>Poslednji tehnički događaj: {formatTime(overview.technical.lastEventAt)}</p>
+        </article>
+
+        <article className={styles.panel}>
+          <div className={styles.panelTitle}><div><small>CARD BLACK BOX</small><h2>Poslednji pokušaji</h2></div><span>bez identiteta</span></div>
+          <div className={styles.rows}>
+            {overview.technical.recent.length === 0 ? <p>Nema detaljnih pokušaja.</p> : overview.technical.recent.slice(0, 20).map((item, index) => (
+              <div key={`${item.attemptCode}-${item.createdAt}-${item.event}-${index}`}>
+                <span>{item.attemptCode} · {item.phase} · {item.event}</span>
+                <strong>{item.outcome}{item.errorCode ? ` · ${item.errorCode}` : ""}</strong>
+                <small>{item.packetCount} paketa · {(item.byteCount / 1000).toLocaleString("sr-RS", { maximumFractionDigits: 1 })} KB · {formatTime(item.createdAt)}</small>
+              </div>
+            ))}
+          </div>
         </article>
 
         <article className={styles.panel}>

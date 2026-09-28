@@ -6,9 +6,16 @@ export declare function runBrowserAppV2GoldenCardRead(input?: Readonly<{
     setItem: (key: string, value: string) => void;
   } | null;
   capturedAtIso?: string;
+  onProgress?: (progress: Readonly<{ submessages: number; byteLength: number; complete: boolean }>) => void;
+  onTelemetryAttempt?: (attemptCode: string) => void;
   transportOptions?: Readonly<{
     requestTimeoutMs?: number;
     cardIdleTimeoutMs?: number;
     p3GuardMs?: number;
   }>;
-}>): Promise<AppV2CardReadControllerResult>;
+}>): Promise<AppV2CardReadControllerResult & Readonly<{
+  cardAttemptCode: string | null;
+  cardTelemetryStatus: string;
+  cardTelemetryAcceptedCount: number | null;
+  transportCompleted: boolean;
+}>>;

@@ -12,7 +12,7 @@ const homePage = fs.readFileSync(new URL("../app/page.tsx", import.meta.url), "u
 test("admin surface is noindex and does not render sensitive product data", () => {
   assert.match(layout, /index:\s*false/);
   assert.match(layout, /follow:\s*false/);
-  assert.match(dashboard, /AGGREGATE ONLY/);
+  assert.match(dashboard, /PRIVACY SAFE/);
   assert.match(dashboard, /nema identiteta vozača/);
   assert.match(dashboard, /nema brojeva kartica ili registracija/);
 });
@@ -25,10 +25,10 @@ test("admin API requires signed session before reading aggregate D1 data", () =>
   assert.doesNotMatch(overview, /SELECT \*/);
 });
 
-test("admin overview exposes aggregates only, never visit or support-code rows", () => {
+test("admin overview exposes anonymous support-code diagnostics without identity", () => {
   assert.doesNotMatch(overview, /visit_id AS/);
-  assert.doesNotMatch(overview, /attempt_code AS/);
   assert.doesNotMatch(overview, /session_id AS/);
+  assert.match(overview, /attempt_code, event, phase, outcome, error_code, packet_count, byte_count/);
   assert.doesNotMatch(overview, /driver_name|card_number|registration|latitude|longitude|raw_bytes/i);
   assert.match(overview, /productRetentionDays:\s*90/);
   assert.match(overview, /technicalRetentionDays:\s*60/);

@@ -108,6 +108,18 @@ test("browser card transport follows bounded golden-compatible full-read sequenc
   assert.equal(appMessages.filter((msg) => msg[4] === 0x36).length, 1);
   assert.ok(appMessages.some((msg) => msg[4] === 0x37));
   assert.ok(appMessages.some((msg) => msg[4] === 0x82));
+
+  gatt.connected = true;
+  const sharedDevice = { name: "DTCO", gatt };
+  const sharedResult = await readAppV2GoldenCardPayload({
+    device: sharedDevice,
+    disconnectOnFinish: false,
+    requestTimeoutMs: 100,
+    cardIdleTimeoutMs: 100,
+    p3GuardMs: 0,
+  });
+  assert.equal(sharedResult.transport, "golden-0.32c");
+  assert.equal(gatt.connected, true, "shared LIVE connection must remain open after card teardown");
 });
 
 test("browser card transport keeps the scoped physical field-proof marker in source", async () => {

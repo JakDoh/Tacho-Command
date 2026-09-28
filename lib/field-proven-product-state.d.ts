@@ -20,6 +20,7 @@ export type FieldProvenHistorySegment = Readonly<{
 }>;
 
 export type FieldProvenHistoryDay = Readonly<{
+  dateIso: string | null;
   dateLabel: string;
   drivingMinutes: number;
   activityTotals: Readonly<Record<FieldProvenTimelineKind, number>>;
@@ -41,6 +42,9 @@ export type FieldProvenProductState = Readonly<{
   continuousRemainingLabel: string | null;
   continuousThresholdLabel: string | null;
   continuousBand: FieldProvenContinuousBand;
+  cumulativeBreakMinutes: number | null;
+  workBreakThresholdLabel: string;
+  workBreakConfirmed: boolean;
   todayDrivingMinutes: number | null;
   weekDrivingMinutes: number | null;
   fortnightDrivingMinutes: number | null;
@@ -61,6 +65,7 @@ export declare function createFieldProvenProductState(input?: Readonly<{
   profile?: Readonly<{
     continuousThresholdMinutes?: number | null;
     continuousWarningMinutes?: number | null;
+    workBreakThresholdMinutes?: number | null;
   }>;
   localeLabel?: string | null;
 }>): FieldProvenProductState;

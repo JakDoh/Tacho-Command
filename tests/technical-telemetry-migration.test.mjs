@@ -23,6 +23,13 @@ const migrationSql2 = fs.readFileSync(
 const snapshot2 = JSON.parse(
   fs.readFileSync(new URL("../drizzle/meta/0002_snapshot.json", import.meta.url), "utf8"),
 );
+const migrationSql3 = fs.readFileSync(
+  new URL("../drizzle/0003_card_transfer_telemetry.sql", import.meta.url),
+  "utf8",
+);
+const snapshot3 = JSON.parse(
+  fs.readFileSync(new URL("../drizzle/meta/0003_snapshot.json", import.meta.url), "utf8"),
+);
 const journal = JSON.parse(
   fs.readFileSync(new URL("../drizzle/meta/_journal.json", import.meta.url), "utf8"),
 );
@@ -60,6 +67,8 @@ const latestColumns = [
   "nrc",
   "device_family",
   "error_code",
+  "packet_count",
+  "byte_count",
   "created_at",
 ];
 
@@ -100,7 +109,7 @@ test("initial telemetry migration contains exactly the privacy-safe storage colu
 
 test("schema follows latest snapshot while initial migration stays immutable", () => {
   const schemaColumns = schemaStorageColumns(schemaSource);
-  const snapshotColumns = Object.keys(snapshot2.tables.technical_telemetry_events.columns);
+  const snapshotColumns = Object.keys(snapshot3.tables.technical_telemetry_events.columns);
 
   assert.deepEqual(schemaColumns, latestColumns);
   assert.deepEqual(snapshotColumns, latestColumns);
@@ -133,7 +142,7 @@ test("initial telemetry migration creates retention and session indexes", () => 
 
 test("drizzle journal registers telemetry migrations in order", () => {
   assert.equal(journal.dialect, "sqlite");
-  assert.equal(journal.entries.length, 3);
+  assert.equal(journal.entries.length, 4);
   assert.equal(journal.entries[0].idx, 0);
   assert.equal(journal.entries[0].tag, "0000_technical_telemetry_events");
   assert.equal(journal.entries[0].breakpoints, true);
@@ -143,6 +152,17 @@ test("drizzle journal registers telemetry migrations in order", () => {
   assert.equal(journal.entries[2].idx, 2);
   assert.equal(journal.entries[2].tag, "0002_product_analytics_events");
   assert.equal(journal.entries[2].breakpoints, true);
+  assert.equal(journal.entries[3].idx, 3);
+  assert.equal(journal.entries[3].tag, "0003_card_transfer_telemetry");
+  assert.equal(journal.entries[3].breakpoints, true);
+});
+
+test("card telemetry migration adds only bounded transfer counters", () => {
+  assert.match(migrationSql3, /ADD `packet_count` integer/);
+  assert.match(migrationSql3, /ADD `byte_count` integer/);
+  for (const forbidden of forbiddenFields) {
+    assert.doesNotMatch(migrationSql3, new RegExp(`\\b${forbidden}\\b`, "i"));
+  }
 });
 
 test("product analytics migration is separate and privacy-minimal", () => {

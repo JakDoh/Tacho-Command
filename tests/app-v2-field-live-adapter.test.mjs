@@ -52,6 +52,25 @@ test("field live adapter keeps optional daily and weekly values nullable", async
   assert.equal(result.session.productLive.weeklyDrivingSec, null);
 });
 
+test("field live adapter retries one invalid F903 frame before confirming REST", async () => {
+  let activityReads = 0;
+  const sendUds = async (request) => {
+    const did = (request[1] << 8) | request[2];
+    if (did === 0xf903) {
+      activityReads += 1;
+      return activityReads === 1 ? framedPositive(did, 0x04) : framedPositive(did, 0x00);
+    }
+    if (did === 0xf923 || did === 0xf925) return framedPositive(did, 0x00, 0x00);
+    return [1, 1, 0x7f, 0x22, 0x31];
+  };
+
+  const result = await runAppV2FieldLiveRead({ sendUds });
+
+  assert.equal(activityReads, 2);
+  assert.equal(result.status, "live");
+  assert.equal(result.session.productLive.activity, "REST");
+});
+
 test("field live adapter fails closed when mandatory telemetry is missing", async () => {
   const sendUds = async (request) => {
     const did = (request[1] << 8) | request[2];

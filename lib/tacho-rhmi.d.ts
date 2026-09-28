@@ -12,6 +12,15 @@ export function buildTesterPresentRequest(): readonly number[];
 export function buildOpenRhmiStartRequest(): readonly number[];
 export function buildOpenRhmiStatusRequest(): readonly number[];
 export function buildReadDataByIdentifier(did: number): readonly number[];
+export function inspectVehicleSpeedDid(responseBytes?: readonly number[]): Readonly<{
+  valid: boolean;
+  payload: readonly number[];
+}>;
+export function classifyStationaryVehicleSpeed(responseBytes?: readonly number[]): Readonly<{
+  valid: boolean;
+  stationary: boolean;
+  payload: readonly number[];
+}>;
 
 export type OpenRhmiClassification = Readonly<{
   packetHeaderValid: boolean;

@@ -81,6 +81,30 @@ test("teardown failure never overwrites the verified live result", async () => {
   assert.equal(result.session.phase, "live");
 });
 
+test("field session retains a stationary transport while mandatory LIVE data is incomplete", async () => {
+  let closed = 0;
+  const sendUds = workingSendUds();
+  const result = await runAppV2FieldSession({
+    openTransport: async () => ({
+      deviceLabel: "DTCO incomplete",
+      sendUds: async (request) => {
+        const did = (request[1] << 8) | request[2];
+        if (did === 0xf923) return null;
+        return sendUds(request);
+      },
+      isConnected: () => true,
+      close: async () => { closed += 1; },
+    }),
+    keepTransportOpen: true,
+  });
+
+  assert.equal(result.status, "incomplete");
+  assert.ok(result.transport);
+  assert.equal(closed, 0);
+  await result.transport.close();
+  assert.equal(closed, 1);
+});
+
 test("field session owns lifecycle only, not Bluetooth or UDS framing", async () => {
   const source = await readFile(new URL("../lib/app-v2-field-session.js", import.meta.url), "utf8");
   assert.ok(source.includes("openTransport"));

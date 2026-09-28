@@ -43,6 +43,8 @@ test("technical telemetry keeps the public contract minimal and privacy-safe", (
     nrc: null,
     deviceFamily: "vdo-dtco-4x",
     errorCode: null,
+    packetCount: null,
+    byteCount: null,
   });
 
   for (const forbidden of [

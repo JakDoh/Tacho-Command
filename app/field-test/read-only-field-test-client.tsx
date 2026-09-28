@@ -9,6 +9,7 @@ import {
 } from "../../lib/tacho-ble.js";
 import {
   buildReadDataByIdentifier,
+  inspectVehicleSpeedDid,
   parseDriverMinutesDid,
   parseDriverWorkingState,
   RHMI_DIDS,
@@ -170,6 +171,7 @@ export default function ReadOnlyFieldTestClient() {
   const [connected, setConnected] = useState(false);
   const [deviceName, setDeviceName] = useState("—");
   const [activity, setActivity] = useState("unknown");
+  const [speedProbe, setSpeedProbe] = useState("nije provereno");
   const [continuousDrivingSec, setContinuousDrivingSec] = useState<number | null>(null);
   const [breakSec, setBreakSec] = useState<number | null>(null);
   const [dailyDrivingSec, setDailyDrivingSec] = useState<number | null>(null);
@@ -203,6 +205,7 @@ export default function ReadOnlyFieldTestClient() {
     stopRef.current = false;
     gattWriteQueueRef.current = Promise.resolve();
     setActivity("unknown");
+    setSpeedProbe("nije provereno");
     setContinuousDrivingSec(null);
     setBreakSec(null);
     setDailyDrivingSec(null);
@@ -376,7 +379,7 @@ export default function ReadOnlyFieldTestClient() {
       setConnected(true);
       addLog("pass", "TesterPresent potvrđen. Sačekajte 1 s za stabilizaciju transporta.");
       await sleep(1000);
-      addLog("info", "Pokrećem jedan opservacioni prolaz kroz pet RDBI DID-ova.");
+      addLog("info", "Pokrećem lokalnu F902 proveru formata, zatim jedan opservacioni prolaz kroz pet potvrđenih RDBI DID-ova.");
 
       currentPhase = "live_read";
       const snapshotStartedAt = performance.now();
@@ -432,6 +435,35 @@ export default function ReadOnlyFieldTestClient() {
         }
         await sleep(350);
       };
+
+      const f902StartedAt = performance.now();
+      const f902Response = await sendUds(
+        buildReadDataByIdentifier(RHMI_DIDS.TACHOGRAPH_VEHICLE_SPEED),
+        4000,
+      );
+      const f902DurationMs = Math.round(performance.now() - f902StartedAt);
+      if (!f902Response) {
+        setSpeedProbe("TIMEOUT");
+        addLog("warn", "F902 rezultat: TIMEOUT. Brzina nije potvrđena; ovaj rezultat se ne šalje u telemetriju.");
+      } else if (f902Response[2] === 0x7f && f902Response[3] === 0x22) {
+        const nrc = Number(f902Response[4] ?? 0).toString(16).padStart(2, "0").toUpperCase();
+        setSpeedProbe(`NRC 0x${nrc}`);
+        addLog("warn", `F902 rezultat: NRC 0x${nrc}. Brzina nije potvrđena; ovaj rezultat se ne šalje u telemetriju.`);
+      } else {
+        const inspected = inspectVehicleSpeedDid(f902Response);
+        if (inspected.valid) {
+          const payloadHex = inspected.payload
+            .map((value) => value.toString(16).padStart(2, "0").toUpperCase())
+            .join(" ");
+          const localResult = `${inspected.payload.length} B · ${payloadHex || "prazno"}`;
+          setSpeedProbe(localResult);
+          addLog("pass", `F902 lokalni rezultat: POSITIVE — payload ${localResult}; trajanje ${f902DurationMs} ms. Nije poslato u telemetriju.`);
+        } else {
+          setSpeedProbe("UNEXPECTED");
+          addLog("warn", "F902 rezultat: UNEXPECTED. Brzina nije potvrđena; ovaj rezultat se ne šalje u telemetriju.");
+        }
+      }
+      await sleep(350);
 
       await probeMinutes("F923", RHMI_DIDS.DRIVER_1_CONTINUOUS_DRIVING, setContinuousDrivingSec);
       await probeMinutes("F925", RHMI_DIDS.DRIVER_1_CUMULATIVE_BREAK, setBreakSec);
@@ -545,9 +577,9 @@ export default function ReadOnlyFieldTestClient() {
       ) : null}
 
       <p style={{ padding: 12, background: "#f3f4f6", borderRadius: 10, fontSize: 13 }}>
-        Ovaj kandidat šalje po jedan read-only zahtev za F923, F925, F903, F99A i F99B.
+        Ovaj kandidat prvo lokalno proverava format F902, zatim šalje po jedan read-only zahtev za F923, F925, F903, F99A i F99B.
         Ne otvara Remote HMI/F211 sesiju i ne ponavlja očitavanje u petlji.
-        Tehnički događaji se drže samo u memoriji tokom BLE prolaza i šalju tek po njegovom završetku.
+        F902 payload ostaje samo u ovom prikazu i ne ulazi u telemetriju. Ostali tehnički događaji se drže samo u memoriji tokom BLE prolaza i šalju tek po njegovom završetku.
       </p>
 
       <div style={{ marginBottom: 8, fontSize: 14 }}>Uređaj: <strong>{deviceName}</strong></div>
@@ -555,6 +587,10 @@ export default function ReadOnlyFieldTestClient() {
       <div style={{ marginBottom: 14, fontSize: 14 }}>Tehnička telemetrija: <strong>{telemetryStatus}</strong></div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 12 }}>
+        <article style={{ padding: 16, border: "1px solid #e5e7eb", borderRadius: 12 }}>
+          <small>Bezbednosna proba brzine — F902 (lokalno)</small>
+          <div style={{ fontSize: 22, fontWeight: 800 }}>{speedProbe}</div>
+        </article>
         <article style={{ padding: 16, border: "1px solid #e5e7eb", borderRadius: 12 }}>
           <small>Trenutna aktivnost — F903</small>
           <div style={{ fontSize: 28, fontWeight: 800 }}>{activity.toUpperCase()}</div>
