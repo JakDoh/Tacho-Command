@@ -347,3 +347,14 @@
 .tcx-nav select, .tcx-nav a { min-height: 44px; }
 .tcx-shell :focus-visible { outline: 3px solid #6de4f5; outline-offset: 4px; }
 .tcx-footer nav { display:flex; gap:24px; flex-wrap:wrap; }
+.tcx-hero { grid-template-columns: 1fr; min-height: 600px; text-align: center; }
+.tcx-hero-copy { max-width: 860px; margin-inline: auto; }
+.tcx-hero h1 { max-width: 840px; }
+.tcx-hero-copy > p { margin-inline: auto; max-width: 60ch; }
+.tcx-hero-actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin: 30px 0; }
+.tcx-badge { display: inline-block; color: #69dfd0; font-size: 12px; letter-spacing: .1em; line-height: 1.6; }
+.tcx-value-card h2 { font-size: 24px; }
+.tcx-nav select { color: #d7e9ef; background: #101c24; border: 1px solid #385366; border-radius: 10px; padding: 10px; }
+@media (max-width: 680px) { .tcx-hero { min-height: auto; } .tcx-nav { gap: 12px; padding: 16px; } }
+
+.tcx-shell a.tcx-primary { color: #071015; }

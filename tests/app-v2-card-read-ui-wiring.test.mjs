@@ -86,7 +86,7 @@ test("App V2 derives visible LIVE state from the retained transport", async () =
   assert.match(clientSource, /liveConnected\s*\? "connected"/);
   assert.match(uiSource, /Veza je uspostavljena/);
   assert.match(uiSource, /LIVE · potvrđeni podaci/);
-  assert.match(uiSource, /c\.phase==='connected'/);
+  assert.match(uiSource, /c\.phase\s*===\s*['"]connected['"]/);
 });
 
 test("App V2 keeps card transport details out of UI source", async () => {
