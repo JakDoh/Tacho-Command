@@ -1,0 +1,64 @@
+name: Cloudflare production deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tachocommand-cloudflare-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy existing tachocommand Worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Check out approved main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.2
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Verify source identity
+        run: test "$(git branch --show-current)" = "main"
+
+      - name: Build production artifact
+        run: npm run build:cloudflare
+
+      - name: Verify locked production target
+        run: >-
+          node -e "const c=require('./dist/server/wrangler.json');
+          const db=c.d1_databases?.filter(x=>x.binding==='DB')??[];
+          if(c.name!=='tachocommand'||db.length!==1||db[0].database_name!=='tachocommand-prod'||db[0].database_id!=='0796463f-28ee-485a-8cc4-40b213e7ae26')
+          process.exit(1);"
+
+      - name: Deploy existing production Worker
+        run: npx wrangler deploy --config dist/server/wrangler.json
+
+      - name: Preserve private application secrets
+        env:
+          ADMIN_ACCESS_KEY: ${{ secrets.ADMIN_ACCESS_KEY }}
+          ADMIN_SIGNING_SECRET: ${{ secrets.ADMIN_SIGNING_SECRET }}
+          TRIAL_SIGNING_SECRET: ${{ secrets.TRIAL_SIGNING_SECRET }}
+        run: |
+          test -n "$ADMIN_ACCESS_KEY"
+          test -n "$ADMIN_SIGNING_SECRET"
+          test -n "$TRIAL_SIGNING_SECRET"
+          printf '%s' "$ADMIN_ACCESS_KEY" | npx wrangler secret put ADMIN_ACCESS_KEY --config dist/server/wrangler.json
+          printf '%s' "$ADMIN_SIGNING_SECRET" | npx wrangler secret put ADMIN_SIGNING_SECRET --config dist/server/wrangler.json
+          printf '%s' "$TRIAL_SIGNING_SECRET" | npx wrangler secret put TRIAL_SIGNING_SECRET --config dist/server/wrangler.json
