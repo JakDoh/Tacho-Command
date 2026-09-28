@@ -12,7 +12,6 @@ export const metadata: Metadata = {
   },
   description:
     "TachoCommand čita podržanu Smart Tacho 2 driver karticu preko telefona, prikazuje dostupnu istoriju do 56 dana, aktivnosti i potvrđene zbirne podatke.",
-  manifest: "/manifest.webmanifest",
   applicationName: "TachoCommand",
   appleWebApp: {
     capable: true,
@@ -39,6 +38,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="sr">
+      <head>
+        {/* Keep installation local to this origin; metadataBase is for SEO. */}
+        <link rel="manifest" href="/manifest.webmanifest" />
+      </head>
       <body>
         <ServiceWorkerRegister />
         <ProductAnalyticsObserver />
