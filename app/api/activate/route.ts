@@ -1,3 +1,4 @@
+import { readLimitedJson, requestRateAllowed, RequestLimitError } from "../../../lib/request-guards";
 import {
   createBetaLicenseToken,
   verifyBetaCode,
@@ -13,14 +14,16 @@ const json = (body: unknown, init: ResponseInit = {}) =>
   });
 
 export async function POST(request: Request) {
+  if (!(await requestRateAllowed(request, 10))) return json({status: "rate_limited"}, {status: 429, headers: {"retry-after":"60"}});
   const signingSecret = process.env.TRIAL_SIGNING_SECRET?.trim();
   if (!signingSecret) return json({ status: "unavailable" }, { status: 503 });
 
   let code = "";
   try {
-    const body = await request.json() as { code?: unknown };
+    const body = await readLimitedJson(request) as { code?: unknown };
     code = typeof body.code === "string" ? body.code : "";
-  } catch {
+  } catch (error) {
+    if (error instanceof RequestLimitError) return json({status:"request_rejected"}, {status:error.status});
     return json({ status: "invalid" }, { status: 400 });
   }
 

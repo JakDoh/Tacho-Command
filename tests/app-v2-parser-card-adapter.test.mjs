@@ -25,7 +25,7 @@ test("parser card adapter normalizes ordered parser-native segments and derives 
   assert.ok(result);
   assert.equal(result.cardReadComplete, true);
   assert.equal(result.historyDaysAvailable, 1);
-  assert.equal(result.fortnightDrivingMinutes, 90);
+  assert.equal(result.fortnightDrivingMinutes, null); // Two days do not cover the requested calendar period.
   assert.equal(result.historyDays[0].segments[2].kind, "drive");
   assert.equal(result.historyDays[0].segments[2].minutes, 90);
   assert.deepEqual(result.historyDays[0].events, [{ kind: "card-inserted", minute: 300 }]);

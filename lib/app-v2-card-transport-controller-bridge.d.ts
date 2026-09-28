@@ -9,6 +9,9 @@ export declare function runBrowserAppV2GoldenCardRead(input?: Readonly<{
   onProgress?: (progress: Readonly<{ submessages: number; byteLength: number; complete: boolean }>) => void;
   onTelemetryAttempt?: (attemptCode: string) => void;
   transportOptions?: Readonly<{
+    device?: unknown;
+    disconnectOnFinish?: boolean;
+    signal?: AbortSignal;
     requestTimeoutMs?: number;
     cardIdleTimeoutMs?: number;
     p3GuardMs?: number;

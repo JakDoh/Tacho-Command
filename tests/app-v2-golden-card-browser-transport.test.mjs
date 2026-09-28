@@ -130,3 +130,20 @@ test("browser card transport keeps the scoped physical field-proof marker in sou
   assert.doesNotMatch(source, /fieldProven: false/);
   assert.doesNotMatch(source, /saveLastGoodCardSnapshot|localStorage|parseAppV2CardPayload/);
 });
+
+test('disconnection during a silent card transfer rejects without waiting for idle timeout', async () => {
+  const fifo = new FakeCharacteristic('29d3a479-1592-47df-80a4-afa742d369bb');
+  const credits = new FakeCharacteristic('db9c4128-bff3-41fe-a306-fb6f9a8aeb2d');
+  const handlers = new Map();
+  const device = {addEventListener:(n,f)=>handlers.set(n,f),removeEventListener:n=>handlers.delete(n),gatt:{connected:true,connect:async()=>({getPrimaryServices:async()=>[{uuid:'eef90782-55dd-4388-b80b-695aba7a69b5',getCharacteristics:async()=>[fifo,credits]}]}),disconnect(){this.connected=false;}}};
+  credits.onWrite=async write=>{if(write[0]===1)queueMicrotask(()=>credits.emit([8]));};
+  fifo.onWrite=async write=>{
+    const body=write.slice(2),sid=body[4];queueMicrotask(()=>credits.emit([1]));
+    if(body[0]===0x81)queueMicrotask(()=>fifo.emit(wrapIts(ddp([0xc1,0xea,0x8f]))));
+    else if(sid===0x10)queueMicrotask(()=>fifo.emit(wrapIts(ddp([0x50,0x81]))));
+    else if(sid===0x35)queueMicrotask(()=>fifo.emit(wrapIts(ddp([0x75,0x00,0xff]))));
+    else if(sid===0x36)queueMicrotask(()=>{device.gatt.connected=false;handlers.get('gattserverdisconnected')?.();});
+  };
+  await assert.rejects(readAppV2GoldenCardPayload({device,disconnectOnFinish:true,p3GuardMs:0,requestTimeoutMs:100,cardIdleTimeoutMs:60000}),/prekinut/);
+  assert.equal(handlers.size,0);
+});

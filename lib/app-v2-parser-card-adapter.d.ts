@@ -22,4 +22,4 @@ export declare function normalizeParserCardResult(input?: Readonly<{
   attentionTitle?: string | null;
   attentionBody?: string | null;
   days?: readonly AppV2ParserCardDay[];
-}>): Readonly<Record<string, unknown>> | null;
+}>, options?: Readonly<{ capturedAtIso?: string }>): Readonly<Record<string, unknown>> | null;

@@ -21,6 +21,7 @@ test("adapter maps proven LIVE snapshot values without inventing data", () => {
   const state = createFieldProvenProductState({
     live: {
       connected: true,
+      snapshotConfirmed: true,
       deviceLabel: "SYNTH-TACHO",
       lastLiveReadLabel: "06:02",
       activity: "rest",
@@ -67,7 +68,8 @@ test("card UTC activity times render in the Vienna time zone with DST", () => {
 
 test("adapter stays neutral when no rule/profile threshold is supplied", () => {
   const state = createFieldProvenProductState({
-    live: { connected: true, continuousDrivingSec: 3600, activity: "driving" },
+    live: { connected: true,
+      snapshotConfirmed: true, continuousDrivingSec: 3600, activity: "driving" },
   });
 
   assert.equal(state.continuousProgressPercent, null);
@@ -213,6 +215,7 @@ test("adapter preserves absolute daily positions and card events for day detail"
 test("adapter bounds support-code and identity display fields", () => {
   const live = createFieldProvenLiveSnapshot({
     connected: true,
+      snapshotConfirmed: true,
     attemptCode: "Boban Canic",
     deviceLabel: "  Synthetic device  ",
   });

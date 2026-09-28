@@ -15,7 +15,7 @@ const readCookie = (request: Request, cookieName = COOKIE_NAME) => {
   const header = request.headers.get("cookie") ?? "";
   for (const part of header.split(";")) {
     const [name, ...value] = part.trim().split("=");
-    if (name === cookieName) return decodeURIComponent(value.join("="));
+    if (name === cookieName) { try { return decodeURIComponent(value.join("=")); } catch { return null; } }
   }
   return null;
 };

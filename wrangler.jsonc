@@ -15,6 +15,7 @@
   "images": {
     "binding": "IMAGES"
   },
+  "triggers": { "crons": ["17 3 * * *"] },
   "observability": {
     "enabled": true
   }

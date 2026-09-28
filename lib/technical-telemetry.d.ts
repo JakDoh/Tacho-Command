@@ -38,6 +38,7 @@ export type TechnicalTelemetryDeviceFamily =
 export type TechnicalTelemetrySanitizedEvent = Readonly<{
   schema: "tc-tech-v1";
   sessionId: string;
+  attemptCode: string | null;
   event: TechnicalTelemetryEventName;
   phase: TechnicalTelemetryPhase;
   outcome: TechnicalTelemetryOutcome;
@@ -63,3 +64,6 @@ export function normalizeTechnicalTelemetrySessionId(value: unknown): string | n
 export function sanitizeTechnicalTelemetryEvent(input: unknown): TechnicalTelemetrySanitizedEvent | null;
 export function sanitizeTechnicalTelemetryBatch(input: unknown, maxBatch?: number): readonly TechnicalTelemetrySanitizedEvent[];
 export function technicalTelemetryRetentionCutoffEpochSeconds(nowMs?: number): number;
+
+export function createTechnicalTelemetryAttemptCode(cryptoImpl?: { getRandomValues: (array: Uint8Array) => Uint8Array }): string | null;
+export function normalizeTechnicalTelemetryAttemptCode(value: unknown): string | null;

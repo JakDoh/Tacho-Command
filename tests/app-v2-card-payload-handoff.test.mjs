@@ -150,7 +150,7 @@ test("canonical card handoff runs payload through the canonical parser and last-
 
   assert.equal(result.status, "accepted");
   assert.equal(result.card.historyDays.length, 1);
-  assert.equal(result.card.historyDays[0].drivingMinutes, 1110);
+  assert.equal(result.card.historyDays[0].drivingMinutes, 245); // Cut at capturedAtIso, not the future midnight.
   assert.equal(result.card.lastCardReadAtIso, "2026-09-19T09:35:00.000Z");
 });
 
