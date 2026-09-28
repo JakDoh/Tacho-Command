@@ -1,584 +1,109 @@
 "use client";
-
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useState } from "react";
 import styles from "./field-proven-premium-ui.module.css";
-import type { FieldProvenActivity, FieldProvenHistoryDay, FieldProvenHistorySegment, FieldProvenProductState, FieldProvenTimelineKind } from "../../lib/field-proven-product-state.js";
-
+import type { FieldProvenProductState, FieldProvenHistoryDay } from "../../lib/field-proven-product-state.js";
 export type ProductTab = "live" | "periods" | "history" | "attention" | "card";
-
-type ProductControls = Readonly<{
+type Locale = "sr" | "en" | "de";
+type ProductControls = {
   phase: "idle" | "connecting" | "connected" | "card-preparing" | "card-reading" | "error";
   restoreState: "checking" | "restored" | "empty" | "invalid";
-  restoredLabel: string | null;
-  errorText: string | null;
-  cardReadProgress: Readonly<{
-    submessages: number;
-    byteLength: number;
-    complete: boolean;
-  }> | null;
-  cardAttemptCode: string | null;
-  versionLine: string;
-  onConnect: () => void;
-  onReadCard: () => void;
-}>;
-
-const nav: readonly Readonly<{ id: ProductTab; label: string; glyph: string }>[] = Object.freeze([
-  Object.freeze({ id: "live", label: "LIVE", glyph: "●" }),
-  Object.freeze({ id: "periods", label: "Periodi", glyph: "▤" }),
-  Object.freeze({ id: "history", label: "56 dana", glyph: "▥" }),
-  Object.freeze({ id: "attention", label: "Pažnja", glyph: "!" }),
-  Object.freeze({ id: "card", label: "Kartica", glyph: "◇" }),
-]);
-
-const ACTIVITY_SR: Readonly<Record<FieldProvenActivity, string>> = Object.freeze({
-  DRIVING: "VOŽNJA",
-  WORK: "RAD",
-  AVAILABILITY: "RASPOLOŽIVOST",
-  REST: "ODMOR",
-  UNKNOWN: "NEPOZNATO",
-});
-
-function formatMinutes(value: number | null): string {
-  if (value === null || !Number.isFinite(value) || value < 0) return "—";
-  const rounded = Math.round(value);
-  return Math.floor(rounded / 60) + " h " + String(rounded % 60).padStart(2, "0") + " min";
+  restoredLabel: string | null; errorText: string | null;
+  cardReadProgress: { submessages: number; byteLength: number; complete: boolean } | null;
+  cardAttemptCode: string | null; versionLine: string;
+  locale: Locale; onLocale: (locale: Locale) => void; zone: string;
+  periodLabel: string; periodComplete: boolean; savedAvailable: boolean; screenAwake: boolean; accepted: boolean;
+  onShowSaved: () => void; onForget: () => void; onCancel: () => void;
+  onDisconnect?: () => void; onConnect: () => void; onReadCard: () => void;
+};
+const copy = {
+ sr: {
+  tabs: ["Pregled", "Periodi", "Istorija", "Pažnja", "Kartica"], language:"Jezik",
+  live:"LIVE · potvrđeni podaci", saved:"Sačuvani podaci · nisu LIVE", offline:"Nema potvrđenih LIVE podataka",
+  safety:"Povezivanje i očitavanje samo dok vozilo miruje. Tahograf ostaje merodavan.",
+  disconnect:"Prekini vezu", connect:"Poveži tahograf", connecting:"Povezivanje…", connected:"Veza je uspostavljena", prepare:"Priprema očitavanja…",
+  read:"Očitaj karticu", reading:"Preuzimanje kartice…", processing:"Podaci preneti · provera i čuvanje…", success:"Kartica obrađena i sačuvana",
+  cancel:"Prekini očitavanje", error:"Očitavanje nije završeno. Proveri Bluetooth, karticu i dozvole, pa pokušaj ponovo.",
+  activity:"Aktivnost", continuous:"Kontinuirana vožnja", today:"Danas", week:"Ove nedelje", fortnight:"Prethodna + tekuća nedelja",
+  partial:"Period nije potpuno pokriven. Zbir nije potvrđen.", breaks:"Pauza prijavljena sa tahografa", breakNote:"Prikazana vrednost nije posebna potvrda pravila radnog vremena.",
+  noAnalysis:"Analiza upozorenja nije dostupna", noAnalysisText:"Odsustvo nalaza nije potvrda da nema prekršaja. Proveri zvanični tahograf.",
+  showSaved:"Prikaži prethodno sačuvanu karticu", savedNote:"Sačuvana istorija nije potvrđena kao kartica trenutno povezanog vozača.",
+  history:"Istorija kartice", empty:"Nema prikazane istorije. Očitaj karticu ili izaberi sačuvanu.", days:"dana", back:"Nazad", until:"Sačuvano", zone:"Vremenska zona telefona",
+  dayNote:"Lokalni prikaz. Prazni intervali nisu potvrđen odmor; na dan promene sata lokalna vremena mogu se ponoviti ili preskočiti.",
+  drive:"Vožnja", work:"Rad", availability:"Raspoloživost", rest:"Odmor", unknown:"Nepoznato",
+  inserted:"Kartica ubačena", removed:"Kartica izvađena", driver:"Vozač", card:"Kartica", device:"Uređaj", support:"Šifra pokušaja", packets:"Paketi", awake:"Ekran ostaje uključen", noWake:"Automatsko zaključavanje ekrana nije sprečeno",
+  remove:"Obriši karticu sa ovog uređaja", confirm:"Obrisati sačuvanu karticu i istoriju sa ovog uređaja?", csv:"Izvezi pregled CSV", exportNote:"Korisnički pregled, nije zvanični potpisani DDD.", help:"Prvo povezivanje", last:"Poslednji LIVE uzorak",
+ },
+ en: {
+  tabs:["Overview","Periods","History","Attention","Card"],language:"Language",
+  live:"LIVE · confirmed data",saved:"Saved data · not LIVE",offline:"No confirmed LIVE data",safety:"Connect and read only while stationary. The tachograph remains authoritative.",
+  disconnect:"Disconnect",connect:"Connect tachograph",connecting:"Connecting…",connected:"Connection established",prepare:"Preparing card read…",read:"Read driver card",reading:"Downloading card…",processing:"Data received · validating and saving…",success:"Card processed and saved",cancel:"Cancel read",error:"Read did not complete. Check Bluetooth, card and permissions, then try again.",
+  activity:"Activity",continuous:"Continuous driving",today:"Today",week:"This week",fortnight:"Previous + current week",partial:"Period coverage is incomplete. Total is unconfirmed.",breaks:"Break reported by tachograph",breakNote:"This value is not a separate confirmation of working-time rules.",
+  noAnalysis:"Warning analysis unavailable",noAnalysisText:"No finding does not confirm the absence of infringements. Check the official tachograph.",showSaved:"Show previously saved card",savedNote:"Saved history is not verified as belonging to the currently connected driver.",history:"Card history",empty:"No history shown. Read a card or select saved data.",days:"days",back:"Back",until:"Saved",zone:"Phone time zone",dayNote:"Local display. Gaps are not confirmed rest; local times may repeat or skip on daylight-saving days.",
+  drive:"Driving",work:"Work",availability:"Availability",rest:"Rest",unknown:"Unknown",inserted:"Card inserted",removed:"Card removed",driver:"Driver",card:"Card",device:"Device",support:"Attempt code",packets:"Packets",awake:"Screen wake lock active",noWake:"Automatic screen locking is not prevented",remove:"Delete card from this device",confirm:"Delete the saved card and history from this device?",csv:"Export CSV overview",exportNote:"User overview, not an official signed DDD file.",help:"First connection",last:"Last LIVE sample",
+ },
+ de: {
+  tabs:["Übersicht","Zeiträume","Verlauf","Hinweise","Karte"],language:"Sprache",
+  live:"LIVE · bestätigte Daten",saved:"Gespeicherte Daten · nicht LIVE",offline:"Keine bestätigten LIVE-Daten",safety:"Nur bei stehendem Fahrzeug verbinden und auslesen. Der Tachograph bleibt maßgeblich.",
+  disconnect:"Verbindung trennen",connect:"Tachograph verbinden",connecting:"Verbindung wird hergestellt…",connected:"Verbindung hergestellt",prepare:"Auslesen wird vorbereitet…",read:"Fahrerkarte auslesen",reading:"Karte wird heruntergeladen…",processing:"Daten empfangen · prüfen und speichern…",success:"Karte verarbeitet und gespeichert",cancel:"Auslesen abbrechen",error:"Auslesen nicht abgeschlossen. Bluetooth, Karte und Berechtigungen prüfen und erneut versuchen.",
+  activity:"Tätigkeit",continuous:"Ununterbrochene Lenkzeit",today:"Heute",week:"Diese Woche",fortnight:"Vorherige + aktuelle Woche",partial:"Zeitraum nicht vollständig erfasst. Summe unbestätigt.",breaks:"Vom Tachograph gemeldete Pause",breakNote:"Dieser Wert bestätigt nicht gesondert die Arbeitszeitregeln.",noAnalysis:"Warnungsanalyse nicht verfügbar",noAnalysisText:"Kein Befund bestätigt nicht die Abwesenheit von Verstößen. Offiziellen Tachograph prüfen.",showSaved:"Zuvor gespeicherte Karte anzeigen",savedNote:"Der gespeicherte Verlauf ist nicht als Karte des aktuell verbundenen Fahrers bestätigt.",history:"Kartenverlauf",empty:"Kein Verlauf angezeigt. Karte auslesen oder gespeicherte Daten auswählen.",days:"Tage",back:"Zurück",until:"Gespeichert",zone:"Zeitzone des Telefons",dayNote:"Lokale Anzeige. Lücken sind keine bestätigte Ruhezeit; bei Zeitumstellung können Uhrzeiten wiederholt werden oder entfallen.",
+  drive:"Lenken",work:"Arbeit",availability:"Bereitschaft",rest:"Ruhe",unknown:"Unbekannt",inserted:"Karte eingesteckt",removed:"Karte entnommen",driver:"Fahrer",card:"Karte",device:"Gerät",support:"Versuchscode",packets:"Pakete",awake:"Bildschirmsperre verhindert",noWake:"Automatische Bildschirmsperre wird nicht verhindert",remove:"Karte von diesem Gerät löschen",confirm:"Gespeicherte Karte und Verlauf von diesem Gerät löschen?",csv:"CSV-Übersicht exportieren",exportNote:"Benutzerübersicht, keine offiziell signierte DDD-Datei.",help:"Erste Verbindung",last:"Letzte LIVE-Abfrage",
+ }
+} as const;
+function minutes(value: number | null) { return value === null ? "—" : `${Math.floor(value / 60)} h ${String(value % 60).padStart(2,"0")} min`; }
+function clock(value: number | null) { return value === null ? "—" : `${String(Math.floor(value / 60)).padStart(2,"0")}:${String(value % 60).padStart(2,"0")}`; }
+function exportCsv(state: FieldProvenProductState, controls: ProductControls) {
+  const quote = (value: unknown) => '"'+String(value ?? "").replaceAll('"','""')+'"';
+  const rows: unknown[][] = [["TachoCommand user overview — not official DDD"],["Time zone",controls.zone],["Saved",controls.restoredLabel],["Date","Activity","Local start","Local end","Elapsed minutes"]];
+  for(const day of state.historyDays) for(const seg of day.segments) rows.push([day.dateIso,seg.kind,clock(seg.startMinute),clock(seg.endMinute),seg.minutes]);
+  const url = URL.createObjectURL(new Blob(['\uFEFF'+rows.map(row=>row.map(quote).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}));
+  const a = document.createElement('a');a.href=url;a.download='TachoCommand-overview.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
-
-function clampPercent(value: number | null): number {
-  if (value === null || !Number.isFinite(value)) return 0;
-  return Math.min(100, Math.max(0, value));
-}
-
-function pauseStatus(minutes: number | null) {
-  if (minutes === null || !Number.isFinite(minutes) || minutes < 0) {
-    return {
-      drivingLabel: "Nije potvrđeno",
-      drivingDetail: "Poveži tahograf za potvrđenu pauzu",
-      drivingPercent: 0,
-      drivingComplete: false,
-      workLabel: "Nije potvrđeno",
-      workDetail: "Poveži tahograf za potvrđenu pauzu",
-      workPercent: 0,
-      workComplete: false,
-    };
-  }
-
-  const rounded = Math.round(minutes);
-  const drivingComplete = rounded >= 45;
-  const workComplete = rounded >= 30;
-  return {
-    drivingLabel: drivingComplete ? "Puna pauza ostvarena" : "Pauza u toku · " + formatMinutes(rounded),
-    drivingDetail: drivingComplete
-      ? "Novi ciklus vožnje počinje kada tahograf potvrdi VOŽNJU"
-      : rounded >= 15
-        ? "15 min potvrđeno · nastavi do 45 min ili kasnije najmanje 30 min"
-        : "Do pune pauze potrebno je 45 min",
-    drivingPercent: clampPercent((rounded / 45) * 100),
-    drivingComplete,
-    workLabel: workComplete ? "Pauza ostvarena" : "Pauza u toku · " + formatMinutes(rounded),
-    workDetail: rounded >= 45
-      ? "Ispunjeno i za dnevni rad duži od 9 sati"
-      : workComplete
-        ? "Minimum 30 min ispunjen · za više od 9 sati potrebno je 45 min"
-        : rounded >= 15
-          ? "Prvi deo od najmanje 15 min potvrđen"
-          : "Za 6–9 sati rada potrebno je najmanje 30 min",
-    workPercent: clampPercent((rounded / 45) * 100),
-    workComplete,
-  };
-}
-
-const TIMELINE_SR: Readonly<Record<FieldProvenTimelineKind, string>> = Object.freeze({
-  drive: "VOŽNJA",
-  work: "RAD",
-  availability: "RASPOLOŽIVOST",
-  rest: "ODMOR / PAUZA",
-});
-
-const HISTORY_EVENT_SR = Object.freeze({
-  "card-inserted": "Kartica ubačena",
-  "card-removed": "Kartica izvađena",
-});
-
-function formatClockMinute(value: number | null): string {
-  if (value === null || !Number.isFinite(value)) return "—";
-  const safe = Math.min(1440, Math.max(0, Math.round(value)));
-  if (safe === 1440) return "24:00";
-  return String(Math.floor(safe / 60)).padStart(2, "0") + ":" + String(safe % 60).padStart(2, "0");
-}
-
-function segmentContext(day: FieldProvenHistoryDay, segment: FieldProvenHistorySegment): string | null {
-  if (segment.label) return segment.label;
-  const insertedHere = segment.startMinute !== null && day.events.some(
-    (event) => event.kind === "card-inserted" && event.minute === segment.startMinute,
-  );
-  if (insertedHere && segment.kind === "work" && segment.minutes >= 7 && segment.minutes <= 15) {
-    return "Provera vozila";
-  }
-  return null;
-}
-
-function IdentityHeader({ state, controls }: Readonly<{ state: FieldProvenProductState; controls: ProductControls }>) {
-  const headerStatus = controls.phase === "card-reading"
-    ? "OČITAVANJE"
-    : controls.phase === "connecting"
-      ? "POVEZIVANJE"
-      : state.live
-        ? "LIVE"
-        : controls.cardReadProgress?.complete || state.liveSnapshotAvailable
-          ? "SAČUVANO"
-          : "OFFLINE";
-  const activeStatus = headerStatus !== "OFFLINE";
-
-  return (
-    <>
-      <header className={styles.topbar}>
-        <div className={styles.brand}>
-          <div className={styles.brandMark}>TC</div>
-          <div className={styles.brandText}>
-            <strong>TachoCommand</strong>
-            <span>INSTRUMENT ZA VOZAČE</span>
-          </div>
-        </div>
-        <div className={activeStatus ? styles.livePill : styles.offlinePill}>
-          <span aria-hidden="true" />
-          {headerStatus}
-        </div>
-      </header>
-
-      <section className={styles.identityStrip}>
-        <div>
-          <span className={styles.identityLabel}>KARTICA</span>
-          <strong>{state.cardReadComplete ? "Kartica očitana" : state.slotLabel ?? "Čeka očitavanje"}</strong>
-          <small>{state.cardReadComplete ? "Očitana i sačuvana lokalno" : "Kartica još nije očitana"}</small>
-        </div>
-        <div>
-          <span className={styles.identityLabel}>TAHOGRAF</span>
-          <strong>{state.tachographLabel ?? "Nije povezan"}</strong>
-          <small>{state.tachographLabel ? "Poslednji povezani uređaj" : "Čeka povezivanje"}</small>
-        </div>
-      </section>
-    </>
-  );
-}
-
-function LiveScreen({ state, controls }: Readonly<{ state: FieldProvenProductState; controls: ProductControls }>) {
-  const breaks = pauseStatus(state.cumulativeBreakMinutes);
-  const cardProgress = controls.cardReadProgress;
-  const cardVisualProgress = cardProgress?.complete
-    ? 100
-    : Math.min(96, Math.max(0, (cardProgress?.submessages ?? 0) / 2.8));
-
-  return (
-    <div className={styles.screen}>
-      <div className={styles.screenTopline}>
-        <span>{state.live ? "LIVE · POTVRĐENO SA TAHOGRAFA" : state.liveSnapshotAvailable ? "POSLEDNJE SAČUVANO OČITAVANJE" : "TAHOGRAF NIJE POVEZAN"}</span>
-        <small>{state.lastLiveReadLabel ? state.lastLiveReadLabel : "Još nema očitavanja"}</small>
-      </div>
-
-      <section className={styles.primaryControl} data-phase={controls.phase}>
-        <div>
-          <span>LIVE VEZA</span>
-          <strong>
-            {controls.phase === "connecting" && "Povezivanje i LIVE očitavanje…"}
-            {controls.phase === "card-preparing" && "Priprema tahografa za očitavanje kartice…"}
-            {controls.phase === "card-reading" && "Sačekajte završetak očitavanja kartice"}
-            {controls.phase === "connected" && "LIVE veza je aktivna"}
-            {controls.phase === "error" && "LIVE očitavanje nije završeno"}
-            {controls.phase === "idle" && "Poveži tahograf za LIVE podatke"}
-          </strong>
-          {controls.errorText ? <small>{controls.errorText}</small> : null}
-        </div>
-        <button
-          type="button"
-          onClick={controls.onConnect}
-          disabled={controls.phase === "connecting" || controls.phase === "card-preparing" || controls.phase === "card-reading" || controls.phase === "connected"}
-        >
-          {controls.phase === "connecting" && "Povezujem…"}
-          {controls.phase === "card-preparing" && "Priprema za očitavanje…"}
-          {controls.phase === "card-reading" && "Kartica se očitava…"}
-          {controls.phase === "connected" && "LIVE povezano"}
-          {controls.phase === "error" && "Ponovi LIVE"}
-          {controls.phase === "idle" && "Poveži tahograf"}
-        </button>
-      </section>
-
-      <section className={styles.activityCard}>
-        <span>TRENUTNA AKTIVNOST</span>
-        <strong>{state.liveSnapshotAvailable ? ACTIVITY_SR[state.currentActivity] : "—"}</strong>
-        <p>{state.live ? "LIVE podaci su potvrđeni sa tahografa." : state.liveSnapshotAvailable ? "Prikazano je poslednje potvrđeno očitavanje; aktivna veza je završena." : "Poveži tahograf da bi trenutna aktivnost bila potvrđena."}</p>
-      </section>
-
-      <section className={styles.metricPanel}>
-        <div className={styles.pauseHeading}>PAUZE</div>
-        <div className={styles.pauseBlock}>
-          <div className={styles.metricRow}>
-            <span>Vožnja · 45 min / 15 + 30</span>
-            <strong className={breaks.drivingComplete ? styles.pauseComplete : undefined}>{breaks.drivingLabel}</strong>
-          </div>
-          <div className={styles.progressTrack} aria-label="Potvrđena pauza od vožnje">
-            <span className={styles.progressFill + " " + (breaks.drivingComplete ? styles.progressSafe : styles.progressWarning)} style={{ width: String(breaks.drivingPercent) + "%" }} />
-          </div>
-          <div className={styles.progressScale}>
-            <span>0 min</span>
-            <span>{breaks.drivingDetail}</span>
-            <span>45 min</span>
-          </div>
-        </div>
-        <div className={styles.pauseBlock}>
-          <div className={styles.metricRow}>
-            <span>Radno vreme · pauza nakon najviše 6 h</span>
-            <strong className={breaks.workComplete ? styles.pauseComplete : undefined}>{breaks.workLabel}</strong>
-          </div>
-          <div className={styles.progressTrack} aria-label="Potvrđena pauza u radnom vremenu">
-            <span className={styles.progressFill + " " + (breaks.workComplete ? styles.progressSafe : styles.progressWarning)} style={{ width: String(breaks.workPercent) + "%" }} />
-          </div>
-          <div className={styles.progressScale}>
-            <span>0 min</span>
-            <span>{breaks.workDetail}</span>
-            <span>30 / 45 min</span>
-          </div>
-          <div className={styles.confirmedBreak}>
-            Tahograf je potvrdio pauzu: <strong>{formatMinutes(state.cumulativeBreakMinutes)}</strong>
-          </div>
-        </div>
-      </section>
-
-      <section className={styles.metricPanel}>
-        <div className={styles.metricRow}>
-          <span>Danas</span>
-          <strong>{formatMinutes(state.todayDrivingMinutes)}</strong>
-        </div>
-        <div className={styles.slimTrack}>
-          <span style={{ width: String(clampPercent(state.todayDrivingMinutes === null ? null : state.todayDrivingMinutes / 6)) + "%" }} />
-        </div>
-      </section>
-
-      <section className={styles.metricPanel}>
-        <div className={styles.metricRow}>
-          <span>Ove nedelje</span>
-          <strong>{formatMinutes(state.weekDrivingMinutes)}</strong>
-        </div>
-        <div className={styles.slimTrack}>
-          <span style={{ width: String(clampPercent(state.weekDrivingMinutes === null ? null : state.weekDrivingMinutes / 33.6)) + "%" }} />
-        </div>
-      </section>
-
-      <section className={styles.cardActionPanel} data-reading={controls.phase === "card-reading" ? "true" : "false"}>
-        <div>
-          <span>KARTICA</span>
-          <strong>
-            {controls.phase === "card-reading"
-              ? "Očitavanje kartice je u toku…"
-              : cardProgress?.complete
-                ? "Očitavanje kartice je završeno"
-                : state.cardReadComplete
-                  ? "Kartica je sačuvana lokalno"
-                  : "Očitaj poslednjih 56 dana"}
-          </strong>
-          {cardProgress ? (
-            <div className={styles.cardTransferProgress} aria-live="polite">
-              <div>
-                <span>Paketi: {cardProgress.submessages}</span>
-                <span>Preuzeto: {(cardProgress.byteLength / 1000).toLocaleString("sr-RS", { maximumFractionDigits: 1 })} KB</span>
-              </div>
-              <div className={styles.cardTransferTrack} aria-label={cardProgress.complete ? "Očitavanje kartice je završeno" : "Količina primljenih podataka raste tokom očitavanja"}>
-                <span style={{ width: String(cardVisualProgress) + "%" }} />
-              </div>
-            </div>
-          ) : state.cardReadComplete ? <small>{state.historyDaysAvailable}/56 dana sačuvano</small> : null}
-          {controls.cardAttemptCode ? <small>Šifra pokušaja: <strong>{controls.cardAttemptCode}</strong></small> : null}
-          {controls.phase === "card-preparing" ? <small>LIVE veza se zatvara. Nakon kratke pripremne pauze počinje očitavanje.</small> : null}
-        </div>
-        <button
-          type="button"
-          onClick={controls.onReadCard}
-          disabled={controls.phase === "connecting" || controls.phase === "card-preparing" || controls.phase === "card-reading"}
-        >
-          {controls.phase === "card-preparing" ? "Priprema za očitavanje…" : controls.phase === "card-reading" ? "Očitavam…" : "Očitaj karticu"}
-        </button>
-          {controls.phase === "card-preparing" ? <small>Posle zatvaranja LIVE veze sledi pauza od 3 sekunde; ukupno vreme zavisi i od završetka aktivnog LIVE zahteva.</small> : null}
-      </section>
-    </div>
-  );
-}
-
-function PeriodsScreen({ state }: Readonly<{ state: FieldProvenProductState }>) {
-  const periods = [
-    ["DANAS", formatMinutes(state.todayDrivingMinutes), "Dnevna vožnja"],
-    ["OVA NEDELJA", formatMinutes(state.weekDrivingMinutes), "Tekuća nedelja"],
-    ["DVE NEDELJE", formatMinutes(state.fortnightDrivingMinutes), "Prethodna + tekuća"],
-  ] as const;
-
-  return (
-    <div className={styles.screen}>
-      <div className={styles.screenTopline}><span>PERIODI</span><small>Potvrđene vrednosti</small></div>
-      <div className={styles.periodCards}>
-        {periods.map(([label, value, source]) => (
-          <section key={label} className={styles.periodCard}>
-            <div><span>{label}</span><strong>{value}</strong></div>
-            <small>{source}</small>
-          </section>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function HistoryDayDetail({
-  day,
-  onBack,
-}: Readonly<{ day: FieldProvenHistoryDay; onBack: () => void }>) {
-  const ticks = Array.from({ length: 97 }, (_, index) => index);
-  const summary = [
-    ["drive", "Vožnja"],
-    ["work", "Rad"],
-    ["availability", "Raspoloživost"],
-    ["rest", "Odmor / pauza"],
-  ] as const;
-
-  return (
-    <div className={styles.screen}>
-      <div className={styles.dayDetailTopline}>
-        <button type="button" className={styles.backButton} onClick={onBack}>← 56 dana</button>
-        <small>DETALJ DANA</small>
-      </div>
-
-      <div className={styles.pageIntro}>
-        <h1>{day.dateLabel}</h1>
-        <p>24-časovni zapis aktivnosti sa tahografske kartice. Velike crte su sati, srednje 30 min, male 15 min.</p>
-      </div>
-
-      {!day.timingComplete ? (
-        <section className={styles.emptyPanel}>
-          Apsolutna vremena za ovaj dan nisu potvrđena. TachoCommand prikazuje trajanja aktivnosti, ali ne izmišlja poziciju na 24-časovnoj liniji.
-        </section>
-      ) : (
-      <section className={styles.dayTimelinePanel}>
-        <div className={styles.dayTimelineHeader}>
-          <span>00:00</span><strong>24 h</strong><span>24:00</span>
-        </div>
-        <div className={styles.dayTimelineTrack} aria-label={"24-časovna linija za " + day.dateLabel}>
-          {day.segments.map((segment, index) => {
-            if (segment.startMinute === null || segment.endMinute === null) return null;
-            const left = (segment.startMinute / 1440) * 100;
-            const width = ((segment.endMinute - segment.startMinute) / 1440) * 100;
-            return (
-              <span
-                key={day.dateLabel + "-detail-" + String(index)}
-                className={styles[segment.kind]}
-                style={{ left: String(left) + "%", width: String(Math.max(0, width)) + "%" }}
-                title={TIMELINE_SR[segment.kind] + " · " + formatClockMinute(segment.startMinute) + "–" + formatClockMinute(segment.endMinute)}
-              />
-            );
-          })}
-          {day.events.map((event, index) => (
-            <i
-              key={event.kind + "-" + String(event.minute) + "-" + String(index)}
-              className={event.kind === "card-inserted" ? styles.cardInsertedMarker : styles.cardRemovedMarker}
-              style={{ left: String((event.minute / 1440) * 100) + "%" }}
-              aria-label={HISTORY_EVENT_SR[event.kind] + " u " + formatClockMinute(event.minute)}
-              title={HISTORY_EVENT_SR[event.kind] + " · " + formatClockMinute(event.minute)}
-            />
-          ))}
-        </div>
-        <div className={styles.dayRuler} aria-hidden="true">
-          {ticks.map((tick) => (
-            <i
-              key={tick}
-              className={tick % 4 === 0 ? styles.hourTick : tick % 2 === 0 ? styles.halfHourTick : styles.quarterHourTick}
-              style={{ left: String((tick / 96) * 100) + "%" }}
-            />
-          ))}
-        </div>
-        <div className={styles.dayHourLabels} aria-hidden="true">
-          <span>00</span><span>06</span><span>12</span><span>18</span><span>24</span>
-        </div>
-      </section>
-      )}
-
-      <div className={styles.daySummaryGrid}>
-        {summary.map(([kind, label]) => (
-          <section key={kind} className={styles.daySummaryCard}>
-            <div><i className={styles[kind]} /><span>{label}</span></div>
-            <strong>{formatMinutes(day.activityTotals[kind])}</strong>
-          </section>
-        ))}
-      </div>
-
-      <section className={styles.dayEventsPanel}>
-        <span>DOGAĐAJI KARTICE</span>
-        {day.events.length > 0 ? day.events.map((event, index) => (
-          <div key={event.kind + "-row-" + String(index)}>
-            <time>{formatClockMinute(event.minute)}</time>
-            <strong>{HISTORY_EVENT_SR[event.kind]}</strong>
-          </div>
-        )) : <p>Ovaj dnevni zapis nema potvrđen marker ubacivanja ili vađenja kartice. TachoCommand ga ne izmišlja.</p>}
-      </section>
-
-      <section className={styles.daySequencePanel}>
-        <span>TOK DANA</span>
-        {day.segments.length === 0 ? <p>Nema obrađenih aktivnosti za ovaj dan.</p> : day.segments.map((segment, index) => {
-          const context = segmentContext(day, segment);
-          return (
-            <div className={styles.daySequenceRow} key={day.dateLabel + "-sequence-" + String(index)}>
-              <time>{segment.startMinute === null || segment.endMinute === null ? "Vreme nije potvrđeno" : formatClockMinute(segment.startMinute) + "–" + formatClockMinute(segment.endMinute)}</time>
-              <div>
-                <strong>{TIMELINE_SR[segment.kind]}</strong>
-                {context ? <small>{context}</small> : null}
-              </div>
-              <span>{formatMinutes(segment.minutes)}</span>
-            </div>
-          );
-        })}
-      </section>
-    </div>
-  );
-}
-
-function HistoryScreen({ state }: Readonly<{ state: FieldProvenProductState }>) {
-  const visibleDays = state.historyDays.slice(0, 56);
-  const [selectedDayIndex, setSelectedDayIndex] = useState<number | null>(null);
-  const selectedDay = selectedDayIndex === null ? null : visibleDays[selectedDayIndex] ?? null;
-
-  if (selectedDay) return <HistoryDayDetail day={selectedDay} onBack={() => setSelectedDayIndex(null)} />;
-
-  return (
-    <div className={styles.screen}>
-      <div className={styles.screenTopline}><span>ISTORIJA KARTICE</span><small>{state.historyDaysAvailable} od 56 dana</small></div>
-
-      <div className={styles.legend}>
-        <span><i className={styles.drive} />Vožnja</span>
-        <span><i className={styles.work} />Rad</span>
-        <span><i className={styles.availability} />Raspoloživost</span>
-        <span><i className={styles.rest} />Odmor</span>
-      </div>
-
-      {visibleDays.length === 0 ? (
-        <section className={styles.emptyPanel}>Kartica još nema obrađenu istoriju za prikaz.</section>
-      ) : (
-        <div className={styles.historyList}>
-          {visibleDays.map((day, index) => (
-            <button
-              type="button"
-              className={styles.historyRow}
-              key={day.dateLabel + "-" + String(index)}
-              onClick={() => setSelectedDayIndex(index)}
-              aria-label={"Otvori detalj za " + day.dateLabel}
-            >
-              <strong>{day.dateLabel}</strong>
-              <div className={styles.historyTimelineWrap}>
-                <div
-                  className={day.timingComplete ? styles.timeline : styles.timelineUnverified}
-                  aria-label={day.timingComplete ? "24-časovna linija za " + day.dateLabel : "24-časovna linija bez potvrđenih apsolutnih vremena za " + day.dateLabel}
-                >
-                  {day.timingComplete ? day.segments.map((segment, segmentIndex) => {
-                    if (segment.startMinute === null || segment.endMinute === null) return null;
-                    return (
-                      <span
-                        key={day.dateLabel + "-" + String(segmentIndex)}
-                        className={styles[segment.kind]}
-                        style={{
-                          left: String((segment.startMinute / 1440) * 100) + "%",
-                          width: String(((segment.endMinute - segment.startMinute) / 1440) * 100) + "%",
-                        }}
-                      />
-                    );
-                  }) : <small>vreme nije potvrđeno</small>}
-                </div>
-                <div className={styles.historyHourLabels} aria-hidden="true">
-                  <span>00</span><span>06</span><span>12</span><span>18</span><span>24</span>
-                </div>
-              </div>
-              <strong>{formatMinutes(day.drivingMinutes)}</strong>
-              <span className={styles.historyChevron} aria-hidden="true">›</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function AttentionScreen({ state }: Readonly<{ state: FieldProvenProductState }>) {
-  const hasAttention = Boolean(state.attentionTitle);
-
-  return (
-    <div className={styles.screen}>
-      <div className={styles.screenTopline}><span>PAŽNJA</span><small>Nije pravni zaključak</small></div>
-      <section className={hasAttention ? styles.attentionPanel : styles.okPanel}>
-        <div className={hasAttention ? styles.attentionIcon : styles.okIcon}>{hasAttention ? "!" : "✓"}</div>
-        <div>
-          <strong>{state.attentionTitle ?? "Nema trenutnog upozorenja."}</strong>
-          <p>{state.attentionBody ?? "Na osnovu dostupnih potvrđenih vrednosti. Tahograf ostaje merodavan."}</p>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function CardScreen({ state, controls }: Readonly<{ state: FieldProvenProductState; controls: ProductControls }>) {
-  return (
-    <div className={styles.screen}>
-      <div className={styles.screenTopline}><span>KARTICA I VEZA</span><small>Podaci ostaju na telefonu</small></div>
-
-      <div className={styles.statusGrid}>
-        <section><span>KARTICA</span><strong>{state.cardLast4 ? `•••• ${state.cardLast4}` : "Nije očitana"}</strong></section>
-        <section><span>VOZAČ</span><strong>{state.driverName ?? "Nije očitan"}</strong></section>
-        <section><span>POSLEDNJE LIVE OČITAVANJE</span><strong>{state.lastLiveReadLabel ?? "—"}</strong></section>
-        <section><span>TAHOGRAF</span><strong>{state.tachographLabel ?? "—"}</strong></section>
-      </div>
-
-      <section className={styles.cardReadPanel}>
-        <span>ISTORIJA KARTICE</span>
-        <strong>{state.cardReadComplete ? "Kartica je bezbedno očitana" : "Kartica još nije očitana"}</strong>
-        <p>{state.historyDaysAvailable}/56 dana</p>
-        {controls.restoreState === "restored" && controls.restoredLabel ? <small>Sačuvano {controls.restoredLabel}</small> : null}
-      </section>
-      <small className={styles.versionLine}>{controls.versionLine}</small>
-    </div>
-  );
-}
-
-export default function FieldProvenPremiumUi({ state, controls }: Readonly<{ state: FieldProvenProductState; controls: ProductControls }>) {
-  const [tab, setTab] = useState<ProductTab>("live");
-
-  const screen = useMemo(() => {
-    switch (tab) {
-      case "periods":
-        return <PeriodsScreen state={state} />;
-      case "history":
-        return <HistoryScreen state={state} />;
-      case "attention":
-        return <AttentionScreen state={state} />;
-      case "card":
-        return <CardScreen state={state} controls={controls} />;
-      default:
-        return <LiveScreen state={state} controls={controls} />;
-    }
-  }, [controls, state, tab]);
-
-  return (
-    <div className={styles.shell}>
-      <IdentityHeader state={state} controls={controls} />
-      <main className={styles.content}>{screen}</main>
-      <nav className={styles.bottomNav} aria-label="Glavna navigacija">
-        {nav.map((item) => {
-          const active = item.id === tab;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              className={active ? styles.activeTab : ""}
-              aria-current={active ? "page" : undefined}
-              onClick={() => setTab(item.id)}
-            >
-              <span aria-hidden="true">{item.glyph}</span>
-              <small>{item.label}</small>
-            </button>
-          );
-        })}
-      </nav>
-    </div>
-  );
+export default function FieldProvenPremiumUi({state,controls:c}:{state:FieldProvenProductState;controls:ProductControls}) {
+  const [tab,setTab]=useState<ProductTab>('live');
+  const [selected,setSelected]=useState<string|null>(null);
+  const t=copy[c.locale];
+  const busy=c.phase==='card-reading'||c.phase==='card-preparing'||c.phase==='connecting';
+  const activity={DRIVING:t.drive,WORK:t.work,AVAILABILITY:t.availability,REST:t.rest,UNKNOWN:t.unknown};
+  const kinds={drive:t.drive,work:t.work,availability:t.availability,rest:t.rest};
+  const day:FieldProvenHistoryDay|undefined=state.historyDays.find(d=>d.dateIso===selected);
+  const status=c.phase==='card-preparing'?t.prepare:c.phase==='card-reading'?(c.cardReadProgress?.complete?t.processing:t.reading):c.accepted?t.success:c.phase==='connecting'?t.connecting:state.live?t.live:state.liveSnapshotAvailable?t.saved:t.offline;
+  const metrics=[[t.continuous,state.continuousDrivingMinutes],[t.today,state.todayDrivingMinutes],[t.week,state.weekDrivingMinutes],[t.breaks,state.cumulativeBreakMinutes]] as const;
+  return <div className={styles.shell} lang={c.locale}>
+    <header className={styles.topbar}><div className={styles.brand}><Link href="/" className={styles.brandMark} aria-label="TachoCommand">TC</Link><strong>TachoCommand</strong></div>
+      <label>{t.language}<select value={c.locale} onChange={e=>c.onLocale(e.target.value as Locale)}><option value="sr">SR</option><option value="en">EN</option><option value="de">DE</option></select></label></header>
+    <main className={styles.content}>
+      <div className={styles.screenTopline} role="status" aria-live="polite"><strong>{status}</strong></div>
+      <p>{t.safety}</p>
+      {c.errorText&&<p role="alert">{c.locale==='sr'?c.errorText:t.error}</p>}
+      {c.savedAvailable&&<section className={styles.emptyPanel}><p>{t.savedNote}</p><button disabled={busy} onClick={c.onShowSaved}>{t.showSaved}</button></section>}
+      {tab==='live'&&<div className={styles.screen}>
+        <section className={styles.primaryControl}><p>{c.phase==='connected'?t.connected:t.offline}</p><button onClick={c.onConnect} disabled={busy||c.phase==='connected'}>{c.phase==='connecting'?t.connecting:t.connect}</button>{c.phase==='connected'&&<button onClick={c.onDisconnect}>{t.disconnect}</button>}</section>
+        <section className={styles.activityCard}><span>{t.activity}</span><strong>{activity[state.currentActivity]}</strong><small>{t.last}: {state.lastLiveReadLabel??'—'}</small></section>
+        {metrics.map(([label,value])=><section className={styles.metricPanel} key={label}><div className={styles.metricRow}><span>{label}</span><strong>{minutes(value)}</strong></div></section>)}
+        <p>{t.breakNote}</p>
+        <section className={styles.cardActionPanel}><div><strong>{c.accepted?t.success:t.read}</strong>
+          {c.cardReadProgress&&<p>{t.packets}: {c.cardReadProgress.submessages} · {(c.cardReadProgress.byteLength/1000).toFixed(1)} KB</p>}
+          {c.phase==='card-reading'&&<><progress aria-label={t.reading}/><p>{c.screenAwake?t.awake:t.noWake}</p></>}
+          {c.cardAttemptCode&&<p>{t.support}: {c.cardAttemptCode}</p>}</div>
+          {c.phase==='card-reading'?<button onClick={c.onCancel}>{t.cancel}</button>:<button disabled={busy||c.phase!=='connected'} onClick={c.onReadCard}>{t.read}</button>}</section>
+        <a href={'/'+c.locale+'#connect'}>{t.help}</a>
+      </div>}
+      {tab==='periods'&&<div className={styles.screen}>
+        {[[t.today,state.todayDrivingMinutes],[t.week,state.weekDrivingMinutes],[t.fortnight,state.fortnightDrivingMinutes]].map(([label,value])=><section className={styles.periodCard} key={String(label)}><span>{label}</span><strong>{minutes(value as number|null)}</strong></section>)}
+        <p>{c.periodLabel} · {c.zone}</p>{!c.periodComplete&&<p>{t.partial}</p>}<p>{t.until}: {c.restoredLabel??'—'}</p></div>}
+      {tab==='history'&&<div className={styles.screen}><h1>{t.history}</h1><p>{state.historyDaysAvailable}/56 {t.days} · {c.zone}</p><p>{t.until}: {c.restoredLabel??'—'}</p>
+        {day?<><button onClick={()=>setSelected(null)}>← {t.back}</button><h2>{day.dateIso}</h2><p>{t.dayNote}</p>
+          {day.timingComplete&&<section className={styles.dayTimelinePanel}><div className={styles.dayTimelineHeader}><span>00:00</span><span>12:00</span><span>24:00</span></div><div className={styles.dayTimelineTrack} aria-label={t.history}>{day.segments.map((seg,i)=>seg.startMinute!==null&&seg.endMinute!==null?<span key={i} className={styles[seg.kind]} style={{left:(seg.startMinute/1440*100)+'%',width:((seg.endMinute-seg.startMinute)/1440*100)+'%'}} title={kinds[seg.kind]+' '+clock(seg.startMinute)+'–'+clock(seg.endMinute)}/>:null)}</div></section>}
+          <div className={styles.daySummaryGrid}>{Object.entries(day.activityTotals).map(([kind,value])=><section key={kind}><span>{kinds[kind as keyof typeof kinds]}</span><strong>{minutes(value)}</strong></section>)}</div>
+          {day.events.length>0&&<ul>{day.events.map((event,i)=><li key={i}><time>{clock(event.minute)}</time> · {event.kind==='card-inserted'?t.inserted:t.removed}</li>)}</ul>}<div className={styles.daySequencePanel}>{day.segments.map((seg,i)=><div className={styles.daySequenceRow} key={i}><time>{clock(seg.startMinute)}–{clock(seg.endMinute)}</time><span>{kinds[seg.kind]}</span><strong>{minutes(seg.minutes)}</strong></div>)}</div></>:
+          state.historyDays.length?state.historyDays.map(d=><button className={styles.historyRow} key={d.dateIso??d.dateLabel} onClick={()=>setSelected(d.dateIso)}><strong>{d.dateLabel}</strong><span>{t.drive}</span><strong>{minutes(d.drivingMinutes)}</strong><span>›</span></button>):<p>{t.empty}</p>}
+      </div>}
+      {tab==='attention'&&<section className={styles.emptyPanel}><h1>{t.noAnalysis}</h1><p>{t.noAnalysisText}</p></section>}
+      {tab==='card'&&<div className={styles.screen}><h1>{t.card}</h1><p>{t.savedNote}</p><div className={styles.statusGrid}><section>{t.driver}<strong>{state.driverName??'—'}</strong></section><section>{t.card}<strong>{state.cardLast4?'•••• '+state.cardLast4:'—'}</strong></section><section>{t.device}<strong>{state.tachographLabel??'—'}</strong></section><section>{t.until}<strong>{c.restoredLabel??'—'}</strong></section></div>
+        <p>{t.zone}: {c.zone}</p><button disabled={busy||!state.cardReadComplete} onClick={()=>exportCsv(state,c)}>{t.csv}</button><p>{t.exportNote}</p>
+        <button disabled={busy||(!state.cardReadComplete&&!c.savedAvailable)} onClick={()=>{if(window.confirm(t.confirm))c.onForget();}}>{t.remove}</button><p className={styles.versionLine}>{c.versionLine}</p></div>}
+    </main>
+    <nav className={styles.bottomNav} aria-label={t.tabs[0]}>{(['live','periods','history','attention','card'] as ProductTab[]).map((id,i)=><button key={id} className={tab===id?styles.activeTab:''} aria-current={tab===id?'page':undefined} onClick={()=>{setTab(id);setSelected(null);}}>{t.tabs[i]}</button>)}</nav>
+  </div>;
 }

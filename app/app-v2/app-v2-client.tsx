@@ -6,14 +6,17 @@ import { createFieldProvenProductState } from "../../lib/field-proven-product-st
 import {
   cardStateFromLastGoodCardSnapshot,
   loadLastGoodCardSnapshot,
+  LAST_GOOD_CARD_SNAPSHOT_STORAGE_KEY,
 } from "../../lib/last-good-card-snapshot.js";
 import { formatTachoCommandVersionLine } from "../../lib/product-version.js";
 import { createAppV2LiveSession } from "../../lib/app-v2-live-session.js";
-import { beginAppV2CardRead, createAppV2CardSession } from "../../lib/app-v2-card-session.js";
+import { beginAppV2CardRead, createAppV2CardSession, failAppV2CardRead } from "../../lib/app-v2-card-session.js";
 import { runBrowserAppV2GoldenCardRead } from "../../lib/app-v2-card-transport-controller-bridge.js";
 import { openBrowserAppV2FieldTransport } from "../../lib/app-v2-field-transport.js";
 import { runAppV2LiveAttemptWithTelemetry } from "../../lib/app-v2-technical-telemetry-bridge.js";
 import { runAppV2FieldLiveRead } from "../../lib/app-v2-field-live-adapter.js";
+import { phoneTimeZone, projectCardTimelineForPhone } from "../../lib/app-v2-phone-timeline.js";
+import { calendarCardPeriod } from "../../lib/card-period.js";
 import styles from "./app-v2.module.css";
 
 type RestoreState = "checking" | "restored" | "empty" | "invalid";
@@ -36,7 +39,6 @@ type PersistentLiveTransport = {
   isConnected?: () => boolean;
   close: () => Promise<void>;
 };
-type WakeLockSentinelLike = { release: () => Promise<void> };
 const LIVE_TEARDOWN_TIMEOUT_MS = 1500;
 const LIVE_TO_CARD_SETTLE_MS = 3000;
 const LIVE_MONITOR_IDLE_TIMEOUT_MS = 10000;
@@ -74,23 +76,12 @@ async function closeLiveForCard(transport: PersistentLiveTransport) {
   await waitForLiveRelease();
 }
 
-async function requestCardWakeLock(): Promise<WakeLockSentinelLike | null> {
-  const wakeLock = (navigator as Navigator & {
-    wakeLock?: { request: (type: "screen") => Promise<WakeLockSentinelLike> };
-  }).wakeLock;
-  if (!wakeLock) return null;
-  try {
-    return await wakeLock.request("screen");
-  } catch {
-    return null;
-  }
-}
-
-function formatRestoreTime(value: string | null) {
+function formatRestoreTime(value: string | null, locale: string) {
   if (!value) return null;
   const parsed = new Date(value);
   if (!Number.isFinite(parsed.getTime())) return null;
-  return parsed.toLocaleString("sr-RS", {
+  return parsed.toLocaleString(locale, {
+    year: "numeric",
     day: "2-digit",
     month: "2-digit",
     hour: "2-digit",
@@ -99,6 +90,11 @@ function formatRestoreTime(value: string | null) {
 }
 
 export default function AppV2Client() {
+  const [locale, setLocale] = useState<"sr" | "en" | "de">("sr");
+  const [savedCardVisible, setSavedCardVisible] = useState(false);
+  const [clock, setClock] = useState(() => Date.now());
+  const [screenAwake, setScreenAwake] = useState(false);
+  const readAbortRef = useRef<AbortController | null>(null);
   const [restoreState, setRestoreState] = useState<RestoreState>("checking");
   const [cardState, setCardState] = useState<Readonly<Record<string, unknown>> | null>(null);
   const [capturedAtIso, setCapturedAtIso] = useState<string | null>(null);
@@ -115,6 +111,48 @@ export default function AppV2Client() {
   const liveRefreshTimerRef = useRef<number | null>(null);
   const udsMonitorBusyRef = useRef(false);
   const cardReadBusyRef = useRef(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("tachocommand-locale");
+      const initial = saved ?? navigator.language.slice(0, 2);
+      if (initial === "en" || initial === "de" || initial === "sr") queueMicrotask(() => setLocale(initial));
+    } catch {}
+    const tick = () => setClock(Date.now());
+    const timer = window.setInterval(tick, 10000);
+    document.addEventListener("visibilitychange", tick);
+    return () => { clearInterval(timer); document.removeEventListener("visibilitychange", tick); };
+  }, []);
+
+  useEffect(() => {
+    const busy = cardSession.busy || cardHandoffPreparing || liveRunState === "running" || liveConnected;
+    document.documentElement.dataset.tachoBusy = busy ? "true" : "false";
+    window.dispatchEvent(new Event("tacho-busy-change"));
+    if (!cardSession.busy && !cardHandoffPreparing) return () => {
+      document.documentElement.dataset.tachoBusy = "false";
+      window.dispatchEvent(new Event("tacho-busy-change"));
+    };
+    let closed = false;
+    let lock: WakeLockSentinel | null = null;
+    let requesting = false;
+    const acquire = async () => {
+      if (closed || lock || requesting || document.visibilityState !== "visible") return;
+      requesting = true;
+      try {
+        const next = await navigator.wakeLock?.request("screen");
+        if (!next) return;
+        if (closed) { await next.release(); return; }
+        lock = next;
+        setScreenAwake(true);
+        next.addEventListener("release", () => { lock = null; if (!closed) setScreenAwake(false); }, { once: true });
+      } catch { if (!closed) setScreenAwake(false); }
+      finally { requesting = false; }
+    };
+    const visible = () => { void acquire(); };
+    document.addEventListener("visibilitychange", visible);
+    void acquire();
+    return () => { closed = true; document.removeEventListener("visibilitychange", visible); void lock?.release(); setScreenAwake(false); document.documentElement.dataset.tachoBusy = "false"; };
+  }, [cardSession.busy, cardHandoffPreparing, liveRunState, liveConnected]);
 
   const stopSpeedGuard = () => {
     if (speedGuardTimerRef.current !== null) {
@@ -168,8 +206,11 @@ export default function AppV2Client() {
             ...refreshed.session.productLive,
             connected: true,
             snapshotConfirmed: true,
+            measuredAt: Date.now(),
           });
-        } else if (refreshed.status !== "incomplete") {
+        } else if (refreshed.status === "incomplete") {
+          setLastLiveSnapshot((previous) => previous ? { ...previous, snapshotConfirmed: false } : previous);
+        } else {
           throw new Error(refreshed.session.errorText ?? "LIVE veza je prekinuta.");
         }
       } catch (error) {
@@ -212,10 +253,14 @@ export default function AppV2Client() {
 
   useEffect(() => () => {
     stopSpeedGuard();
+    readAbortRef.current?.abort();
     void liveTransportRef.current?.close();
     liveTransportRef.current = null;
   }, []);
 
+  const zone = phoneTimeZone();
+  const projectedCard = useMemo(() => projectCardTimelineForPhone(cardState, zone, { now: new Date(clock) }), [cardState, zone, clock]);
+  const period = useMemo(() => calendarCardPeriod(projectedCard?.historyDays, { now: new Date(clock), timeZone: zone }), [projectedCard, clock, zone]);
   const state = useMemo(() => {
     const latestDiagnostics = liveSession.productLive ?? {};
     const stableLive = lastLiveSnapshot ?? { connected: false };
@@ -225,22 +270,22 @@ export default function AppV2Client() {
         ? { connected: false }
         : {
             ...stableLive,
-            connected: liveConnected,
+            connected: liveConnected && Number(stableLive.measuredAt ?? 0) + 30000 >= clock,
             attemptCode: latestDiagnostics.attemptCode ?? stableLive.attemptCode,
             telemetryAcceptedCount:
               latestDiagnostics.telemetryAcceptedCount ?? stableLive.telemetryAcceptedCount,
           },
-      card: cardState ?? {},
+      card: savedCardVisible && projectedCard ? { ...projectedCard, fortnightDrivingMinutes: period.minutes } : {},
       profile: {
         continuousThresholdMinutes: 270,
         continuousWarningMinutes: 255,
         workBreakThresholdMinutes: 360,
       },
-      localeLabel: "SR · Srpski",
+      localeLabel: locale.toUpperCase(),
     });
-  }, [cardState, lastLiveSnapshot, liveConnected, liveRunState, liveSession]);
+  }, [savedCardVisible, projectedCard, period, clock, locale, lastLiveSnapshot, liveConnected, liveRunState, liveSession]);
 
-  const restoredLabel = formatRestoreTime(capturedAtIso);
+  const restoredLabel = formatRestoreTime(capturedAtIso, locale);
 
   const runLiveRead = async () => {
     if (liveRunState === "running" || cardSession.busy || cardReadBusyRef.current) return;
@@ -262,6 +307,7 @@ export default function AppV2Client() {
         ...result.session.productLive,
         connected: true,
         snapshotConfirmed: result.status === "live",
+        measuredAt: Date.now(),
         deviceLabel: result.session.productLive.deviceLabel ?? transport.deviceLabel,
         attemptCode: result.attemptCode,
         telemetryAcceptedCount: result.telemetryAcceptedCount,
@@ -374,7 +420,8 @@ export default function AppV2Client() {
     setCardAttemptCode(null);
     setCardReadProgress(Object.freeze({ submessages: 0, byteLength: 0, complete: false }));
 
-    const wakeLock = await requestCardWakeLock();
+    const controller = new AbortController();
+    readAbortRef.current = controller;
     const result = await runBrowserAppV2GoldenCardRead({
       session: readingSession,
       storage: window.localStorage,
@@ -382,17 +429,22 @@ export default function AppV2Client() {
       transportOptions: {
         device: selectedCardDevice,
         disconnectOnFinish: true,
+        signal: controller.signal,
       },
       onProgress: (progress: CardReadProgress) => setCardReadProgress(progress),
       onTelemetryAttempt: (attemptCode: string) => setCardAttemptCode(attemptCode),
-    }).finally(async () => {
+    }).catch((error: unknown) => ({
+      status: "error",
+      session: failAppV2CardRead(readingSession, error instanceof Error ? error.message : undefined),
+    })).finally(async () => {
       cardReadBusyRef.current = false;
-      try { await wakeLock?.release(); } catch {}
+      readAbortRef.current = null;
     });
 
     if (result.session) setCardSession(result.session);
 
     if (result.status === "accepted" && result.session?.currentCard) {
+      setSavedCardVisible(true);
       setCardState(result.session.currentCard);
       setCapturedAtIso(result.session.capturedAtIso);
       setRestoreState("restored");
@@ -423,8 +475,25 @@ export default function AppV2Client() {
             cardReadProgress,
             cardAttemptCode,
             versionLine: formatTachoCommandVersionLine(),
+            locale,
+            onLocale: (next) => { setLocale(next); try { localStorage.setItem("tachocommand-locale", next); } catch {} },
+            zone,
+            periodLabel: period.start + " — " + period.end,
+            periodComplete: period.complete,
+            savedAvailable: Boolean(cardState) && !savedCardVisible,
+            screenAwake,
+            accepted: cardSession.phase === "accepted",
+            onShowSaved: () => setSavedCardVisible(true),
+            onForget: () => {
+              try { localStorage.removeItem(LAST_GOOD_CARD_SNAPSHOT_STORAGE_KEY); }
+              catch { return; }
+              setCardState(null); setCapturedAtIso(null); setSavedCardVisible(false);
+              setCardSession(createAppV2CardSession()); setRestoreState("empty"); setCardReadProgress(null);
+            },
+            onCancel: () => readAbortRef.current?.abort(),
             onConnect: runLiveRead,
             onReadCard: runCardRead,
+            onDisconnect: () => { void closePersistentLive(); },
           }}
         />
       </section>

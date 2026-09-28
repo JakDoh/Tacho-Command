@@ -337,3 +337,13 @@
 @media (prefers-reduced-motion: reduce) {
   .tcx-shell *, .tcx-shell *::before, .tcx-shell *::after { scroll-behavior: auto !important; transition: none !important; }
 }
+/* Audit candidate: readable content and keyboard controls on narrow screens. */
+.tcx-section { max-width: 1120px; margin: 0 auto; padding: 48px 24px; }
+.tcx-section p, .tcx-section li { max-width: 74ch; font-size: 17px; line-height: 1.7; color: #c8d6df; }
+.tcx-section li { margin-block: 12px; }
+.tcx-section details { border: 1px solid #385366; padding: 20px; border-radius: 16px; }
+.tcx-section summary { cursor: pointer; font-size: 19px; }
+.tcx-nav { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; justify-content: space-between; padding: 24px; }
+.tcx-nav select, .tcx-nav a { min-height: 44px; }
+.tcx-shell :focus-visible { outline: 3px solid #6de4f5; outline-offset: 4px; }
+.tcx-footer nav { display:flex; gap:24px; flex-wrap:wrap; }

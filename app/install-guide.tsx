@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import styles from "./install-guide.module.css";
 
 type Locale = "sr" | "en" | "de";
@@ -70,7 +70,8 @@ const copy = {
 
 function readLocale(): Locale {
   if (typeof window === "undefined") return "sr";
-  const saved = window.localStorage.getItem("tachocommand-locale");
+  let saved: string | null = null;
+  try { saved = window.localStorage.getItem("tachocommand-locale"); } catch {}
   if (saved === "sr" || saved === "en" || saved === "de") return saved;
   const language = window.navigator.language.toLowerCase();
   if (language.startsWith("de")) return "de";
@@ -89,6 +90,7 @@ export default function InstallGuide({ locale: explicitLocale }: InstallGuidePro
   const storedLocale = useSyncExternalStore(subscribeLocale, readLocale, () => "sr" as Locale);
   const locale = explicitLocale ?? storedLocale;
   const t = copy[locale];
+  const dialogRef = useRef<HTMLElement>(null);
   const [open, setOpen] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
@@ -116,11 +118,31 @@ export default function InstallGuide({ locale: explicitLocale }: InstallGuidePro
     };
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const dialog = dialogRef.current;
+    const focusable = () => Array.from(dialog?.querySelectorAll<HTMLElement>('button, a[href], select, [tabindex="0"]') ?? []);
+    focusable()[0]?.focus();
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); setOpen(false); }
+      if (event.key !== "Tab") return;
+      const items = focusable(), first = items[0], last = items.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => { document.removeEventListener("keydown", handleKey); previous?.focus(); };
+  }, [open]);
+
   const installNow = async () => {
     if (!installPrompt) return;
-    await installPrompt.prompt();
-    const choice = await installPrompt.userChoice;
-    if (choice.outcome === "accepted") setInstallPrompt(null);
+    const prompt = installPrompt;
+    setInstallPrompt(null);
+    try {
+      await prompt.prompt();
+      await prompt.userChoice;
+    } catch { setOpen(true); }
   };
 
   if (installed) return null;
@@ -132,7 +154,7 @@ export default function InstallGuide({ locale: explicitLocale }: InstallGuidePro
       </button>
       {open && (
         <div className={styles.backdrop} role="presentation" onClick={() => setOpen(false)}>
-          <section className={styles.sheet} role="dialog" aria-modal="true" aria-labelledby="tc-install-title" onClick={(event) => event.stopPropagation()}>
+          <section ref={dialogRef} className={styles.sheet} role="dialog" aria-modal="true" aria-labelledby="tc-install-title" onClick={(event) => event.stopPropagation()}>
             <div className={styles.handle} />
             <span className={styles.kicker}>{t.kicker}</span>
             <h2 id="tc-install-title">{t.title}</h2>

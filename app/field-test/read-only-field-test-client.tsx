@@ -213,7 +213,7 @@ export default function ReadOnlyFieldTestClient() {
     setTelemetryStatus("prikuplja se do kraja prolaza");
 
     const attemptCode = createTechnicalTelemetryAttemptCode(window.crypto);
-    setAttemptCode(attemptCode);
+    setAttemptCode(attemptCode ?? "");
     attemptCodeRef.current = attemptCode;
     const sessionId = window.crypto.randomUUID();
     sessionIdRef.current = sessionId;
@@ -421,7 +421,7 @@ export default function ReadOnlyFieldTestClient() {
         const durationMs = Math.round(performance.now() - startedAt);
         if (classifyFailure(label, response, durationMs)) return;
         const parsed = parseDriverMinutesDid(response ?? [], did);
-        if (parsed.valid) {
+        if (parsed.valid && parsed.minutes !== null) {
           setter(parsed.minutes * 60);
           addTechnicalEvent("did_read", "live_read", "positive", { did: label, durationMs });
           addLog("pass", `${label} rezultat: POSITIVE — ${formatMinutes(parsed.minutes)} (${parsed.minutes} min).`);

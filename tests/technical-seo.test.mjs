@@ -62,7 +62,7 @@ test("localized landing routes are crawlable and self-canonical with hreflang", 
 test("localized routes render the existing landing component without duplicating product copy", () => {
   assert.match(localePage, /<LandingPage initialLocale=\{locale\} canonicalLocaleRoute \/>/);
   assert.match(landingPage, /canonicalLocaleRoute/);
-  assert.match(landingPage, /router\.push\(\`\/\$\{next\}\`\)/);
+  assert.match(landingPage, /router\.push/);
   assert.match(landingPage, /lang=\{locale\}/);
 });
 

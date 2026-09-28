@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     template: "%s | TachoCommand",
   },
   description:
-    "TachoCommand čita podržanu Smart Tacho 2 driver karticu preko telefona, pretvara Gen2 v2 istoriju u jasan 56-day timeline i prikazuje vožnju, pauze, upozorenja i pravne rule profile bez nagađanja.",
+    "TachoCommand čita podržanu Smart Tacho 2 driver karticu preko telefona, prikazuje dostupnu istoriju do 56 dana, aktivnosti i potvrđene zbirne podatke.",
   manifest: "/manifest.webmanifest",
   applicationName: "TachoCommand",
   appleWebApp: {
@@ -31,7 +31,6 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
   viewportFit: "cover",
   themeColor: "#020304",
   colorScheme: "dark",

@@ -368,3 +368,12 @@
   .daySequenceRow > span { grid-column: 2; justify-self: start; margin-top: -6px; }
   .bottomNav button small { font-size: 10px; }
 }
+.content button:not(.historyRow) { min-height: 44px; padding: 10px 16px; border: 1px solid #587889; border-radius: 10px; color: #e8f3f8; background: #153344; font: inherit; cursor: pointer; }
+.content button:disabled { opacity: .5; cursor: default; }
+.shell select { min-height:44px; background:#153344; color:#fff; border:1px solid #587889; margin-left:8px; }
+.shell :focus-visible { outline:3px solid #6de4f5; outline-offset:3px; }
+.screenTopline { flex-wrap:wrap; }
+.content p { line-height:1.6; color:#b6cbd6; }
+.daySummaryGrid strong { display:block; }
+.bottomNav button { min-height:56px; overflow-wrap:anywhere; }
+@media (max-width: 420px) { .topbar { flex-wrap:wrap; } .daySequenceRow { flex-wrap:wrap; gap:8px; } }
