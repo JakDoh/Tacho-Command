@@ -55,16 +55,3 @@ jobs:
 
       - name: Deploy existing production Worker
         run: npx wrangler deploy --config dist/server/wrangler.json
-
-      - name: Preserve private application secrets
-        env:
-          ADMIN_ACCESS_KEY: ${{ secrets.ADMIN_ACCESS_KEY }}
-          ADMIN_SIGNING_SECRET: ${{ secrets.ADMIN_SIGNING_SECRET }}
-          TRIAL_SIGNING_SECRET: ${{ secrets.TRIAL_SIGNING_SECRET }}
-        run: |
-          test -n "$ADMIN_ACCESS_KEY"
-          test -n "$ADMIN_SIGNING_SECRET"
-          test -n "$TRIAL_SIGNING_SECRET"
-          printf '%s' "$ADMIN_ACCESS_KEY" | npx wrangler secret put ADMIN_ACCESS_KEY --config dist/server/wrangler.json
-          printf '%s' "$ADMIN_SIGNING_SECRET" | npx wrangler secret put ADMIN_SIGNING_SECRET --config dist/server/wrangler.json
-          printf '%s' "$TRIAL_SIGNING_SECRET" | npx wrangler secret put TRIAL_SIGNING_SECRET --config dist/server/wrangler.json
