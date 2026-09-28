@@ -37,3 +37,11 @@ Before promotion, record hardware/phone/browser/build and expected/actual outcom
 7. Installed Android PWA upgrade from the existing release, offline shell, API never served from cache.
 
 Operational work cannot be certified from repository code: distributed Cloudflare rate limiting, alerting/retention job execution, operator/legal identity and lawful-basis review, other DTCO models, iPhone support, DDD signature validation and infringement engine. These remain explicit gates or unsupported features, not completed claims. The candidate UI needs visual/device review; automated SSR is not a substitute for mobile interaction testing.
+
+## Review result
+
+Draft PR: https://github.com/canicboban-source/Tacho-Command/pull/96
+
+Isolated preview: https://tachocommand-audit-preview.canicboban.workers.dev/
+
+GitHub CI, quality gates and isolated preview deployment passed on the first candidate (274 tests, typecheck and build). Browser verification confirmed landing rendering, app entry, German language selection and the empty history state. Visual review caught and corrected CTA contrast, desktop hero alignment and the unknown-activity color. Follow-up commits must pass the same CI before review. Mobile hardware, real card data interaction and installed-PWA upgrade remain unverified.
