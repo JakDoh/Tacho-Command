@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import InstallGuide from "./install-guide";
 import TrialLauncher from "./trial-launcher";
 import { trackProductAnalytics } from "../lib/product-analytics-client.js";
 import { formatTachoCommandVersionLine } from "../lib/product-version.js";
@@ -235,6 +236,7 @@ export default function LandingPage({ initialLocale = "sr", canonicalLocaleRoute
           <div className="tcx-actions">
             <TrialLauncher label={t.start} loadingLabel={t.starting} errorLabel={t.trialError} className="tcx-primary" />
             <a className="tcx-secondary" href="#connect" onClick={() => void trackProductAnalytics("connection_guide_click", { locale, surface: "landing" })}>{t.guide}<span>↓</span></a>
+            <InstallGuide locale={locale} />
           </div>
           <div className="tcx-hero-trustline">
             <span>✓ Real DTCO 4.1a</span><span>✓ Complete card download</span><span>✓ Gen2 v2</span><span>✓ 56-day parser</span>

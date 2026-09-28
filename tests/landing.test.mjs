@@ -7,6 +7,9 @@ const landingStyles = await readFile(new URL("../app/landing-oled.css", import.m
 const launcher = await readFile(new URL("../app/trial-launcher.tsx", import.meta.url), "utf8");
 const appPage = await readFile(new URL("../app/app/page.tsx", import.meta.url), "utf8");
 const installGuide = await readFile(new URL("../app/install-guide.tsx", import.meta.url), "utf8");
+const installGuideStyles = await readFile(new URL("../app/install-guide.module.css", import.meta.url), "utf8");
+const rootPage = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+const localePage = await readFile(new URL("../app/[locale]/page.tsx", import.meta.url), "utf8");
 const manifest = JSON.parse(await readFile(new URL("../public/manifest.webmanifest", import.meta.url), "utf8"));
 const serviceWorker = await readFile(new URL("../public/sw.js", import.meta.url), "utf8");
 
@@ -60,6 +63,15 @@ test("beginner install guide documents Chrome home-screen installation and direc
 
 test("landing install button opens the native Chrome prompt in one tap when available", () => {
   assert.match(installGuide, /onClick=\{\(\) => installPrompt \? void installNow\(\) : setOpen\(true\)\}/);
+});
+
+test("install action lives in the landing hero and never sticks over page content", () => {
+  assert.match(landing, /<InstallGuide locale=\{locale\} \/>/);
+  assert.doesNotMatch(rootPage, /InstallGuide/);
+  assert.doesNotMatch(localePage, /InstallGuide/);
+  assert.doesNotMatch(installGuideStyles, /\.fab\{[^}]*position:fixed/);
+  assert.doesNotMatch(installGuideStyles, /\.fab\{[^}]*bottom:/);
+  assert.match(installGuide, /if \(installed\) return null/);
 });
 
 test("PWA identity opens the TachoCommand shell instead of the legacy field-test start URL", () => {

@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { isAdminHost } from "../lib/admin-host.js";
-import InstallGuide from "./install-guide";
 import LandingPage from "./landing-page";
 
 const title = "TachoCommand — Smart Tacho 2 driver-card cockpit";
@@ -70,7 +69,6 @@ export default async function Home() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
       />
       <LandingPage />
-      <InstallGuide />
     </>
   );
 }

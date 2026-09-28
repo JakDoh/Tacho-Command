@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import InstallGuide from "../install-guide";
 import LandingPage, { type Locale } from "../landing-page";
 
 const locales = ["sr", "en", "de"] as const satisfies readonly Locale[];
@@ -110,7 +109,6 @@ export default async function LocaleLandingPage({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
       />
       <LandingPage initialLocale={locale} canonicalLocaleRoute />
-      <InstallGuide />
     </>
   );
 }

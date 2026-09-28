@@ -5,6 +5,10 @@ import styles from "./install-guide.module.css";
 
 type Locale = "sr" | "en" | "de";
 
+type InstallGuideProps = Readonly<{
+  locale?: Locale;
+}>;
+
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
@@ -81,8 +85,9 @@ function subscribeLocale(onStoreChange: () => void) {
   return () => window.removeEventListener("storage", handler);
 }
 
-export default function InstallGuide() {
-  const locale = useSyncExternalStore(subscribeLocale, readLocale, () => "sr" as Locale);
+export default function InstallGuide({ locale: explicitLocale }: InstallGuideProps) {
+  const storedLocale = useSyncExternalStore(subscribeLocale, readLocale, () => "sr" as Locale);
+  const locale = explicitLocale ?? storedLocale;
   const t = copy[locale];
   const [open, setOpen] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
@@ -118,9 +123,7 @@ export default function InstallGuide() {
     if (choice.outcome === "accepted") setInstallPrompt(null);
   };
 
-  if (installed) {
-    return <div className={styles.installed} aria-live="polite">✓ {t.installed}</div>;
-  }
+  if (installed) return null;
 
   return (
     <>

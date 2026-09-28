@@ -47,6 +47,12 @@ jobs:
           if(c.name!=='tachocommand'||db.length!==1||db[0].database_name!=='tachocommand-prod'||db[0].database_id!=='0796463f-28ee-485a-8cc4-40b213e7ae26')
           process.exit(1);"
 
+      - name: Show pending production database migrations
+        run: npx wrangler d1 migrations list tachocommand-prod --remote --config wrangler.jsonc
+
+      - name: Apply versioned production database migrations
+        run: npx wrangler d1 migrations apply tachocommand-prod --remote --config wrangler.jsonc
+
       - name: Deploy existing production Worker
         run: npx wrangler deploy --config dist/server/wrangler.json
 
