@@ -19,6 +19,9 @@
     "AUTH_EMAIL_FROM": "TachoCommand <support@tachocommand.com>",
     "AUTH_PUBLIC_ORIGIN": "https://tachocommand.com"
   },
+  "secrets": {
+    "required": ["EMAIL_ID_SECRET", "RESEND_API_KEY"]
+  },
   "triggers": { "crons": ["17 3 * * *"] },
   "observability": {
     "enabled": true
