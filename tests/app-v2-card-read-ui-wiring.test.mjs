@@ -90,6 +90,13 @@ test("App V2 derives visible LIVE state from the retained transport", async () =
   assert.match(uiSource, /c\.phase\s*===\s*['"]connected['"]/);
 });
 
+test("a previous card error is hidden after a successful LIVE reconnect", async () => {
+  const source = await readFile(clientUrl, "utf8");
+  assert.match(source, /const visibleErrorText = productPhase === "error"/);
+  assert.match(source, /errorText: visibleErrorText/);
+  assert.doesNotMatch(source, /errorText: cardSession\.errorText \?\? liveSession\.errorText/);
+});
+
 test("App V2 keeps card transport details out of UI source", async () => {
   const source = await readFile(clientUrl, "utf8");
 

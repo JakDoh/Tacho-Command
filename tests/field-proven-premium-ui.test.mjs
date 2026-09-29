@@ -12,6 +12,10 @@ test('transport completion remains processing until the result is accepted',()=>
  const html=render(Ui,{state:createFieldProvenProductState(),controls:{...controls,phase:'card-reading',cardReadProgress:{complete:true,submessages:269,byteLength:67295}}});
  assert.match(html,/provera i čuvanje/);assert.match(html,/Prekini očitavanje/);assert.doesNotMatch(html,/Kartica obrađena i sačuvana/);assert.doesNotMatch(html,/96%/);
 });
+test('ordinary card read shows real packet and byte progress without diagnostics mode',()=>{
+ const html=render(Ui,{state:createFieldProvenProductState(),controls:{...controls,phase:'card-reading',diagnosticsEnabled:false,cardReadProgress:{complete:false,submessages:125,byteLength:31375}}});
+ assert.match(html,/Paketi: 125/);assert.match(html,/31\.4 KB/);assert.match(html,/aria-live="polite"/);assert.doesNotMatch(html,/Detaljna dijagnostika|GATT/);
+});
 test('accepted card shows final success independently of packet progress',()=>{
  assert.match(render(Ui,{state:createFieldProvenProductState(),controls:{...controls,accepted:true}}),/Kartica obrađena i sačuvana/);
 });

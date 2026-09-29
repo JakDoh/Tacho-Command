@@ -15,3 +15,9 @@ test('PWA identity remains unchanged',async()=>{
  const manifest=JSON.parse(await readFile(new URL('../public/manifest.webmanifest',import.meta.url),'utf8'));
  assert.equal(manifest.id,'/app');assert.equal(manifest.start_url,'/app');assert.equal(manifest.display,'standalone');
 });
+test('shared product version remains the final visible landing item',async()=>{
+ const source=await readFile(new URL('../app/landing-page.tsx',import.meta.url),'utf8');
+ const version=source.indexOf('className="tcx-version-line"');
+ const footerClose=source.indexOf('</footer>',version);
+ assert.ok(version>0);assert.ok(footerClose>version);assert.doesNotMatch(source.slice(version,footerClose),/<(?:p|nav|section|a)\b/);
+});
