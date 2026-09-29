@@ -1,4 +1,5 @@
 "use client";
+import { APP_LANGUAGES, type AppLocale } from "../../lib/product-app-copy.js";
 
 import type { CardTransportDiagnostic } from "../../lib/card-transport-diagnostic";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -95,7 +96,8 @@ function formatRestoreTime(value: string | null, locale: string) {
 }
 
 export default function AppV2Client() {
-  const [locale, setLocale] = useState<"sr" | "en" | "de">("sr");
+  const [diagnosticsEnabled, setDiagnosticsEnabled] = useState(false);
+  const [locale, setLocale] = useState<AppLocale>("sr");
   const [savedCardVisible, setSavedCardVisible] = useState(false);
   const [clock, setClock] = useState(() => Date.now());
   const [screenAwake, setScreenAwake] = useState(false);
@@ -119,10 +121,11 @@ export default function AppV2Client() {
   const cardReadBusyRef = useRef(false);
 
   useEffect(() => {
+    queueMicrotask(() => setDiagnosticsEnabled(new URLSearchParams(window.location.search).get("diagnostics") === "1"));
     try {
       const saved = localStorage.getItem("tachocommand-locale");
       const initial = saved ?? navigator.language.slice(0, 2);
-      if (initial === "en" || initial === "de" || initial === "sr") queueMicrotask(() => setLocale(initial));
+      if (Object.hasOwn(APP_LANGUAGES, initial)) queueMicrotask(() => setLocale(initial as AppLocale));
     } catch {}
     const tick = () => setClock(Date.now());
     const timer = window.setInterval(tick, 10000);
@@ -499,6 +502,7 @@ export default function AppV2Client() {
             cardReadProgress,
             cardAttemptCode,
             cardDiagnostic,
+            diagnosticsEnabled,
             versionLine: formatTachoCommandVersionLine(),
             locale,
             onLocale: (next) => { setLocale(next); try { localStorage.setItem("tachocommand-locale", next); } catch {} },

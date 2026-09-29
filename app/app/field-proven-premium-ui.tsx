@@ -1,6 +1,8 @@
 "use client";
 import type { CardTransportDiagnostic } from "../../lib/card-transport-diagnostic";
 import Link from "next/link";
+import { diagnosticCopy } from "../../lib/product-diagnostic-copy.js";
+import { appCopy as copy, APP_LANGUAGES, type AppLocale } from "../../lib/product-app-copy.js";
 import { analyzeCardBreaks } from "../../lib/card-break-analysis.js";
 import { useState } from "react";
 import styles from "./field-proven-premium-ui.module.css";
@@ -9,7 +11,7 @@ import type {
   FieldProvenHistoryDay,
 } from "../../lib/field-proven-product-state.js";
 export type ProductTab = "live" | "periods" | "history" | "attention" | "card";
-type Locale = "sr" | "en" | "de";
+type Locale = AppLocale;
 type ProductControls = {
   phase:
     | "idle"
@@ -27,6 +29,7 @@ type ProductControls = {
     complete: boolean;
   } | null;
   cardDiagnostic?: CardTransportDiagnostic | null;
+  diagnosticsEnabled?: boolean;
   cardAttemptCode: string | null;
   versionLine: string;
   locale: Locale;
@@ -44,200 +47,6 @@ type ProductControls = {
   onConnect: () => void;
   onReadCard: () => void;
 };
-const copy = {
-  sr: {
-    tabs: ["Pregled", "Periodi", "Istorija", "Pažnja", "Kartica"],
-    language: "Jezik",
-    live: "LIVE · potvrđeni podaci",
-    saved: "Sačuvani podaci · nisu LIVE",
-    offline: "Nema potvrđenih LIVE podataka",
-    safety:
-      "Povezivanje i očitavanje samo dok vozilo miruje. Tahograf ostaje merodavan.",
-    disconnect: "Prekini vezu",
-    connect: "Poveži tahograf",
-    connecting: "Povezivanje…",
-    connected: "Veza je uspostavljena",
-    prepare: "Priprema očitavanja…",
-    read: "Očitaj karticu",
-    reading: "Preuzimanje kartice…",
-    processing: "Podaci preneti · provera i čuvanje…",
-    success: "Kartica obrađena i sačuvana",
-    cancel: "Prekini očitavanje",
-    error:
-      "Očitavanje nije završeno. Proveri Bluetooth, karticu i dozvole, pa pokušaj ponovo.",
-    activity: "Aktivnost",
-    continuous: "Kontinuirana vožnja",
-    today: "Danas",
-    week: "Ove nedelje",
-    fortnight: "Prethodna + tekuća nedelja",
-    partial: "Period nije potpuno pokriven. Zbir nije potvrđen.",
-    breaks: "Pauza prijavljena sa tahografa",
-    breakNote:
-      "Prikazana vrednost nije posebna potvrda pravila radnog vremena.",
-    noAnalysis: "Analiza upozorenja nije dostupna",
-    noAnalysisText:
-      "Odsustvo nalaza nije potvrda da nema prekršaja. Proveri zvanični tahograf.",
-    showSaved: "Prikaži prethodno sačuvanu karticu",
-    savedNote:
-      "Sačuvana istorija nije potvrđena kao kartica trenutno povezanog vozača.",
-    history: "Istorija kartice",
-    empty: "Nema prikazane istorije. Očitaj karticu ili izaberi sačuvanu.",
-    days: "dana",
-    back: "Nazad",
-    until: "Sačuvano",
-    zone: "Vremenska zona telefona",
-    dayNote:
-      "Lokalni prikaz. Prazni intervali nisu potvrđen odmor; na dan promene sata lokalna vremena mogu se ponoviti ili preskočiti.",
-    drive: "Vožnja",
-    work: "Rad",
-    availability: "Raspoloživost",
-    rest: "Odmor",
-    unknown: "Nepoznato",
-    inserted: "Kartica ubačena",
-    removed: "Kartica izvađena",
-    driver: "Vozač",
-    card: "Kartica",
-    device: "Uređaj",
-    support: "Šifra pokušaja",
-    packets: "Paketi",
-    awake: "Ekran ostaje uključen",
-    noWake: "Automatsko zaključavanje ekrana nije sprečeno",
-    remove: "Obriši karticu sa ovog uređaja",
-    confirm: "Obrisati sačuvanu karticu i istoriju sa ovog uređaja?",
-    csv: "Izvezi pregled CSV",
-    exportNote: "Korisnički pregled, nije zvanični potpisani DDD.",
-    help: "Prvo povezivanje",
-    last: "Poslednji LIVE uzorak",
-  },
-  en: {
-    tabs: ["Overview", "Periods", "History", "Attention", "Card"],
-    language: "Language",
-    live: "LIVE · confirmed data",
-    saved: "Saved data · not LIVE",
-    offline: "No confirmed LIVE data",
-    safety:
-      "Connect and read only while stationary. The tachograph remains authoritative.",
-    disconnect: "Disconnect",
-    connect: "Connect tachograph",
-    connecting: "Connecting…",
-    connected: "Connection established",
-    prepare: "Preparing card read…",
-    read: "Read driver card",
-    reading: "Downloading card…",
-    processing: "Data received · validating and saving…",
-    success: "Card processed and saved",
-    cancel: "Cancel read",
-    error:
-      "Read did not complete. Check Bluetooth, card and permissions, then try again.",
-    activity: "Activity",
-    continuous: "Continuous driving",
-    today: "Today",
-    week: "This week",
-    fortnight: "Previous + current week",
-    partial: "Period coverage is incomplete. Total is unconfirmed.",
-    breaks: "Break reported by tachograph",
-    breakNote:
-      "This value is not a separate confirmation of working-time rules.",
-    noAnalysis: "Warning analysis unavailable",
-    noAnalysisText:
-      "No finding does not confirm the absence of infringements. Check the official tachograph.",
-    showSaved: "Show previously saved card",
-    savedNote:
-      "Saved history is not verified as belonging to the currently connected driver.",
-    history: "Card history",
-    empty: "No history shown. Read a card or select saved data.",
-    days: "days",
-    back: "Back",
-    until: "Saved",
-    zone: "Phone time zone",
-    dayNote:
-      "Local display. Gaps are not confirmed rest; local times may repeat or skip on daylight-saving days.",
-    drive: "Driving",
-    work: "Work",
-    availability: "Availability",
-    rest: "Rest",
-    unknown: "Unknown",
-    inserted: "Card inserted",
-    removed: "Card removed",
-    driver: "Driver",
-    card: "Card",
-    device: "Device",
-    support: "Attempt code",
-    packets: "Packets",
-    awake: "Screen wake lock active",
-    noWake: "Automatic screen locking is not prevented",
-    remove: "Delete card from this device",
-    confirm: "Delete the saved card and history from this device?",
-    csv: "Export CSV overview",
-    exportNote: "User overview, not an official signed DDD file.",
-    help: "First connection",
-    last: "Last LIVE sample",
-  },
-  de: {
-    tabs: ["Übersicht", "Zeiträume", "Verlauf", "Hinweise", "Karte"],
-    language: "Sprache",
-    live: "LIVE · bestätigte Daten",
-    saved: "Gespeicherte Daten · nicht LIVE",
-    offline: "Keine bestätigten LIVE-Daten",
-    safety:
-      "Nur bei stehendem Fahrzeug verbinden und auslesen. Der Tachograph bleibt maßgeblich.",
-    disconnect: "Verbindung trennen",
-    connect: "Tachograph verbinden",
-    connecting: "Verbindung wird hergestellt…",
-    connected: "Verbindung hergestellt",
-    prepare: "Auslesen wird vorbereitet…",
-    read: "Fahrerkarte auslesen",
-    reading: "Karte wird heruntergeladen…",
-    processing: "Daten empfangen · prüfen und speichern…",
-    success: "Karte verarbeitet und gespeichert",
-    cancel: "Auslesen abbrechen",
-    error:
-      "Auslesen nicht abgeschlossen. Bluetooth, Karte und Berechtigungen prüfen und erneut versuchen.",
-    activity: "Tätigkeit",
-    continuous: "Ununterbrochene Lenkzeit",
-    today: "Heute",
-    week: "Diese Woche",
-    fortnight: "Vorherige + aktuelle Woche",
-    partial: "Zeitraum nicht vollständig erfasst. Summe unbestätigt.",
-    breaks: "Vom Tachograph gemeldete Pause",
-    breakNote: "Dieser Wert bestätigt nicht gesondert die Arbeitszeitregeln.",
-    noAnalysis: "Warnungsanalyse nicht verfügbar",
-    noAnalysisText:
-      "Kein Befund bestätigt nicht die Abwesenheit von Verstößen. Offiziellen Tachograph prüfen.",
-    showSaved: "Zuvor gespeicherte Karte anzeigen",
-    savedNote:
-      "Der gespeicherte Verlauf ist nicht als Karte des aktuell verbundenen Fahrers bestätigt.",
-    history: "Kartenverlauf",
-    empty:
-      "Kein Verlauf angezeigt. Karte auslesen oder gespeicherte Daten auswählen.",
-    days: "Tage",
-    back: "Zurück",
-    until: "Gespeichert",
-    zone: "Zeitzone des Telefons",
-    dayNote:
-      "Lokale Anzeige. Lücken sind keine bestätigte Ruhezeit; bei Zeitumstellung können Uhrzeiten wiederholt werden oder entfallen.",
-    drive: "Lenken",
-    work: "Arbeit",
-    availability: "Bereitschaft",
-    rest: "Ruhe",
-    unknown: "Unbekannt",
-    inserted: "Karte eingesteckt",
-    removed: "Karte entnommen",
-    driver: "Fahrer",
-    card: "Karte",
-    device: "Gerät",
-    support: "Versuchscode",
-    packets: "Pakete",
-    awake: "Bildschirmsperre verhindert",
-    noWake: "Automatische Bildschirmsperre wird nicht verhindert",
-    remove: "Karte von diesem Gerät löschen",
-    confirm: "Gespeicherte Karte und Verlauf von diesem Gerät löschen?",
-    csv: "CSV-Übersicht exportieren",
-    exportNote: "Benutzerübersicht, keine offiziell signierte DDD-Datei.",
-    help: "Erste Verbindung",
-    last: "Letzte LIVE-Abfrage",
-  },
-} as const;
 function minutes(value: number | null) {
   return value === null
     ? "—"
@@ -288,11 +97,16 @@ export default function FieldProvenPremiumUi({
   const [tab, setTab] = useState<ProductTab>("live");
   const [selected, setSelected] = useState<string | null>(null);
   const t = copy[c.locale];
+  const d = diagnosticCopy[c.locale];
   const analysis = analyzeCardBreaks(state.historyDays);
   const warningCopy = {
     sr: {title: "Provera pauza", scope: "Standardno pravilo: 4 h 30 min vožnje; pauza 45 min ili najmanje 15 + 30 min, tim redom. Nalazi važe za taj režim. Posebni režimi prevoza, radno vreme i dnevni/nedeljni odmori nisu provereni.", none: "Nema pronađenog prekoračenja po ovoj proveri. To nije potvrda da nema drugih prekršaja.", gap: "Nepotpuni ili vremenski nejasni podaci: deo istorije nije moguće proveriti.", excess: "Prekoračenje", count: "Periodi za proveru"},
     en: {title: "Driving break check", scope: "Standard rule: 4 h 30 min driving; 45 min break or at least 15 + 30 min, in that order. Findings apply to this regime. Special transport regimes, working time and daily/weekly rest are not checked.", none: "No exceedance found by this check. This does not confirm the absence of other infringements.", gap: "Incomplete or ambiguous times: part of the history could not be checked.", excess: "Excess", count: "Periods to review"},
     de: {title: "Lenkpausenprüfung", scope: "Standardregel: 4 Std. 30 Min. Lenkzeit; 45 Min. Pause oder mindestens 15 + 30 Min., in dieser Reihenfolge. Die Ergebnisse gelten für diese Regel. Sonderregelungen, Arbeitszeit sowie tägliche/wöchentliche Ruhezeiten werden nicht geprüft.", none: "Keine Überschreitung bei dieser Prüfung gefunden. Andere Verstöße sind damit nicht ausgeschlossen.", gap: "Unvollständige oder unklare Zeitangaben: Ein Teil des Verlaufs konnte nicht geprüft werden.", excess: "Überschreitung", count: "Zu prüfende Zeiträume"},
+    ru: {"title": "Проверка перерывов", "scope": "Стандартное правило: 4 ч 30 мин вождения; перерыв 45 мин или минимум 15 + 30 мин в этом порядке. Выводы относятся к этому режиму. Особые режимы перевозок, рабочее время, ежедневный и еженедельный отдых не проверяются.", "none": "Эта проверка не выявила превышений. Это не исключает других нарушений.", "gap": "Неполные или неоднозначные данные: часть истории не удалось проверить.", "excess": "Превышение", "count": "Периоды для проверки"},
+    bg: {"title": "Проверка на прекъсванията", "scope": "Стандартно правило: 4 ч 30 мин управление; прекъсване 45 мин или поне 15 + 30 мин в този ред. Резултатите важат за този режим. Специалните режими, работното време и дневната/седмичната почивка не се проверяват.", "none": "Тази проверка не откри превишения. Това не изключва други нарушения.", "gap": "Непълни или неясни данни: част от историята не може да се провери.", "excess": "Превишение", "count": "Периоди за проверка"},
+    ro: {"title": "Verificarea pauzelor", "scope": "Regula standard: 4 h 30 min de conducere; pauză de 45 min sau cel puțin 15 + 30 min, în această ordine. Rezultatele se aplică acestui regim. Regimurile speciale, timpul de lucru și repausul zilnic/săptămânal nu sunt verificate.", "none": "Această verificare nu a identificat depășiri. Aceasta nu exclude alte încălcări.", "gap": "Date incomplete sau ore ambigue: o parte din istoric nu a putut fi verificată.", "excess": "Depășire", "count": "Perioade de verificat"},
+    hu: {"title": "Vezetési szünetek ellenőrzése", "scope": "Általános szabály: 4 óra 30 perc vezetés; 45 perc szünet vagy legalább 15 + 30 perc, ebben a sorrendben. Az eredmények erre a szabályra vonatkoznak. A különleges szabályok, a munkaidő és a napi/heti pihenő nincs ellenőrizve.", "none": "Az ellenőrzés nem talált túllépést. Ez nem zárja ki más szabálysértések lehetőségét.", "gap": "Hiányos vagy bizonytalan időadatok: az előzmények egy része nem ellenőrizhető.", "excess": "Túllépés", "count": "Ellenőrizendő időszakok"},
   }[c.locale];
   const busy =
     c.phase === "card-reading" ||
@@ -351,9 +165,7 @@ export default function FieldProvenPremiumUi({
             value={c.locale}
             onChange={(e) => c.onLocale(e.target.value as Locale)}
           >
-            <option value="sr">SR</option>
-            <option value="en">EN</option>
-            <option value="de">DE</option>
+            {Object.entries(APP_LANGUAGES).map(([code, name]) => <option key={code} value={code}>{name}</option>)}
           </select>
         </label>
       </header>
@@ -361,7 +173,7 @@ export default function FieldProvenPremiumUi({
         <div className={styles.screenTopline} role="status" aria-live="polite">
           <strong>{status}</strong>
         </div>
-        <p>{t.safety}</p>
+        <p className={styles.safetyNote}>{t.safety}</p>
         {c.errorText && (
           <p role="alert">{c.locale === "sr" ? c.errorText : t.error}</p>
         )}
@@ -395,19 +207,19 @@ export default function FieldProvenPremiumUi({
                 {t.last}: {state.lastLiveReadLabel ?? "—"}
               </small>
             </section>
-            {metrics.map(([label, value]) => (
+            <div className={styles.metricsGrid}>{metrics.map(([label, value]) => (
               <section className={styles.metricPanel} key={label}>
                 <div className={styles.metricRow}>
                   <span>{label}</span>
                   <strong>{minutes(value)}</strong>
                 </div>
               </section>
-            ))}
-            <p>{t.breakNote}</p>
+            ))}</div>
+            <p className={styles.subtleNote}>{t.breakNote}</p>
             <section className={styles.cardActionPanel}>
               <div>
                 <strong>{c.accepted ? t.success : t.read}</strong>
-                {c.cardReadProgress && (
+                {c.diagnosticsEnabled && c.cardReadProgress && (
                   <p>
                     {t.packets}: {c.cardReadProgress.submessages} ·{" "}
                     {(c.cardReadProgress.byteLength / 1000).toFixed(1)} KB
@@ -419,22 +231,25 @@ export default function FieldProvenPremiumUi({
                     <p>{c.screenAwake ? t.awake : t.noWake}</p>
                   </>
                 )}
-                {c.cardDiagnostic && (
-                  <div aria-live="polite">
-                    <p>{c.locale === "sr" ? "Faza" : c.locale === "de" ? "Phase" : "Stage"}: <code>{c.cardDiagnostic.stage}</code></p>
-                    <p>{c.locale === "sr" ? "Poslednja potvrđena faza" : c.locale === "de" ? "Zuletzt bestätigt" : "Last confirmed stage"}: <code>{c.cardDiagnostic.lastConfirmedStage}</code></p>
-                    {c.cardDiagnostic.errorCode && <p role="alert">{c.locale === "sr" ? "Razlog prekida" : c.locale === "de" ? "Abbruchgrund" : "Stop reason"}: <code>{c.cardDiagnostic.errorCode}</code></p>}
-                    <p>{c.locale === "sr" ? "Vreme do poslednjeg događaja" : c.locale === "de" ? "Zeit bis zum letzten Ereignis" : "Time to last event"}: {(c.cardDiagnostic.elapsedMs / 1000).toFixed(1)} s · Pending: {c.cardDiagnostic.pendingResponses}</p>
-                    {c.cardDiagnostic.packetIdleMs != null && <p>{c.locale === "sr" ? "Bez novog paketa" : c.locale === "de" ? "Ohne neues Paket" : "Since last packet"}: {(c.cardDiagnostic.packetIdleMs / 1000).toFixed(0)} s / {(c.cardDiagnostic.cardIdleTimeoutMs ?? 60000) / 1000} s</p>}
-                    {!c.cardDiagnostic.errorCode && (c.cardDiagnostic.packetIdleMs ?? 0) >= 10000 && <p role="status">{c.locale === "sr" ? "Prenos čeka sledeći paket." : c.locale === "de" ? "Übertragung wartet auf das nächste Paket." : "Transfer is waiting for the next packet."}</p>}
-                    {c.cardDiagnostic.events && <details>
-                      <summary>{c.locale === "sr" ? "Detaljna dijagnostika" : c.locale === "de" ? "Detaillierte Diagnose" : "Detailed diagnostics"}</summary>
-                      <p>GATT: {String(c.cardDiagnostic.connected)} · Credits: {c.cardDiagnostic.serverCredits} · Queue: {c.cardDiagnostic.queuedWrites}</p>
-                      {c.cardDiagnostic.failureState && <p>GATT @ error: {String(c.cardDiagnostic.failureState.connected)} · Write @ error: {c.cardDiagnostic.failureState.activeWrite ?? "—"}</p>}
-                      <p>Write: {c.cardDiagnostic.activeWrite ?? "—"} · ACK: {c.cardDiagnostic.ackRequested ?? "—"} / {c.cardDiagnostic.ackWritten ?? "—"}</p>
-                      <p>Notifications: {c.cardDiagnostic.notificationCount} · Partial: {c.cardDiagnostic.partialMessages} · Ignored: {c.cardDiagnostic.ignoredMessages}</p>
-                      {c.cardDiagnostic.handoff && <p>LIVE close: {c.cardDiagnostic.handoff.closeMs} ms · Settle: {c.cardDiagnostic.handoff.settleMs} ms</p>}
-                      <p>{c.locale === "sr" ? "ACK označava zahtev i završen Bluetooth upis; ne potvrđuje da ga je tahograf obradio." : c.locale === "de" ? "ACK zeigt Anforderung und abgeschlossenen Bluetooth-Schreibvorgang, nicht die Verarbeitung im Tachographen." : "ACK shows request and completed Bluetooth write, not tachograph processing."}</p>
+                {!c.diagnosticsEnabled && c.phase === "card-reading" && (c.cardDiagnostic?.packetIdleMs ?? 0) >= 10000 && <p role="status">{d.stalled}</p>}
+                {c.diagnosticsEnabled && c.cardDiagnostic && (
+                  <div>
+                    {c.cardDiagnostic.errorCode && <p role="alert">{d.stop}: <code>{c.cardDiagnostic.errorCode}</code></p>}
+                    {!c.cardDiagnostic.errorCode && (c.cardDiagnostic.packetIdleMs ?? 0) >= 10000 && <p role="status">{d.stalled}</p>}
+                    <details className={styles.diagnosticDetails}><summary>{d.details}</summary>
+                    <p>{d.stage}: <code>{c.cardDiagnostic.stage}</code></p>
+                    <p>{d.lastStage}: <code>{c.cardDiagnostic.lastConfirmedStage}</code></p>
+                    {c.cardDiagnostic.errorCode && <p role="alert">{d.stop}: <code>{c.cardDiagnostic.errorCode}</code></p>}
+                    <p>{d.elapsed}: {(c.cardDiagnostic.elapsedMs / 1000).toFixed(1)} s · {d.pending}: {c.cardDiagnostic.pendingResponses}</p>
+                    {c.cardDiagnostic.packetIdleMs != null && <p>{d.idle}: {(c.cardDiagnostic.packetIdleMs / 1000).toFixed(0)} s / {(c.cardDiagnostic.cardIdleTimeoutMs ?? 60000) / 1000} s</p>}
+                    {!c.cardDiagnostic.errorCode && (c.cardDiagnostic.packetIdleMs ?? 0) >= 10000 && <p role="status">{d.stalled}</p>}
+                    {c.cardDiagnostic.events && <div>
+                      <p>GATT: {String(c.cardDiagnostic.connected)} · {d.credits}: {c.cardDiagnostic.serverCredits} · {d.queue}: {c.cardDiagnostic.queuedWrites}</p>
+                      {c.cardDiagnostic.failureState && <p>GATT ({d.error}): {String(c.cardDiagnostic.failureState.connected)} · {d.write} ({d.error}): {c.cardDiagnostic.failureState.activeWrite ?? "—"}</p>}
+                      <p>{d.write}: {c.cardDiagnostic.activeWrite ?? "—"} · ACK: {c.cardDiagnostic.ackRequested ?? "—"} / {c.cardDiagnostic.ackWritten ?? "—"}</p>
+                      <p>{d.notifications}: {c.cardDiagnostic.notificationCount} · {d.partial}: {c.cardDiagnostic.partialMessages} · {d.ignored}: {c.cardDiagnostic.ignoredMessages}</p>
+                      {c.cardDiagnostic.handoff && <p>{d.close}: {c.cardDiagnostic.handoff.closeMs} ms · {d.settle}: {c.cardDiagnostic.handoff.settleMs} ms</p>}
+                      <p>{d.ack}</p>
                       <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: "0.75rem" }}>{c.cardDiagnostic.events.slice(-20).map(event => `${(event.ms / 1000).toFixed(1)}s ${event.event} ${Object.entries(event).filter(([key]) => key !== "ms" && key !== "event").map(([key, value]) => `${key}=${value}`).join(" ")}`).join("\n")}</pre>
                       <button onClick={() => {
                         const blob = new Blob([JSON.stringify({ schema: 1, version: c.versionLine, attemptCode: c.cardAttemptCode, diagnostic: c.cardDiagnostic }, null, 2)], { type: "application/json" });
@@ -443,12 +258,13 @@ export default function FieldProvenPremiumUi({
                         link.href = url; link.download = `tachocommand-diagnostic-${c.cardAttemptCode ?? "handoff"}.json`;
                         document.body.appendChild(link); link.click(); link.remove();
                         window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-                      }}>{c.locale === "sr" ? "Preuzmi dijagnostiku" : c.locale === "de" ? "Diagnose herunterladen" : "Download diagnostics"}</button>
-                    </details>}
-                    {c.cardDiagnostic.stage === "waiting_first_packet" && !c.cardDiagnostic.errorCode && <p>{c.locale === "sr" ? "Čekanje prvog paketa, najviše" : c.locale === "de" ? "Warten auf erstes Paket, maximal" : "Waiting for first packet, maximum"} {c.cardDiagnostic.firstPacketTimeoutMs / 1000} s</p>}
+                      }}>{d.download}</button>
+                    </div>}
+                    {c.cardDiagnostic.stage === "waiting_first_packet" && !c.cardDiagnostic.errorCode && <p>{d.first} {c.cardDiagnostic.firstPacketTimeoutMs / 1000} s</p>}
+                    </details>
                   </div>
                 )}
-                {c.cardAttemptCode && (
+                {c.diagnosticsEnabled && c.cardAttemptCode && (
                   <p>
                     {t.support}: {c.cardAttemptCode}
                   </p>
@@ -465,7 +281,7 @@ export default function FieldProvenPremiumUi({
                 </button>
               )}
             </section>
-            <a href={"/" + c.locale + "#connect"}>{t.help}</a>
+            <a href={"/" + (["sr", "en", "de"].includes(c.locale) ? c.locale : "en") + "#connect"}>{t.help}</a>
           </div>
         )}
         {tab === "periods" && (
@@ -663,7 +479,7 @@ export default function FieldProvenPremiumUi({
               setSelected(null);
             }}
           >
-            {t.tabs[i]}
+            <span className={styles.navIcon} aria-hidden="true">{["◴", "▥", "≡", "!", "▤"][i]}</span><small>{t.tabs[i]}</small>
           </button>
         ))}
       </nav>

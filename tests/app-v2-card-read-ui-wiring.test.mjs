@@ -84,8 +84,9 @@ test("App V2 derives visible LIVE state from the retained transport", async () =
 
   assert.match(clientSource, /setLiveConnected\(false\)/);
   assert.match(clientSource, /liveConnected\s*\? "connected"/);
-  assert.match(uiSource, /Veza je uspostavljena/);
-  assert.match(uiSource, /LIVE · potvrđeni podaci/);
+  const { appCopy } = await import("../lib/product-app-copy.js");
+  assert.equal(appCopy.sr.connected, "Veza je uspostavljena");
+  assert.equal(appCopy.sr.live, "LIVE · potvrđeni podaci");
   assert.match(uiSource, /c\.phase\s*===\s*['"]connected['"]/);
 });
 

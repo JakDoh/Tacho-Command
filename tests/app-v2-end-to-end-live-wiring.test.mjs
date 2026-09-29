@@ -47,7 +47,8 @@ test("app v2 wires the browser transport factory through the telemetry bridge an
 
 test("premium UI distinguishes active LIVE from the last confirmed snapshot", async () => {
   const ui = await readFile(new URL("../app/app/field-proven-premium-ui.tsx", import.meta.url), "utf8");
-  assert.ok(ui.includes("Sačuvani podaci · nisu LIVE"));
+  const { appCopy } = await import("../lib/product-app-copy.js");
+  assert.equal(appCopy.sr.saved,"Sačuvani podaci · nisu LIVE");
   assert.ok(ui.includes("state.liveSnapshotAvailable"));
-  assert.ok(ui.includes("Nema potvrđenih LIVE podataka"));
+  assert.equal(appCopy.sr.offline,"Nema potvrđenih LIVE podataka");
 });

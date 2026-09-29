@@ -97,3 +97,27 @@ Local validation against the supplied CSV found 277, 272 and 301 driving minutes
 in the three flagged periods, including the user-reported September 21 case.
 Synthetic regression tests cover split-break order, exact limit, short stops,
 rest fragments, midnight, gaps and overlap. Firmware/protocol unchanged.
+
+### 2026-09-29 — beta.1 presentation and language pass
+
+App dictionaries now cover Serbian, English, German, Russian, Bulgarian,
+Romanian and Hungarian, with persisted selection, browser-language initialization,
+localized primary actions, break-analysis scope and diagnostic labels. No fallback
+English primary-action dictionaries for the four added languages. The first-pairing
+web guide remains SR/EN/DE; additional app languages link to the English guide.
+Native-speaker review of new translations is still appropriate before paid release.
+
+Reworked landing and compact mobile app typography, card density, navigation and
+mint/graphite palette. Landing illustration is explicitly labelled as illustrative;
+no invented live values. Landing remains in three languages, app in seven.
+Ordinary customers see no packet/debug panel or attempt code. The explicit local
+support view is /app?diagnostics=1; this is a display toggle, not access control or
+server data access. Friendly stalled-transfer feedback remains visible normally.
+Bluetooth transport, timers, parsing and break calculations unchanged.
+
+Landing describes a free three-day beta with no payment card or automatic charge.
+This is a test-program description, not an implemented account-expiry/paywall.
+No payment onboarding or email collection has been enabled. Existing minimal
+technical telemetry has not been expanded; the isolated preview still has no DB,
+so automatic report receipt must be validated on an appropriate backed environment
+before a public beta. No claim of irreversible anonymization is made.

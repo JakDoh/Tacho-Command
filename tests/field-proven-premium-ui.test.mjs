@@ -24,16 +24,36 @@ test('saved history requires explicit selection',()=>{
  assert.match(html,/Prikaži prethodno sačuvanu karticu/);assert.match(html,/nije potvrđena kao kartica/);
 });
 test('failed zero-packet read retains last confirmed phase and diagnostic code',()=>{
- const html=render(Ui,{state:createFieldProvenProductState(),controls:{...controls,phase:'error',cardDiagnostic:{stage:'waiting_first_packet',lastConfirmedStage:'request_upload',errorCode:'first_packet_timeout',elapsedMs:90000,packets:0,bytes:0,pendingResponses:3,firstPacketTimeoutMs:90000}}});
+ const html=render(Ui,{state:createFieldProvenProductState(),controls:{...controls,phase:'error',diagnosticsEnabled:true,cardDiagnostic:{stage:'waiting_first_packet',lastConfirmedStage:'request_upload',errorCode:'first_packet_timeout',elapsedMs:90000,packets:0,bytes:0,pendingResponses:3,firstPacketTimeoutMs:90000}}});
  assert.match(html,/request_upload/);assert.match(html,/first_packet_timeout/);assert.match(html,/90\.0/);assert.doesNotMatch(html,/<progress/);
 });
 
 test('detailed diagnostics expose stalled progress and a local export action',()=>{
- const html=render(Ui,{state:createFieldProvenProductState(),controls:{...controls,phase:'card-reading',cardDiagnostic:{stage:'receiving',lastConfirmedStage:'receiving',errorCode:null,elapsedMs:80000,packets:107,bytes:26000,pendingResponses:1,firstPacketTimeoutMs:90000,cardIdleTimeoutMs:60000,packetIdleMs:11000,ackRequested:108,ackWritten:108,events:[{ms:69000,event:'ack:write_complete',counter:108}]}}});
+ const html=render(Ui,{state:createFieldProvenProductState(),controls:{...controls,phase:'card-reading',diagnosticsEnabled:true,cardDiagnostic:{stage:'receiving',lastConfirmedStage:'receiving',errorCode:null,elapsedMs:80000,packets:107,bytes:26000,pendingResponses:1,firstPacketTimeoutMs:90000,cardIdleTimeoutMs:60000,packetIdleMs:11000,ackRequested:108,ackWritten:108,events:[{ms:69000,event:'ack:write_complete',counter:108}]}}});
  assert.match(html,/Prenos čeka sledeći paket/);assert.match(html,/Preuzmi dijagnostiku/);assert.match(html,/ack:write_complete/);assert.match(html,/counter=108/);
 });
 
 test('historical break finding is visible on overview without opening Attention',()=>{
  const state={...createFieldProvenProductState(),historyDays:[{dateIso:'2026-09-21',segments:[{kind:'drive',startMinute:760,endMinute:1037,minutes:277}]}]};
  assert.match(render(Ui,{state,controls}),/Periodi za proveru: 1/);
+});
+
+test('customer interface does not expose protocol diagnostics',()=>{
+ const html=render(Ui,{state:createFieldProvenProductState(),controls:{...controls,cardAttemptCode:'TC-ABCDEF',cardDiagnostic:{stage:'receiving',events:[]}}});
+ assert.doesNotMatch(html,/GATT|TC-ABCDEF|Detaljna dijagnostika/);
+});
+test('all requested app languages render translated primary actions',()=>{
+ for(const [locale,action] of [['ru','Подключить тахограф'],['bg','Свържи тахограф'],['ro','Conectează tahograful'],['hu','Menetíró csatlakoztatása']]) {
+ const html=render(Ui,{state:createFieldProvenProductState(),controls:{...controls,locale}});
+ assert.ok(html.includes(action));assert.doesNotMatch(html,/Connect tachograph/);
+ }
+});
+test('all seven app dictionaries contain the same complete key set',async()=>{
+ const {appCopy,APP_LANGUAGES}=await import('../lib/product-app-copy.js');
+ const expected=Object.keys(appCopy.en).sort();
+ for(const locale of Object.keys(APP_LANGUAGES)) {
+ assert.deepEqual(Object.keys(appCopy[locale]).sort(),expected);
+ assert.equal(appCopy[locale].tabs.length,5);
+ for(const value of Object.values(appCopy[locale])) assert.ok(Array.isArray(value)?value.every(Boolean):value.length>0);
+ }
 });

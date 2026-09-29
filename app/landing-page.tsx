@@ -7,7 +7,7 @@ import { formatTachoCommandVersionLine } from "../lib/product-version.js";
 export type Locale = "sr" | "en" | "de";
 const copy = {
   sr: {
-    title: "Tvoja kartica. Jasan pregled na telefonu.",
+    title: "Tvoj dan za volanom. Jasno, na telefonu.",
     body: "Očitaj podržanu karticu vozača preko Bluetooth veze i pregledaj dostupnu istoriju do 56 dana. Podaci kartice ostaju na tvom uređaju.",
     open: "Otvori beta aplikaciju",
     guide: "Prvo povezivanje",
@@ -16,7 +16,7 @@ const copy = {
     features: [
       [
         "Očitaj karticu",
-        "Provereni tok za VDO DTCO 4.1a, karticu u slotu 1 i Android Chrome.",
+        "Provereni tok za VDO DTCO 4.1 i 4.1a, karticu u slotu 1 i Android Chrome.",
       ],
       [
         "Pregledaj dane",
@@ -47,21 +47,21 @@ const copy = {
     trouble:
       "Ako uređaj nije vidljiv, proveri Bluetooth, Nearby devices dozvolu, ITS i slot kartice. Ne briši postojeće uparivanje kao prvi korak.",
     trust: "Jasno šta je potvrđeno",
-    tested: "FIELD PROVEN · VDO DTCO 4.1a · Android Chrome · Slot 1",
+    tested: "FIELD PROVEN · VDO DTCO 4.1 / 4.1a · Android Chrome · Slot 1",
     scope:
-      "Dokazani download nije potvrda podrške za svaki model. Drugi tahografi i iPhone/Safari nisu potvrđeni za ovu putanju. Kriptografska validacija DDD potpisa i analiza prekršaja nisu dostupne funkcije ovog kandidata.",
+      "Dokazani download nije potvrda podrške za svaki model. Drugi tahografi i iPhone/Safari nisu potvrđeni za ovu putanju. Dostupna je osnovna provera pauza po standardnom pravilu 4 h 30 min. To nije potpuna analiza prekršaja niti provera DDD potpisa.",
     privacy: "Podaci i privatnost",
     privacyText:
       "Kartična istorija se obrađuje i čuva lokalno. Ograničena tehnička telemetrija služi dijagnostici; ne sadrži ime vozača, raw karticu ili lokaciju. Detalji su u politici privatnosti.",
     beta: "Beta koju proveravamo zajedno",
     betaText:
-      "Beta ulaz je direktan, bez obećanja trodnevne licence ili aktivne kupovine. Vremena proveri na zvaničnom tahografu. Kandidat zahteva novu terensku proveru pre objavljivanja.",
+      "Besplatna beta: tri dana zajedničkog testiranja. Bez platne kartice i automatske naplate. Vremena proveri na zvaničnom tahografu.",
     footer:
       "TachoCommand je pomoćni pregled. Tahograf, kartica i važeći propisi ostaju merodavni.",
     legal: ["Privatnost", "Uslovi", "Impressum"],
   },
   en: {
-    title: "Your driver card. Clear on your phone.",
+    title: "Your day behind the wheel. Clear at a glance.",
     body: "Read a supported driver card over Bluetooth and review up to 56 days of available history. Card data stays on your device.",
     open: "Open beta app",
     guide: "First connection",
@@ -101,15 +101,15 @@ const copy = {
     trouble:
       "If the device is missing, check Bluetooth, Nearby devices permission, ITS and the card slot. Do not delete existing pairing as the first step.",
     trust: "Clear about what is proven",
-    tested: "FIELD PROVEN · VDO DTCO 4.1a · Android Chrome · Slot 1",
+    tested: "FIELD PROVEN · VDO DTCO 4.1 / 4.1a · Android Chrome · Slot 1",
     scope:
-      "A proven download does not establish support for every model. Other tachographs and iPhone/Safari are not confirmed for this path. DDD signature validation and infringement analysis are not available in this candidate.",
+      "A proven download does not establish support for every model. Other tachographs and iPhone/Safari are not confirmed for this path. A basic driving-break check under the standard 4 h 30 min rule is available. It is not a full infringement analysis or DDD signature verification.",
     privacy: "Data and privacy",
     privacyText:
       "Card history is processed and stored locally. Limited technical telemetry supports diagnostics; it excludes driver names, raw card data and location. See the privacy policy for details.",
     beta: "A beta we validate together",
     betaText:
-      "Direct beta access, without a three-day licence promise or active checkout. Cross-check times on the official tachograph. This candidate needs new field validation before release.",
+      "Free beta: three days of testing together. No payment card or automatic charge. Cross-check times on the official tachograph.",
     footer:
       "TachoCommand is an auxiliary overview. The tachograph, card and applicable rules remain authoritative.",
     legal: ["Privacy", "Terms", "Imprint"],
@@ -155,15 +155,15 @@ const copy = {
     trouble:
       "Gerät fehlt? Bluetooth, Berechtigung für Geräte in der Nähe, ITS und Kartenslot prüfen. Bestehende Kopplung nicht als ersten Schritt löschen.",
     trust: "Klar benennen, was bestätigt ist",
-    tested: "IM FELD BESTÄTIGT · VDO DTCO 4.1a · Android Chrome · Slot 1",
+    tested: "IM FELD BESTÄTIGT · VDO DTCO 4.1 / 4.1a · Android Chrome · Slot 1",
     scope:
-      "Ein bestätigter Download belegt nicht die Unterstützung aller Modelle. Andere Tachographen und iPhone/Safari sind für diesen Weg nicht bestätigt. DDD-Signaturprüfung und Verstoßanalyse sind in diesem Kandidaten nicht verfügbar.",
+      "Ein bestätigter Download belegt nicht die Unterstützung aller Modelle. Andere Tachographen und iPhone/Safari sind für diesen Weg nicht bestätigt. Eine grundlegende Lenkpausenprüfung nach der Standardregel von 4 Std. 30 Min. ist verfügbar. Dies ist keine vollständige Verstoßanalyse oder DDD-Signaturprüfung.",
     privacy: "Daten und Datenschutz",
     privacyText:
       "Kartenverlauf wird lokal verarbeitet und gespeichert. Begrenzte technische Telemetrie dient der Diagnose; Fahrername, rohe Kartendaten und Standort sind ausgeschlossen. Einzelheiten in der Datenschutzerklärung.",
     beta: "Eine Beta, die wir gemeinsam prüfen",
     betaText:
-      "Direkter Beta-Zugang ohne Dreitageslizenz oder aktive Kaufabwicklung. Zeiten am offiziellen Tachograph prüfen. Dieser Kandidat benötigt vor Veröffentlichung neue Feldtests.",
+      "Kostenlose Beta: drei Tage gemeinsam testen. Keine Zahlungskarte und keine automatische Abbuchung. Zeiten am offiziellen Tachograph prüfen.",
     footer:
       "TachoCommand ist eine ergänzende Übersicht. Tachograph, Karte und geltende Vorschriften bleiben maßgeblich.",
     legal: ["Datenschutz", "Bedingungen", "Impressum"],
@@ -178,6 +178,11 @@ export default function LandingPage({
   const locale = initialLocale,
     t = copy[locale],
     router = useRouter();
+  const visual = {
+    sr: {label:"TACHOCOMMAND / ZA VOZAČE", title:"Kartica. Dani. Jasna slika.", days:"dana dostupne istorije", local:"Na tvom telefonu", localText:"Tvoji podaci ostaju tvoji.", languages:"7 jezika u aplikaciji", flow:"Poveži · Očitaj · Pregledaj", demo:"Ilustracija pregleda · bez stvarnih podataka", preview:["Vožnja", "Rad", "Odmor"], ready:"Spreman za sledeću pauzu?", android:"Za Android i Chrome"},
+    en: {label:"TACHOCOMMAND / FOR DRIVERS", title:"One card. Your days. A clear view.", days:"days of available history", local:"On your phone", localText:"Your data stays yours.", languages:"7 languages in the app", flow:"Connect · Read · Review", demo:"Overview illustration · no real data", preview:["Driving", "Work", "Rest"], ready:"Ready for your next break?", android:"For Android and Chrome"},
+    de: {label:"TACHOCOMMAND / FÜR FAHRER", title:"Eine Karte. Deine Tage. Klarer Überblick.", days:"Tage verfügbarer Verlauf", local:"Auf deinem Telefon", localText:"Deine Daten bleiben deine.", languages:"7 Sprachen in der App", flow:"Verbinden · Auslesen · Prüfen", demo:"Illustration · keine echten Daten", preview:["Lenken", "Arbeit", "Ruhe"], ready:"Bereit für die nächste Pause?", android:"Für Android und Chrome"},
+  }[locale];
   const openApp = () => {
     try { localStorage.setItem("tachocommand-locale", locale); } catch {}
     void trackProductAnalytics("open_app_click", { locale, surface: "landing" });
@@ -186,7 +191,7 @@ export default function LandingPage({
     <main className="tcx-shell" lang={locale}>
       <header className="tcx-nav">
         <Link className="tcx-brand" href="/">
-          TC · TachoCommand
+          <span className="tcx-monogram">TC</span> TachoCommand
         </Link>
         <select
           aria-label="Language / Jezik / Sprache"
@@ -216,7 +221,7 @@ export default function LandingPage({
       </header>
       <section className="tcx-hero">
         <div className="tcx-hero-copy">
-          <span className="tcx-badge">{t.tested}</span>
+          <span className="tcx-badge"><i />{visual.label}</span>
           <h1>{t.title}</h1>
           <p>{t.body}</p>
           <div className="tcx-hero-actions">
@@ -241,22 +246,32 @@ export default function LandingPage({
             </a>
           </div>
           <InstallGuide locale={locale} />
-          <p>
+          <p className="tcx-safety">
             <strong>{t.safety}</strong>
           </p>
         </div>
+        <aside className="tcx-product-visual" aria-label={visual.demo}>
+          <div className="tcx-visual-top"><span className="tcx-monogram">TC</span><span>TachoCommand<small>{visual.android}</small></span><span className="tcx-beta-pill">BETA</span></div>
+          <div className="tcx-visual-body"><span className="tcx-eyebrow">{visual.flow}</span><h2>{visual.title}</h2>
+            <div className="tcx-history-number"><strong>56</strong><span>{visual.days}</span></div>
+            <div className="tcx-timeline-art" aria-hidden="true">{Array.from({length:28},(_,i)=><i key={i} style={{height: `${24+(i*17)%52}px`}} />)}</div>
+            <div className="tcx-visual-legend">{visual.preview.map((label,i)=><span key={label}><i data-kind={i}/>{label}</span>)}</div>
+            <div className="tcx-local"><span>↳</span><div><strong>{visual.local}</strong><small>{visual.localText}</small></div></div>
+          </div><small className="tcx-illustration-note">{visual.demo}</small>
+        </aside>
       </section>
+      <div className="tcx-proof"><span>{t.tested}</span><span>{visual.languages}</span></div>
       <section className="tcx-section">
         <div className="tcx-value-grid">
-          {t.features.map(([title, body]) => (
+          {t.features.map(([title, body], i) => (
             <article className="tcx-value-card" key={title}>
-              <h2>{title}</h2>
+              <span className="tcx-feature-number">0{i + 1}</span><h2>{title}</h2>
               <p>{body}</p>
             </article>
           ))}
         </div>
       </section>
-      <section className="tcx-section" id="connect">
+      <section className="tcx-section tcx-guide" id="connect">
         <h2>{t.how}</h2>
         <ol>
           {t.steps.map((step) => (
@@ -280,8 +295,8 @@ export default function LandingPage({
         <h2>{t.privacy}</h2>
         <p>{t.privacyText}</p>
       </section>
-      <section className="tcx-section">
-        <h2>{t.beta}</h2>
+      <section className="tcx-section tcx-final">
+        <span className="tcx-eyebrow">{t.beta}</span><h2>{visual.ready}</h2>
         <p>{t.betaText}</p>
         <Link
           href="/app"
