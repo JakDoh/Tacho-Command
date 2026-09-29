@@ -219,8 +219,8 @@ export default function FieldProvenPremiumUi({
             <section className={styles.cardActionPanel}>
               <div>
                 <strong>{c.accepted ? t.success : t.read}</strong>
-                {c.diagnosticsEnabled && c.cardReadProgress && (
-                  <p>
+                {c.cardReadProgress && (
+                  <p role="status" aria-live="polite">
                     {t.packets}: {c.cardReadProgress.submessages} ·{" "}
                     {(c.cardReadProgress.byteLength / 1000).toFixed(1)} KB
                   </p>
