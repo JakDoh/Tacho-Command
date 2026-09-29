@@ -59,3 +59,10 @@ The deadline is an experimental operational bound, not a manufacturer specificat
 ## Diagnostic candidate 2: five-second handoff experiment
 
 `2026.09.29-diagnostic.2` changes only the LIVE-to-card settling delay from 3 to 5 seconds and makes receive-credit write failures visible as `credit_write_failed`, terminating the failed transport instead of silently waiting. Protocol request bytes and first-packet deadline remain unchanged. Five seconds is an experimental value, not an established device requirement. The field evidence includes one completed 269-packet read and subsequent zero-packet reads with one pending response, including an automatic first-packet timeout. Neither company remote download nor handoff timing is a proven cause.
+
+
+## Diagnostic candidate 3: prevent late LIVE teardown crossing sessions
+
+Code inspection found that the outer 1.5-second close timeout previously allowed handoff to continue while the old close operation could still await its write queue and later disconnect the same BluetoothDevice. LIVE close now has a 1-second internal deadline, shares one close promise, seals queued writes on completion or failure and disconnects exactly once. A failed close rejects; the outer deadline also rejects instead of proceeding to card read. UI retains `live_close_timeout` or `live_close_failed` with stage `live_teardown`. Five-second settling and card command bytes remain unchanged.
+
+A regression test deliberately delays the final credit write beyond the close deadline, reconnects, then releases the old write; the successor is not disconnected. Another test verifies a rejected close write is surfaced. This is a demonstrated code race, not proof of the physical zero-packet cause. In particular, a zero-packet attempt without a disconnect cannot be attributed to this race from current evidence. Successful and failed field transfers both had one response-pending reply. Further investigation of receive credits and ignored/partial protocol responses remains necessary if stalls persist.

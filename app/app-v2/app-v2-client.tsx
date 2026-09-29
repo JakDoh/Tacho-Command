@@ -64,15 +64,16 @@ async function waitForLiveMonitorIdle(isBusy: () => boolean) {
 async function closeLiveForCard(transport: PersistentLiveTransport) {
   let timeoutId: number | null = null;
   const outcome = await Promise.race([
-    transport.close().then(() => "closed" as const, () => "failed" as const),
+    transport.close().then(() => "closed" as const),
     new Promise<"timeout">((resolve) => {
       timeoutId = window.setTimeout(() => resolve("timeout"), LIVE_TEARDOWN_TIMEOUT_MS);
     }),
-  ]);
-  if (timeoutId !== null) window.clearTimeout(timeoutId);
-  if (outcome === "failed") throw new Error("LIVE teardown failed");
+  ]).finally(() => {
+    if (timeoutId !== null) window.clearTimeout(timeoutId);
+  });
   if (outcome === "timeout") {
     try { transport.device?.gatt?.disconnect?.(); } catch {}
+    throw new Error("LIVE_CLOSE_TIMEOUT");
   }
   await waitForLiveRelease();
 }
@@ -403,9 +404,20 @@ export default function AppV2Client() {
     liveTransportRef.current = null;
     setLiveConnected(false);
     setLastLiveSnapshot((previous) => previous ? { ...previous, connected: false } : previous);
+    const handoffStartedAt = performance.now();
+    setCardDiagnostic(null);
+    setCardReadProgress(null);
+    setCardAttemptCode(null);
     try {
       await closeLiveForCard(transport);
-    } catch {
+    } catch (error) {
+      setCardDiagnostic(Object.freeze({
+        stage: "live_teardown", lastConfirmedStage: "stationary_confirmed",
+        errorCode: error instanceof Error && error.message === "LIVE_CLOSE_TIMEOUT"
+          ? "live_close_timeout" : "live_close_failed",
+        elapsedMs: Math.round(performance.now() - handoffStartedAt),
+        packets: 0, bytes: 0, pendingResponses: 0, firstPacketTimeoutMs: 90000,
+      }));
       cardReadBusyRef.current = false;
       setCardHandoffPreparing(false);
       setLiveSession(createAppV2LiveSession({

@@ -27,7 +27,7 @@ function characteristic(uuid, onWrite) {
   };
 }
 
-function bluetoothFixture({ speedPayload = [0x00, 0x00] } = {}) {
+function bluetoothFixture({ speedPayload = [0x00, 0x00], closeWrite } = {}) {
   const writes = [];
   let disconnected = 0;
   let fifo;
@@ -35,6 +35,7 @@ function bluetoothFixture({ speedPayload = [0x00, 0x00] } = {}) {
 
   credits = characteristic(TACHO_DIAGNOSTICS_CREDITS_UUID, async (bytes, listeners) => {
     writes.push(["credits", bytes]);
+    if (bytes[0] === 0xff && closeWrite) await closeWrite();
     if (bytes[0] === 1) {
       queueMicrotask(() => listeners.get("characteristicvaluechanged")?.(valueEvent([1])));
     }
@@ -154,4 +155,29 @@ test("transport source stays product-agnostic and read-only", async () => {
   ]) {
     assert.equal(source.includes(forbidden), false, forbidden + " must stay outside the field transport factory");
   }
+});
+
+
+test("late LIVE close write cannot disconnect a subsequent connection", async () => {
+  let release;
+  const blocked = new Promise(resolve => { release = resolve; });
+  const fixture = bluetoothFixture({ closeWrite: () => blocked });
+  const transport = await openAppV2FieldTransport({ bluetooth: fixture.bluetooth, timeoutMs: 100, settleMs: 0, closeTimeoutMs: 20 });
+  const closing = transport.close();
+  assert.equal(transport.close(), closing, "concurrent closers share one operation");
+  await assert.rejects(closing, /LIVE_CLOSE_TIMEOUT/);
+  assert.equal(fixture.disconnected, 1);
+  await transport.device.gatt.connect();
+  release();
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(fixture.disconnected, 1, "late completion must not disconnect the successor");
+  await assert.rejects(transport.close(), /LIVE_CLOSE_TIMEOUT/);
+  assert.equal(fixture.disconnected, 1);
+});
+
+test("LIVE close reports a failed close credit instead of allowing silent handoff", async () => {
+  const fixture = bluetoothFixture({ closeWrite: () => { throw new Error("close write failed"); } });
+  const transport = await openAppV2FieldTransport({ bluetooth: fixture.bluetooth, timeoutMs: 100, settleMs: 0 });
+  await assert.rejects(transport.close(), /close write failed/);
+  assert.equal(fixture.disconnected, 1);
 });
