@@ -9,7 +9,7 @@ test("App V3 presentation routes full-card reads through the proven controller b
 
   assert.match(source, /runBrowserAppV2GoldenCardRead/);
   assert.match(source, /beginAppV2CardRead/);
-  assert.match(source, /storage: window\.localStorage/);
+  assert.match(source, /storage = window\.localStorage/);
   assert.match(source, /result\.status === "accepted"/);
   assert.match(source, /setCardState\(result\.session\.currentCard\)/);
 });
@@ -17,8 +17,8 @@ test("App V3 presentation routes full-card reads through the proven controller b
 test("App V2 prevents concurrent LIVE and CARD Bluetooth sessions", async () => {
   const source = await readFile(clientUrl, "utf8");
 
-  assert.match(source, /if \(cardSession\.busy \|\| cardReadBusyRef\.current \|\| liveRunState === "running"\) return/);
-  assert.match(source, /if \(liveRunState === "running" \|\| cardSession\.busy \|\| cardReadBusyRef\.current\) return/);
+  assert.match(source, /if \(cardSession\.busy \|\| cardReadBusyRef\.current \|\| liveOpeningRef\.current\) return/);
+  assert.match(source, /if \(liveOpeningRef\.current \|\| cardSession\.busy \|\| cardReadBusyRef\.current\) return/);
   assert.match(source, /cardSession\.busy\s*\? "card-reading"/);
   assert.match(source, /liveRunState === "running"\s*\? "connecting"/);
 });
@@ -28,7 +28,7 @@ test("App V3 reuses the LIVE device for card reading after bounded teardown", as
   assert.match(source, /keepTransportOpen: true/);
   const retainedDeviceAt = source.indexOf("const selectedCardDevice = transport.device");
   const stationaryAt = source.indexOf("await transport.assertStationary()", retainedDeviceAt);
-  const closeAt = source.indexOf("await closeLiveForCard(transport)", retainedDeviceAt);
+  const closeAt = source.indexOf("await closeLiveForCard(transport, controller.signal)", retainedDeviceAt);
   const cardReadAt = source.indexOf("await runBrowserAppV2GoldenCardRead", retainedDeviceAt);
   assert.ok(retainedDeviceAt >= 0, "card read must retain the LIVE Bluetooth device");
   assert.ok(stationaryAt > retainedDeviceAt, "stationary guard must follow retained-device validation");
@@ -39,7 +39,7 @@ test("App V3 reuses the LIVE device for card reading after bounded teardown", as
   assert.match(source, /LIVE_TEARDOWN_TIMEOUT_MS = 1500/);
   assert.match(source, /Promise\.race\(\[/);
   assert.match(source, /transport\.device\?\.gatt\?\.disconnect\?\.\(\)/);
-  assert.match(source, /await closeLiveForCard\(transport\)/);
+  assert.match(source, /await closeLiveForCard\(transport, controller\.signal\)/);
   assert.match(source, /LIVE_TO_CARD_SETTLE_MS = 5000/);
   assert.match(source, /device: selectedCardDevice/);
   assert.match(source, /disconnectOnFinish: true/);
@@ -56,7 +56,7 @@ test("App V3 drains the LIVE monitor before starting the card handoff", async ()
   const stopAt = source.indexOf("stopSpeedGuard()", freezeAt);
   const drainAt = source.indexOf("await waitForLiveMonitorIdle", stopAt);
   const stationaryAt = source.indexOf("await transport.assertStationary()", drainAt);
-  const closeAt = source.indexOf("await closeLiveForCard(transport)", stationaryAt);
+  const closeAt = source.indexOf("await closeLiveForCard(transport, controller.signal)", stationaryAt);
 
   assert.ok(freezeAt >= 0, "card handoff must block new LIVE refreshes immediately");
   assert.ok(stopAt > freezeAt, "LIVE timers must stop after the handoff lock");
@@ -72,7 +72,7 @@ test("App V3 holds a screen wake lock only while the card read is active", async
   const source = await readFile(clientUrl, "utf8");
   assert.match(source, /wakeLock\?\.request\("screen"\)/);
   assert.match(source, /lock\?\.release\(\)/);
-  assert.match(source, /\.finally\(async \(\) =>/);
+  assert.match(source, /finally \{/);
 });
 
 test("App V2 derives visible LIVE state from the retained transport", async () => {
@@ -114,7 +114,7 @@ test("App V2 keeps card transport details out of UI source", async () => {
 
   assert.match(source, /formatTachoCommandVersionLine/);
   assert.match(source, /onReadCard: runCardRead/);
-  assert.match(source, /onProgress: \(progress: CardReadProgress\) => setCardReadProgress\(progress\)/);
+  assert.match(source, /onProgress: progress => \{ if \(current\(\)\) setCardReadProgress\(progress\)/);
   assert.match(source, /cardReadProgress,/);
-  assert.match(source, /setRestoreState\("restored"\);\s*return;/);
+  assert.match(source, /setRestoreState\("restored"\)/);
 });

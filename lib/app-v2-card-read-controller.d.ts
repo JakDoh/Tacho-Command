@@ -3,7 +3,7 @@ import type { AppV2CompletedCardPayloadResult } from "./app-v2-card-payload-hand
 
 export type AppV2CardReadControllerResult = Readonly<{
   status:
-    | "accepted"
+    | "accepted" | "accepted_unsaved"
     | "read_unavailable"
     | "read_error"
     | "rejected_payload"

@@ -1,5 +1,5 @@
 import { normalizeEmail, privateId } from './email-trial.js';
-export async function authEnvironment() {
+export async function sessionEnvironment() {
   const {env} = await import('cloudflare:workers');
   const bindings = env as unknown as {
     DB?: D1Database;
@@ -13,7 +13,7 @@ export async function authEnvironment() {
   const apiKey = bindings.RESEND_API_KEY?.trim();
   const from = bindings.AUTH_EMAIL_FROM?.trim();
   const origin = bindings.AUTH_PUBLIC_ORIGIN?.trim();
-  if (!bindings.DB || !secret || secret.length < 32 || !apiKey || !from || !origin) throw new Error('auth_unavailable');
+  if (!bindings.DB || !secret || secret.length < 32 || !origin) throw new Error('auth_unavailable');
   const url = new URL(origin);
   if (url.protocol !== 'https:' || url.origin !== origin) throw new Error('invalid_auth_origin');
   const ownerEmail = bindings.OWNER_EMAIL ? normalizeEmail(bindings.OWNER_EMAIL) : null;
@@ -24,4 +24,10 @@ export const authJson = (body: unknown, status = 200, headers: Record<string,str
   Response.json(body, {status, headers:{'cache-control':'no-store', ...headers}});
 export function sameOrigin(request: Request, origin: string) {
   return request.headers.get('origin') === origin && new URL(request.url).origin === origin;
+}
+
+export async function authEnvironment() {
+  const config = await sessionEnvironment();
+  if (!config.apiKey || !config.from) throw new Error('email_unavailable');
+  return { ...config, apiKey: config.apiKey, from: config.from };
 }

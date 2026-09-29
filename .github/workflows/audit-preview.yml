@@ -1,7 +1,7 @@
 name: Isolated audit preview
 on:
   push:
-    branches: [audit/hardening-20260928]
+    branches: [audit/hardening-20260928, fix/read-reliability-20260929]
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened]
@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   preview:
-    if: github.event_name == 'push' || (github.head_ref == 'audit/hardening-20260928' && github.event.pull_request.head.repo.full_name == github.repository)
+    if: github.event_name == 'push' || ((github.head_ref == 'audit/hardening-20260928' || github.head_ref == 'fix/read-reliability-20260929') && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

@@ -3,6 +3,7 @@ export type AppV2CardPhase = "idle" | "reading" | "accepted" | "error";
 export type AppV2CardSession = Readonly<{
   phase: AppV2CardPhase;
   busy: boolean;
+  persisted: boolean;
   canStart: boolean;
   statusLabel: string;
   errorText: string | null;

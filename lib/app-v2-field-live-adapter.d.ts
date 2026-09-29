@@ -13,5 +13,6 @@ export declare function runAppV2FieldLiveRead(input?: Readonly<{
   attemptCode?: string | null;
   telemetryAcceptedCount?: number | null;
   timeoutMs?: number;
+  shouldContinue?: () => boolean;
   now?: () => Date;
 }>): Promise<AppV2FieldLiveReadResult>;

@@ -14,6 +14,9 @@ export declare function openAppV2FieldTransport(input?: Readonly<{
   timeoutMs?: number;
   settleMs?: number;
   closeTimeoutMs?: number;
+  signal?: AbortSignal;
+  operationTimeoutMs?: number;
+  writeTimeoutMs?: number;
 }>): Promise<AppV2FieldTransport>;
 
 
@@ -21,4 +24,7 @@ export declare function openBrowserAppV2FieldTransport(input?: Readonly<{
   timeoutMs?: number;
   settleMs?: number;
   closeTimeoutMs?: number;
+  signal?: AbortSignal;
+  operationTimeoutMs?: number;
+  writeTimeoutMs?: number;
 }>): Promise<AppV2FieldTransport>;
