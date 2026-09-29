@@ -517,7 +517,7 @@ export default function AppV2Client() {
           state={state}
           controls={{
             phase: productPhase,
-            accessAllowed: trial.access.status === "active" && trial.permitsNow(),
+            accessAllowed: (trial.access.status === "active" || trial.access.status === "owner") && trial.permitsNow(),
             restoreState,
             restoredLabel,
             errorText: visibleErrorText,

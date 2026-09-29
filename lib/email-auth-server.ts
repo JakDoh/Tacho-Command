@@ -1,3 +1,4 @@
+import { normalizeEmail, privateId } from './email-trial.js';
 export async function authEnvironment() {
   const {env} = await import('cloudflare:workers');
   const bindings = env as unknown as {
@@ -6,6 +7,7 @@ export async function authEnvironment() {
     RESEND_API_KEY?: string;
     AUTH_EMAIL_FROM?: string;
     AUTH_PUBLIC_ORIGIN?: string;
+    OWNER_EMAIL?: string;
   };
   const secret = bindings.EMAIL_ID_SECRET?.trim();
   const apiKey = bindings.RESEND_API_KEY?.trim();
@@ -14,7 +16,9 @@ export async function authEnvironment() {
   if (!bindings.DB || !secret || secret.length < 32 || !apiKey || !from || !origin) throw new Error('auth_unavailable');
   const url = new URL(origin);
   if (url.protocol !== 'https:' || url.origin !== origin) throw new Error('invalid_auth_origin');
-  return {db:bindings.DB, secret, apiKey, from, origin};
+  const ownerEmail = bindings.OWNER_EMAIL ? normalizeEmail(bindings.OWNER_EMAIL) : null;
+  const ownerAccountId = ownerEmail ? await privateId(secret, 'email', ownerEmail) : null;
+  return {db:bindings.DB, secret, apiKey, from, origin, ownerAccountId};
 }
 export const authJson = (body: unknown, status = 200, headers: Record<string,string> = {}) =>
   Response.json(body, {status, headers:{'cache-control':'no-store', ...headers}});

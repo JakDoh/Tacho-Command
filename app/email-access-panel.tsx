@@ -16,6 +16,10 @@ export default function EmailAccessPanel({locale,access,onRefresh}:{locale:Local
       setMessage(t.sent);
     } catch {setMessage(t.error);} finally {setBusy(false);}
   }
+  if(access.status==='owner') {
+    const labels:Record<Locale,string> = {sr:'Puni pristup',en:'Full access',de:'Voller Zugriff',ru:'Полный доступ',bg:'Пълен достъп',ro:'Acces complet',hu:'Teljes hozzáférés'};
+    return <aside className={styles.panel} lang={locale}><strong>{labels[locale]}</strong></aside>;
+  }
   if(access.status==='active') {
     const seconds=access.remainingSeconds??0;
     return <aside className={styles.panel} lang={locale}><strong>{t.active} · {Math.floor(seconds/3600)}h {Math.floor(seconds%3600/60)}m</strong></aside>;

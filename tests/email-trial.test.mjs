@@ -52,3 +52,18 @@ test('email normalization rejects header injection and account identifiers are k
  assert.equal(await privateId('secret','email','a@example.com'),await privateId('secret','email','a@example.com'));
  assert.notEqual(await privateId('secret','email','a@example.com'),await privateId('other','email','a@example.com'));
 });
+
+test('owner entitlement follows the verified email account while other trials still expire',async()=>{
+ const {db,sql}=database(),start=1000;
+ const ownerId=await privateId('secret','email','owner@example.com');
+ const ownerLink=await createLogin(db,ownerId,start);
+ const ownerSession=await consumeLogin(db,ownerLink,start+1);
+ const driverLink=await createLogin(db,'driver-id',start);
+ const driverSession=await consumeLogin(db,driverLink,start+1);
+ const later=start+259201;
+ assert.equal((await sessionStatus(db,ownerSession,later,ownerId)).status,'owner');
+ assert.equal((await sessionStatus(db,driverSession,later,ownerId)).status,'expired');
+ assert.equal((await sessionStatus(db,null,later,ownerId)).status,'not_started');
+ assert.equal((await sessionStatus(db,ownerSession,later)).status,'expired');
+ sql.close();
+});

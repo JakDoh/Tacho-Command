@@ -1,12 +1,13 @@
 "use client";
 import {useCallback, useEffect, useRef, useState} from 'react';
-export type EmailTrial = {status:'loading'|'not_started'|'active'|'expired'|'unavailable'; remainingSeconds?:number; expiresAt?:number; serverNow?:number};
+export type EmailTrial = {status:'loading'|'not_started'|'active'|'owner'|'expired'|'unavailable'; remainingSeconds?:number; expiresAt?:number; serverNow?:number};
 export function useEmailTrial(onExpire:()=>void) {
   const [access,setAccess] = useState<EmailTrial>({status:'loading'});
   const permission = useRef(false);
   const deadline = useRef(0);
   const onExpireRef = useRef(onExpire);
   const refreshing = useRef(false);
+  const accessStatus = useRef<EmailTrial['status']>('loading');
   useEffect(()=>{ onExpireRef.current = onExpire; },[onExpire]);
   const permitsNow = useCallback(()=>permission.current && performance.now() < deadline.current,[]);
   const refresh = useCallback(async()=>{
@@ -17,7 +18,10 @@ export function useEmailTrial(onExpire:()=>void) {
       const response = await fetch('/api/trial',{cache:'no-store', signal:AbortSignal.timeout(10000)});
       const next = await response.json() as EmailTrial;
       if (!response.ok) throw new Error('unavailable');
-      if (next.status === 'active' && typeof next.remainingSeconds === 'number' && next.remainingSeconds > 0 && next.remainingSeconds <= 259200) {
+      if (next.status === 'owner') {
+        deadline.current = Number.POSITIVE_INFINITY;
+        permission.current = true;
+      } else if (next.status === 'active' && typeof next.remainingSeconds === 'number' && next.remainingSeconds > 0 && next.remainingSeconds <= 259200) {
         // Subtract full request duration conservatively; the phone's wall clock cannot extend access.
         deadline.current = started + next.remainingSeconds * 1000;
         permission.current = performance.now() < deadline.current;
@@ -26,10 +30,12 @@ export function useEmailTrial(onExpire:()=>void) {
         if (deadline.current) onExpireRef.current();
         deadline.current = 0;
       }
+      accessStatus.current = next.status;
       setAccess(next);
     } catch {
-      permission.current = false;
-      setAccess({status:'unavailable'});
+      // Keep a verified owner session usable while connectivity drops during a read.
+      if (accessStatus.current !== 'owner') permission.current = false;
+      setAccess(accessStatus.current === 'owner' ? {status:'owner'} : {status:'unavailable'});
     } finally { refreshing.current = false; }
   },[]);
   useEffect(()=>{
