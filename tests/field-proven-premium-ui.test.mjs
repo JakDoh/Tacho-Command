@@ -27,3 +27,8 @@ test('failed zero-packet read retains last confirmed phase and diagnostic code',
  const html=render(Ui,{state:createFieldProvenProductState(),controls:{...controls,phase:'error',cardDiagnostic:{stage:'waiting_first_packet',lastConfirmedStage:'request_upload',errorCode:'first_packet_timeout',elapsedMs:90000,packets:0,bytes:0,pendingResponses:3,firstPacketTimeoutMs:90000}}});
  assert.match(html,/request_upload/);assert.match(html,/first_packet_timeout/);assert.match(html,/90\.0/);assert.doesNotMatch(html,/<progress/);
 });
+
+test('detailed diagnostics expose stalled progress and a local export action',()=>{
+ const html=render(Ui,{state:createFieldProvenProductState(),controls:{...controls,phase:'card-reading',cardDiagnostic:{stage:'receiving',lastConfirmedStage:'receiving',errorCode:null,elapsedMs:80000,packets:107,bytes:26000,pendingResponses:1,firstPacketTimeoutMs:90000,cardIdleTimeoutMs:60000,packetIdleMs:11000,ackRequested:108,ackWritten:108,events:[{ms:69000,event:'ack:write_complete',counter:108}]}}});
+ assert.match(html,/Prenos čeka sledeći paket/);assert.match(html,/Preuzmi dijagnostiku/);assert.match(html,/ack:write_complete/);assert.match(html,/counter=108/);
+});

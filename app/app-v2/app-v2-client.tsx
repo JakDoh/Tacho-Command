@@ -62,6 +62,7 @@ async function waitForLiveMonitorIdle(isBusy: () => boolean) {
 }
 
 async function closeLiveForCard(transport: PersistentLiveTransport) {
+  const closeStartedAt = performance.now();
   let timeoutId: number | null = null;
   const outcome = await Promise.race([
     transport.close().then(() => "closed" as const),
@@ -75,7 +76,9 @@ async function closeLiveForCard(transport: PersistentLiveTransport) {
     try { transport.device?.gatt?.disconnect?.(); } catch {}
     throw new Error("LIVE_CLOSE_TIMEOUT");
   }
+  const closeMs = Math.round(performance.now() - closeStartedAt);
   await waitForLiveRelease();
+  return Object.freeze({ closeMs, settleMs: LIVE_TO_CARD_SETTLE_MS, totalMs: Math.round(performance.now() - closeStartedAt) });
 }
 
 function formatRestoreTime(value: string | null, locale: string) {
@@ -408,8 +411,9 @@ export default function AppV2Client() {
     setCardDiagnostic(null);
     setCardReadProgress(null);
     setCardAttemptCode(null);
+    let handoff: CardTransportDiagnostic["handoff"];
     try {
-      await closeLiveForCard(transport);
+      handoff = await closeLiveForCard(transport);
     } catch (error) {
       setCardDiagnostic(Object.freeze({
         stage: "live_teardown", lastConfirmedStage: "stationary_confirmed",
@@ -417,6 +421,10 @@ export default function AppV2Client() {
           ? "live_close_timeout" : "live_close_failed",
         elapsedMs: Math.round(performance.now() - handoffStartedAt),
         packets: 0, bytes: 0, pendingResponses: 0, firstPacketTimeoutMs: 90000,
+        events: [
+          { ms: 0, event: "live:close_start" },
+          { ms: Math.round(performance.now() - handoffStartedAt), event: "live:close_failed" },
+        ],
       }));
       cardReadBusyRef.current = false;
       setCardHandoffPreparing(false);
@@ -446,7 +454,7 @@ export default function AppV2Client() {
         disconnectOnFinish: true,
         signal: controller.signal,
       },
-      onDiagnostic: setCardDiagnostic,
+      onDiagnostic: (diagnostic: CardTransportDiagnostic) => setCardDiagnostic(Object.freeze({ ...diagnostic, handoff })),
       onProgress: (progress: CardReadProgress) => setCardReadProgress(progress),
       onTelemetryAttempt: (attemptCode: string) => setCardAttemptCode(attemptCode),
     }).catch((error: unknown) => ({

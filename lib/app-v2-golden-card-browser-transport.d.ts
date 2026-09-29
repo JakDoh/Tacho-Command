@@ -28,6 +28,7 @@ export declare function readAppV2GoldenCardPayload(input?: Readonly<{
   firstPacketTimeoutMs?: number;
   cardIdleTimeoutMs?: number;
   p3GuardMs?: number;
+    writeTimeoutMs?: number;
   onDiagnostic?: (value: CardTransportDiagnostic) => void;
   onProgress?: (progress: Readonly<{
     submessages: number;
@@ -45,6 +46,7 @@ export declare function readBrowserAppV2GoldenCardPayload(
     firstPacketTimeoutMs?: number;
     cardIdleTimeoutMs?: number;
     p3GuardMs?: number;
+    writeTimeoutMs?: number;
     onDiagnostic?: (value: CardTransportDiagnostic) => void;
     onProgress?: (progress: Readonly<{
       submessages: number;

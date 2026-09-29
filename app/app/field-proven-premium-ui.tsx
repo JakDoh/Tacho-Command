@@ -417,6 +417,26 @@ export default function FieldProvenPremiumUi({
                     <p>{c.locale === "sr" ? "Poslednja potvrđena faza" : c.locale === "de" ? "Zuletzt bestätigt" : "Last confirmed stage"}: <code>{c.cardDiagnostic.lastConfirmedStage}</code></p>
                     {c.cardDiagnostic.errorCode && <p role="alert">{c.locale === "sr" ? "Razlog prekida" : c.locale === "de" ? "Abbruchgrund" : "Stop reason"}: <code>{c.cardDiagnostic.errorCode}</code></p>}
                     <p>{c.locale === "sr" ? "Vreme do poslednjeg događaja" : c.locale === "de" ? "Zeit bis zum letzten Ereignis" : "Time to last event"}: {(c.cardDiagnostic.elapsedMs / 1000).toFixed(1)} s · Pending: {c.cardDiagnostic.pendingResponses}</p>
+                    {c.cardDiagnostic.packetIdleMs != null && <p>{c.locale === "sr" ? "Bez novog paketa" : c.locale === "de" ? "Ohne neues Paket" : "Since last packet"}: {(c.cardDiagnostic.packetIdleMs / 1000).toFixed(0)} s / {(c.cardDiagnostic.cardIdleTimeoutMs ?? 60000) / 1000} s</p>}
+                    {!c.cardDiagnostic.errorCode && (c.cardDiagnostic.packetIdleMs ?? 0) >= 10000 && <p role="status">{c.locale === "sr" ? "Prenos čeka sledeći paket." : c.locale === "de" ? "Übertragung wartet auf das nächste Paket." : "Transfer is waiting for the next packet."}</p>}
+                    {c.cardDiagnostic.events && <details>
+                      <summary>{c.locale === "sr" ? "Detaljna dijagnostika" : c.locale === "de" ? "Detaillierte Diagnose" : "Detailed diagnostics"}</summary>
+                      <p>GATT: {String(c.cardDiagnostic.connected)} · Credits: {c.cardDiagnostic.serverCredits} · Queue: {c.cardDiagnostic.queuedWrites}</p>
+                      {c.cardDiagnostic.failureState && <p>GATT @ error: {String(c.cardDiagnostic.failureState.connected)} · Write @ error: {c.cardDiagnostic.failureState.activeWrite ?? "—"}</p>}
+                      <p>Write: {c.cardDiagnostic.activeWrite ?? "—"} · ACK: {c.cardDiagnostic.ackRequested ?? "—"} / {c.cardDiagnostic.ackWritten ?? "—"}</p>
+                      <p>Notifications: {c.cardDiagnostic.notificationCount} · Partial: {c.cardDiagnostic.partialMessages} · Ignored: {c.cardDiagnostic.ignoredMessages}</p>
+                      {c.cardDiagnostic.handoff && <p>LIVE close: {c.cardDiagnostic.handoff.closeMs} ms · Settle: {c.cardDiagnostic.handoff.settleMs} ms</p>}
+                      <p>{c.locale === "sr" ? "ACK označava zahtev i završen Bluetooth upis; ne potvrđuje da ga je tahograf obradio." : c.locale === "de" ? "ACK zeigt Anforderung und abgeschlossenen Bluetooth-Schreibvorgang, nicht die Verarbeitung im Tachographen." : "ACK shows request and completed Bluetooth write, not tachograph processing."}</p>
+                      <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: "0.75rem" }}>{c.cardDiagnostic.events.slice(-20).map(event => `${(event.ms / 1000).toFixed(1)}s ${event.event} ${Object.entries(event).filter(([key]) => key !== "ms" && key !== "event").map(([key, value]) => `${key}=${value}`).join(" ")}`).join("\n")}</pre>
+                      <button onClick={() => {
+                        const blob = new Blob([JSON.stringify({ schema: 1, version: c.versionLine, attemptCode: c.cardAttemptCode, diagnostic: c.cardDiagnostic }, null, 2)], { type: "application/json" });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement("a");
+                        link.href = url; link.download = `tachocommand-diagnostic-${c.cardAttemptCode ?? "handoff"}.json`;
+                        document.body.appendChild(link); link.click(); link.remove();
+                        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+                      }}>{c.locale === "sr" ? "Preuzmi dijagnostiku" : c.locale === "de" ? "Diagnose herunterladen" : "Download diagnostics"}</button>
+                    </details>}
                     {c.cardDiagnostic.stage === "waiting_first_packet" && !c.cardDiagnostic.errorCode && <p>{c.locale === "sr" ? "Čekanje prvog paketa, najviše" : c.locale === "de" ? "Warten auf erstes Paket, maximal" : "Waiting for first packet, maximum"} {c.cardDiagnostic.firstPacketTimeoutMs / 1000} s</p>}
                   </div>
                 )}

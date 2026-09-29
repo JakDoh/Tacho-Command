@@ -18,6 +18,7 @@ export declare function runBrowserAppV2GoldenCardRead(input?: Readonly<{
     firstPacketTimeoutMs?: number;
     cardIdleTimeoutMs?: number;
     p3GuardMs?: number;
+    writeTimeoutMs?: number;
   }>;
 }>): Promise<AppV2CardReadControllerResult & Readonly<{
   cardAttemptCode: string | null;
