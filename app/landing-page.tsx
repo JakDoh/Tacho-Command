@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trackProductAnalytics } from "../lib/product-analytics-client.js";
@@ -7,8 +8,8 @@ import { formatTachoCommandVersionLine } from "../lib/product-version.js";
 export type Locale = "sr" | "en" | "de";
 const copy = {
   sr: {
-    title: "Tvoj dan za volanom. Jasno, na telefonu.",
-    body: "Očitaj podržanu karticu vozača preko Bluetooth veze i pregledaj dostupnu istoriju do 56 dana. Podaci kartice ostaju na tvom uređaju.",
+    title: "Tvoj dan. U tvojim rukama.",
+    body: "Poveži tahograf. Očitaj karticu. Razumi svojih 56 dana — mirno, jasno i na svom telefonu.",
     open: "Otvori beta aplikaciju",
     guide: "Prvo povezivanje",
     safety:
@@ -61,8 +62,8 @@ const copy = {
     legal: ["Privatnost", "Uslovi", "Impressum"],
   },
   en: {
-    title: "Your day behind the wheel. Clear at a glance.",
-    body: "Read a supported driver card over Bluetooth and review up to 56 days of available history. Card data stays on your device.",
+    title: "Your day. In your hands.",
+    body: "Connect the tachograph. Read your card. Understand your 56 days — clearly, calmly and on your phone.",
     open: "Open beta app",
     guide: "First connection",
     safety:
@@ -115,8 +116,8 @@ const copy = {
     legal: ["Privacy", "Terms", "Imprint"],
   },
   de: {
-    title: "Deine Fahrerkarte. Klar auf dem Smartphone.",
-    body: "Unterstützte Fahrerkarten per Bluetooth auslesen und bis zu 56 Tage verfügbaren Verlauf ansehen. Kartendaten bleiben auf deinem Gerät.",
+    title: "Dein Tag. In deiner Hand.",
+    body: "Tachograph verbinden. Fahrerkarte auslesen. Deine 56 Tage verstehen — klar, ruhig und auf deinem Smartphone.",
     open: "Beta-App öffnen",
     guide: "Erste Verbindung",
     safety:
@@ -179,9 +180,38 @@ export default function LandingPage({
     t = copy[locale],
     router = useRouter();
   const visual = {
-    sr: {label:"TACHOCOMMAND / ZA VOZAČE", title:"Kartica. Dani. Jasna slika.", days:"dana dostupne istorije", local:"Na tvom telefonu", localText:"Tvoji podaci ostaju tvoji.", languages:"7 jezika u aplikaciji", flow:"Poveži · Očitaj · Pregledaj", demo:"Ilustracija pregleda · bez stvarnih podataka", preview:["Vožnja", "Rad", "Odmor"], ready:"Spreman za sledeću pauzu?", android:"Za Android i Chrome"},
-    en: {label:"TACHOCOMMAND / FOR DRIVERS", title:"One card. Your days. A clear view.", days:"days of available history", local:"On your phone", localText:"Your data stays yours.", languages:"7 languages in the app", flow:"Connect · Read · Review", demo:"Overview illustration · no real data", preview:["Driving", "Work", "Rest"], ready:"Ready for your next break?", android:"For Android and Chrome"},
-    de: {label:"TACHOCOMMAND / FÜR FAHRER", title:"Eine Karte. Deine Tage. Klarer Überblick.", days:"Tage verfügbarer Verlauf", local:"Auf deinem Telefon", localText:"Deine Daten bleiben deine.", languages:"7 Sprachen in der App", flow:"Verbinden · Auslesen · Prüfen", demo:"Illustration · keine echten Daten", preview:["Lenken", "Arbeit", "Ruhe"], ready:"Bereit für die nächste Pause?", android:"Für Android und Chrome"},
+    sr: {label:"NAPRAVLJENO ZA VOZAČE", languages:"7 jezika u aplikaciji", ready:"Spreman za sledeću pauzu?", proof:"Potvrđeno na DTCO 4.1 / 4.1a", device:"Android · Chrome"},
+    en: {label:"BUILT FOR DRIVERS", languages:"7 languages in the app", ready:"Ready for your next break?", proof:"Verified on DTCO 4.1 / 4.1a", device:"Android · Chrome"},
+    de: {label:"FÜR FAHRER GEMACHT", languages:"7 Sprachen in der App", ready:"Bereit für die nächste Pause?", proof:"Bestätigt auf DTCO 4.1 / 4.1a", device:"Android · Chrome"},
+  }[locale];
+  const fieldProof = {
+    sr: {
+      eyebrow: "STVARNO OČITAVANJE · DTCO 4.1",
+      title: "Ne obećavamo. Pokazujemo.",
+      body: "Snimljeno u autobusu: LIVE podaci i čitanje kartice paket po paket — do potvrđenih 269 paketa.",
+      poster: "/field-proof-sr.webp",
+      video: "/field-proof-sr.mp4",
+      action: "Pusti 12 sekundi stvarnog čitanja",
+      stat: "269 paketa · 67,3 KB · uspešno",
+    },
+    en: {
+      eyebrow: "REAL READ · DTCO 4.1",
+      title: "No promises. Proof.",
+      body: "Recorded in a bus: confirmed LIVE data and a driver-card read, packet by packet.",
+      poster: "/field-proof-en.webp",
+      video: "/field-proof-en.mp4",
+      action: "Play 12 seconds of a real read",
+      stat: "269 packets · 67.3 KB · completed",
+    },
+    de: {
+      eyebrow: "ECHTES AUSLESEN · DTCO 4.1",
+      title: "Keine Versprechen. Ein Beleg.",
+      body: "Im Bus erprobt: bestätigte LIVE-Daten und das Auslesen der Fahrerkarte — Paket für Paket.",
+      poster: "/field-proof-de.webp",
+      video: null,
+      action: "Feldtest auf dem Smartphone",
+      stat: "269 Pakete · 67,3 KB · erfolgreich",
+    },
   }[locale];
   const openApp = () => {
     try { localStorage.setItem("tachocommand-locale", locale); } catch {}
@@ -220,6 +250,8 @@ export default function LandingPage({
         </Link>
       </header>
       <section className="tcx-hero">
+        <div className="tcx-hero-image" role="img" aria-label="TachoCommand u autobuskoj kabini pre polaska" />
+        <div className="tcx-hero-shade" aria-hidden="true" />
         <div className="tcx-hero-copy">
           <span className="tcx-badge"><i />{visual.label}</span>
           <h1>{t.title}</h1>
@@ -244,23 +276,31 @@ export default function LandingPage({
             >
               {t.guide}
             </a>
+            <InstallGuide locale={locale} />
           </div>
-          <InstallGuide locale={locale} />
-          <p className="tcx-safety">
-            <strong>{t.safety}</strong>
-          </p>
         </div>
-        <aside className="tcx-product-visual" aria-label={visual.demo}>
-          <div className="tcx-visual-top"><span className="tcx-monogram">TC</span><span>TachoCommand<small>{visual.android}</small></span><span className="tcx-beta-pill">BETA</span></div>
-          <div className="tcx-visual-body"><span className="tcx-eyebrow">{visual.flow}</span><h2>{visual.title}</h2>
-            <div className="tcx-history-number"><strong>56</strong><span>{visual.days}</span></div>
-            <div className="tcx-timeline-art" aria-hidden="true">{Array.from({length:28},(_,i)=><i key={i} style={{height: `${24+(i*17)%52}px`}} />)}</div>
-            <div className="tcx-visual-legend">{visual.preview.map((label,i)=><span key={label}><i data-kind={i}/>{label}</span>)}</div>
-            <div className="tcx-local"><span>↳</span><div><strong>{visual.local}</strong><small>{visual.localText}</small></div></div>
-          </div><small className="tcx-illustration-note">{visual.demo}</small>
-        </aside>
       </section>
-      <div className="tcx-proof"><span>{t.tested}</span><span>{visual.languages}</span></div>
+      <div className="tcx-proof">
+        <span>{visual.proof}</span><span>{visual.device}</span><span>{visual.languages}</span><span>{t.safety}</span>
+      </div>
+      <section className="tcx-field-proof" aria-labelledby="tcx-field-title">
+        <div className="tcx-field-copy">
+          <span className="tcx-eyebrow">{fieldProof.eyebrow}</span>
+          <h2 id="tcx-field-title">{fieldProof.title}</h2>
+          <p>{fieldProof.body}</p>
+          <strong>{fieldProof.stat}</strong>
+        </div>
+        <figure className="tcx-field-media">
+          {fieldProof.video ? (
+            <video controls playsInline preload="metadata" poster={fieldProof.poster} aria-label={fieldProof.action}>
+              <source src={fieldProof.video} type="video/mp4" />
+            </video>
+          ) : (
+            <img src={fieldProof.poster} alt={fieldProof.action} loading="lazy" />
+          )}
+          <figcaption>{fieldProof.action}</figcaption>
+        </figure>
+      </section>
       <section className="tcx-section">
         <div className="tcx-value-grid">
           {t.features.map(([title, body], i) => (
@@ -315,7 +355,7 @@ export default function LandingPage({
             </Link>
           ))}
         </nav>
-        <small>{formatTachoCommandVersionLine()}</small>
+        <small className="tcx-version-line">{formatTachoCommandVersionLine()}</small>
       </footer>
     </main>
   );
