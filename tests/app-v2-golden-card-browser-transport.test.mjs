@@ -147,3 +147,36 @@ test('disconnection during a silent card transfer rejects without waiting for id
   await assert.rejects(readAppV2GoldenCardPayload({device,disconnectOnFinish:true,p3GuardMs:0,requestTimeoutMs:100,cardIdleTimeoutMs:60000}),/prekinut/);
   assert.equal(handlers.size,0);
 });
+
+for (const pending of [false, true]) test(`first packet deadline stops zero-data read (pending=${pending})`, async () => {
+  const fifo = new FakeCharacteristic('29d3a479-1592-47df-80a4-afa742d369bb');
+  const credits = new FakeCharacteristic('db9c4128-bff3-41fe-a306-fb6f9a8aeb2d');
+  let pendingTimer;
+  const diagnostics = [];
+  const device = {gatt:{connected:true,connect:async()=>({getPrimaryServices:async()=>[{uuid:'eef90782-55dd-4388-b80b-695aba7a69b5',getCharacteristics:async()=>[fifo,credits]}]}),disconnect(){this.connected=false;}}};
+  credits.onWrite = async write => {if(write[0]===1) queueMicrotask(()=>credits.emit([8]));};
+  fifo.onWrite = async write => {
+    const body=write.slice(2),sid=body[4];
+    queueMicrotask(()=>credits.emit([1]));
+    let response;
+    if(body[0]===0x81) response=[0xc1,0xea,0x8f];
+    else if(sid===0x10) response=[0x50,0x81];
+    else if(sid===0x35) response=[0x75,0x00,0xff];
+    else if(sid===0x36 && pending) pendingTimer=setInterval(()=>fifo.emit(wrapIts(ddp([0x7f,0x36,0x78]))),5);
+    else if(sid===0x37) {clearInterval(pendingTimer);response=[0x77];}
+    else if(sid===0x82) response=[0xc2];
+    if(response) queueMicrotask(()=>fifo.emit(wrapIts(ddp(response))));
+  };
+  try {
+    await assert.rejects(readAppV2GoldenCardPayload({device,disconnectOnFinish:true,p3GuardMs:0,requestTimeoutMs:100,firstPacketTimeoutMs:40,cardIdleTimeoutMs:1000,onDiagnostic:d=>diagnostics.push(d)}),/FIRST_PACKET_TIMEOUT/);
+    const last=diagnostics.at(-1);
+    assert.equal(last.stage,'waiting_first_packet');
+    assert.equal(last.lastConfirmedStage,'request_upload');
+    assert.equal(last.errorCode,'first_packet_timeout');
+    assert.equal(last.packets,0);
+    assert.equal(last.bytes,0);
+    assert.equal(last.pendingResponses > 0,pending);
+    assert.equal(device.gatt.connected,false);
+    assert.deepEqual(credits.writes.at(-1),[0xff]);
+  } finally {clearInterval(pendingTimer);}
+});

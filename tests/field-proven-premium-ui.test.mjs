@@ -23,3 +23,7 @@ test('saved history requires explicit selection',()=>{
  const html=render(Ui,{state:createFieldProvenProductState(),controls:{...controls,savedAvailable:true}});
  assert.match(html,/Prikaži prethodno sačuvanu karticu/);assert.match(html,/nije potvrđena kao kartica/);
 });
+test('failed zero-packet read retains last confirmed phase and diagnostic code',()=>{
+ const html=render(Ui,{state:createFieldProvenProductState(),controls:{...controls,phase:'error',cardDiagnostic:{stage:'waiting_first_packet',lastConfirmedStage:'request_upload',errorCode:'first_packet_timeout',elapsedMs:90000,packets:0,bytes:0,pendingResponses:3,firstPacketTimeoutMs:90000}}});
+ assert.match(html,/request_upload/);assert.match(html,/first_packet_timeout/);assert.match(html,/90\.0/);assert.doesNotMatch(html,/<progress/);
+});

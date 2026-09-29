@@ -45,3 +45,12 @@ Draft PR: https://github.com/canicboban-source/Tacho-Command/pull/96
 Isolated preview: https://tachocommand-audit-preview.canicboban.workers.dev/
 
 GitHub CI, quality gates and isolated preview deployment passed on the first candidate (274 tests, typecheck and build). Browser verification confirmed landing rendering, app entry, German language selection and the empty history state. Visual review caught and corrected CTA contrast, desktop hero alignment and the unknown-activity color. Follow-up commits must pass the same CI before review. Mobile hardware, real card data interaction and installed-PWA upgrade remain unverified.
+
+
+## 2026-09-29: zero-packet field diagnostic candidate
+
+User reports card recognition followed by zero packets while Bluetooth stays connected, on both prior and preview builds. Cancel disconnects. This does not establish a protocol or firmware incompatibility.
+
+Candidate `2026.09.29-diagnostic.1` adds a 90-second absolute first-card-packet deadline, unaffected by response-pending messages. After the first data packet, existing idle handling applies. Transport diagnostics show stage, last confirmed stage, bounded error code, event elapsed time and pending count in the UI, retained after failure. No card contents or identity are included. Diagnostics are local UI evidence; the isolated preview has no telemetry database.
+
+The deadline is an experimental operational bound, not a manufacturer specification or a fix for the underlying no-data cause. Bluetooth setup and teardown retain their existing behavior. Three-second LIVE handoff and protocol command bytes remain unchanged. Main, production and golden HTML remain unchanged. Field retest is required before release.

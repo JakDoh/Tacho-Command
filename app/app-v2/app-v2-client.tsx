@@ -1,5 +1,6 @@
 "use client";
 
+import type { CardTransportDiagnostic } from "../../lib/card-transport-diagnostic";
 import { useEffect, useMemo, useRef, useState } from "react";
 import FieldProvenPremiumUi from "../app/field-proven-premium-ui";
 import { createFieldProvenProductState } from "../../lib/field-proven-product-state.js";
@@ -105,6 +106,7 @@ export default function AppV2Client() {
   const [cardSession, setCardSession] = useState(() => createAppV2CardSession());
   const [cardReadProgress, setCardReadProgress] = useState<CardReadProgress | null>(null);
   const [cardHandoffPreparing, setCardHandoffPreparing] = useState(false);
+  const [cardDiagnostic, setCardDiagnostic] = useState<CardTransportDiagnostic | null>(null);
   const [cardAttemptCode, setCardAttemptCode] = useState<string | null>(null);
   const liveTransportRef = useRef<PersistentLiveTransport | null>(null);
   const speedGuardTimerRef = useRef<number | null>(null);
@@ -418,6 +420,7 @@ export default function AppV2Client() {
     setCardHandoffPreparing(false);
     setCardSession(readingSession);
     setCardAttemptCode(null);
+    setCardDiagnostic(null);
     setCardReadProgress(Object.freeze({ submessages: 0, byteLength: 0, complete: false }));
 
     const controller = new AbortController();
@@ -431,6 +434,7 @@ export default function AppV2Client() {
         disconnectOnFinish: true,
         signal: controller.signal,
       },
+      onDiagnostic: setCardDiagnostic,
       onProgress: (progress: CardReadProgress) => setCardReadProgress(progress),
       onTelemetryAttempt: (attemptCode: string) => setCardAttemptCode(attemptCode),
     }).catch((error: unknown) => ({
@@ -474,6 +478,7 @@ export default function AppV2Client() {
             errorText: cardSession.errorText ?? liveSession.errorText ?? null,
             cardReadProgress,
             cardAttemptCode,
+            cardDiagnostic,
             versionLine: formatTachoCommandVersionLine(),
             locale,
             onLocale: (next) => { setLocale(next); try { localStorage.setItem("tachocommand-locale", next); } catch {} },

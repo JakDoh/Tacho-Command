@@ -1,4 +1,5 @@
 "use client";
+import type { CardTransportDiagnostic } from "../../lib/card-transport-diagnostic";
 import Link from "next/link";
 import { useState } from "react";
 import styles from "./field-proven-premium-ui.module.css";
@@ -24,6 +25,7 @@ type ProductControls = {
     byteLength: number;
     complete: boolean;
   } | null;
+  cardDiagnostic?: CardTransportDiagnostic | null;
   cardAttemptCode: string | null;
   versionLine: string;
   locale: Locale;
@@ -408,6 +410,15 @@ export default function FieldProvenPremiumUi({
                     <progress aria-label={t.reading} />
                     <p>{c.screenAwake ? t.awake : t.noWake}</p>
                   </>
+                )}
+                {c.cardDiagnostic && (
+                  <div aria-live="polite">
+                    <p>{c.locale === "sr" ? "Faza" : c.locale === "de" ? "Phase" : "Stage"}: <code>{c.cardDiagnostic.stage}</code></p>
+                    <p>{c.locale === "sr" ? "Poslednja potvrđena faza" : c.locale === "de" ? "Zuletzt bestätigt" : "Last confirmed stage"}: <code>{c.cardDiagnostic.lastConfirmedStage}</code></p>
+                    {c.cardDiagnostic.errorCode && <p role="alert">{c.locale === "sr" ? "Razlog prekida" : c.locale === "de" ? "Abbruchgrund" : "Stop reason"}: <code>{c.cardDiagnostic.errorCode}</code></p>}
+                    <p>{c.locale === "sr" ? "Vreme do poslednjeg događaja" : c.locale === "de" ? "Zeit bis zum letzten Ereignis" : "Time to last event"}: {(c.cardDiagnostic.elapsedMs / 1000).toFixed(1)} s · Pending: {c.cardDiagnostic.pendingResponses}</p>
+                    {c.cardDiagnostic.stage === "waiting_first_packet" && !c.cardDiagnostic.errorCode && <p>{c.locale === "sr" ? "Čekanje prvog paketa, najviše" : c.locale === "de" ? "Warten auf erstes Paket, maximal" : "Waiting for first packet, maximum"} {c.cardDiagnostic.firstPacketTimeoutMs / 1000} s</p>}
+                  </div>
                 )}
                 {c.cardAttemptCode && (
                   <p>
