@@ -3,7 +3,7 @@ import type { CardTransportDiagnostic } from "../../lib/card-transport-diagnosti
 import Link from "next/link";
 import { diagnosticCopy } from "../../lib/product-diagnostic-copy.js";
 import { appCopy as copy, APP_LANGUAGES, type AppLocale } from "../../lib/product-app-copy.js";
-import { analyzeCardBreaks } from "../../lib/card-break-analysis.js";
+import { reviewUtcCardBreaks, exportUtcCardCsv } from "../../lib/card-utc-review.js";
 import { useState } from "react";
 import styles from "./field-proven-premium-ui.module.css";
 import type {
@@ -13,6 +13,8 @@ import type {
 export type ProductTab = "live" | "periods" | "history" | "attention" | "card";
 type Locale = AppLocale;
 type ProductControls = {
+  canonicalCard?: Readonly<Record<string, unknown>> | null;
+  persisted?: boolean;
   phase:
     | "idle"
     | "connecting"
@@ -58,27 +60,10 @@ function clock(value: number | null) {
     ? "—"
     : `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`;
 }
-function exportCsv(state: FieldProvenProductState, controls: ProductControls) {
-  const quote = (value: unknown) =>
-    '"' + String(value ?? "").replaceAll('"', '""') + '"';
-  const rows: unknown[][] = [
-    ["TachoCommand user overview — not official DDD"],
-    ["Time zone", controls.zone],
-    ["Saved", controls.restoredLabel],
-    ["Date", "Activity", "Local start", "Local end", "Elapsed minutes"],
-  ];
-  for (const day of state.historyDays)
-    for (const seg of day.segments)
-      rows.push([
-        day.dateIso,
-        seg.kind,
-        clock(seg.startMinute),
-        clock(seg.endMinute),
-        seg.minutes,
-      ]);
+function exportCsv(controls: ProductControls) {
   const url = URL.createObjectURL(
     new Blob(
-      ["\uFEFF" + rows.map((row) => row.map(quote).join(",")).join("\r\n")],
+      [exportUtcCardCsv(controls.canonicalCard ?? null, controls.zone, controls.persisted !== false)],
       { type: "text/csv;charset=utf-8" },
     ),
   );
@@ -99,7 +84,18 @@ export default function FieldProvenPremiumUi({
   const [selected, setSelected] = useState<string | null>(null);
   const t = copy[c.locale];
   const d = diagnosticCopy[c.locale];
-  const analysis = analyzeCardBreaks(state.historyDays);
+  const unsavedTitle = {sr:'Kartica proverena · nije sačuvana',en:'Card verified · not saved',de:'Karte geprüft · nicht gespeichert',ru:'Карта проверена · не сохранена',bg:'Картата е проверена · не е запазена',ro:'Card verificat · nesalvat',hu:'Kártya ellenőrizve · nincs mentve'}[c.locale];
+  const cutoffLabel = {sr:'Podaci do početka očitavanja',en:'Data cutoff: read start',de:'Datenstand: Beginn der Auslesung',ru:'Данные на момент начала считывания',bg:'Данни към началото на прочитането',ro:'Date până la începutul citirii',hu:'Adatok a kiolvasás kezdetéig'}[c.locale];
+  const unsavedCopy = {
+    sr: "Očitavanje je provereno, ali nije sačuvano na telefonu. Izvezite CSV pre zatvaranja aplikacije. Prethodno sačuvana kartica nije zamenjena.",
+    en: "The read is verified but not saved on this phone. Export CSV before closing the app. The previously saved card has not been replaced.",
+    de: "Die Auslesung ist geprüft, aber nicht auf diesem Telefon gespeichert. Vor dem Schließen CSV exportieren. Die zuvor gespeicherte Karte wurde nicht ersetzt.",
+    ru: "Считывание проверено, но не сохранено на телефоне. Экспортируйте CSV до закрытия приложения. Ранее сохранённая карта не заменена.",
+    bg: "Прочитането е проверено, но не е запазено на телефона. Експортирайте CSV преди затваряне. Предишната запазена карта не е заменена.",
+    ro: "Citirea este verificată, dar nu este salvată pe telefon. Exportați CSV înainte de închidere. Cardul salvat anterior nu a fost înlocuit.",
+    hu: "A kiolvasás ellenőrzött, de nincs elmentve a telefonra. Bezárás előtt exportálja CSV-be. A korábban mentett kártya nem változott.",
+  }[c.locale];
+  const analysis = reviewUtcCardBreaks(c.canonicalCard ?? null, c.zone);
   const warningCopy = {
     sr: {title: "Provera pauza", scope: "Standardno pravilo: 4 h 30 min vožnje; pauza 45 min ili najmanje 15 + 30 min, tim redom. Nalazi važe za taj režim. Posebni režimi prevoza, radno vreme i dnevni/nedeljni odmori nisu provereni.", none: "Nema pronađenog prekoračenja po ovoj proveri. To nije potvrda da nema drugih prekršaja.", gap: "Nepotpuni ili vremenski nejasni podaci: deo istorije nije moguće proveriti.", excess: "Prekoračenje", count: "Periodi za proveru"},
     en: {title: "Driving break check", scope: "Standard rule: 4 h 30 min driving; 45 min break or at least 15 + 30 min, in that order. Findings apply to this regime. Special transport regimes, working time and daily/weekly rest are not checked.", none: "No exceedance found by this check. This does not confirm the absence of other infringements.", gap: "Incomplete or ambiguous times: part of the history could not be checked.", excess: "Excess", count: "Periods to review"},
@@ -137,7 +133,7 @@ export default function FieldProvenPremiumUi({
           ? t.processing
           : t.reading
         : c.accepted
-          ? t.success
+          ? (c.persisted === false ? unsavedTitle : t.success)
           : c.phase === "connecting"
             ? t.connecting
             : state.live
@@ -171,6 +167,7 @@ export default function FieldProvenPremiumUi({
         </label>
       </header>
       <main className={styles.content}>
+        {c.persisted === false && <p role="alert">{unsavedCopy}</p>}
         <div className={styles.screenTopline} role="status" aria-live="polite">
           <strong>{status}</strong>
         </div>
@@ -180,7 +177,7 @@ export default function FieldProvenPremiumUi({
         )}
         {c.savedAvailable && (
           <section className={styles.emptyPanel}>
-            <p>{t.savedNote}</p>
+            <p>{c.persisted === false ? unsavedCopy : t.savedNote}</p>
             <button disabled={busy} onClick={c.onShowSaved}>
               {t.showSaved}
             </button>
@@ -219,7 +216,7 @@ export default function FieldProvenPremiumUi({
             <p className={styles.subtleNote}>{t.breakNote}</p>
             <section className={styles.cardActionPanel}>
               <div>
-                <strong>{c.accepted ? t.success : t.read}</strong>
+                <strong>{c.accepted ? (c.persisted === false ? unsavedTitle : t.success) : t.read}</strong>
                 {c.cardReadProgress && (
                   <p role="status" aria-live="polite">
                     {t.packets}: {c.cardReadProgress.submessages} ·{" "}
@@ -271,7 +268,7 @@ export default function FieldProvenPremiumUi({
                   </p>
                 )}
               </div>
-              {c.phase === "card-reading" ? (
+              {["connecting", "card-preparing", "card-reading"].includes(c.phase) ? (
                 <button onClick={c.onCancel}>{t.cancel}</button>
               ) : (
                 <button
@@ -302,7 +299,7 @@ export default function FieldProvenPremiumUi({
             </p>
             {!c.periodComplete && <p>{t.partial}</p>}
             <p>
-              {t.until}: {c.restoredLabel ?? "—"}
+              {cutoffLabel}: {c.restoredLabel ?? "—"}
             </p>
           </div>
         )}
@@ -313,7 +310,7 @@ export default function FieldProvenPremiumUi({
               {state.historyDaysAvailable}/56 {t.days} · {c.zone}
             </p>
             <p>
-              {t.until}: {c.restoredLabel ?? "—"}
+              {cutoffLabel}: {c.restoredLabel ?? "—"}
             </p>
             {day ? (
               <>
@@ -414,7 +411,7 @@ export default function FieldProvenPremiumUi({
               {analysis.incomplete && <p>{warningCopy.gap}</p>}
               {!analysis.findings.length && <p>{warningCopy.none}</p>}
               {analysis.findings.map((f, i) => <section className={styles.breakFinding} key={i}>
-                <h2>{f.startDate} · {clock(f.startMinute)}–{f.date !== f.startDate ? f.date + " " : ""}{clock(f.endMinute)}</h2>
+                <h2>{f.startLabel} – {f.endLabel}</h2>
                 <p>{t.drive}: <strong>{minutes(f.drivingMinutes)}</strong></p>
                 <p>{warningCopy.excess}: <strong>{f.excessMinutes} min</strong></p>
               </section>)}
@@ -424,7 +421,7 @@ export default function FieldProvenPremiumUi({
         {tab === "card" && (
           <div className={styles.screen}>
             <h1>{t.card}</h1>
-            <p>{t.savedNote}</p>
+            <p>{c.persisted === false ? unsavedCopy : t.savedNote}</p>
             <div className={styles.statusGrid}>
               <section>
                 {t.driver}
@@ -441,7 +438,7 @@ export default function FieldProvenPremiumUi({
                 <strong>{state.tachographLabel ?? "—"}</strong>
               </section>
               <section>
-                {t.until}
+                {cutoffLabel}
                 <strong>{c.restoredLabel ?? "—"}</strong>
               </section>
             </div>
@@ -450,7 +447,7 @@ export default function FieldProvenPremiumUi({
             </p>
             <button
               disabled={busy || !state.cardReadComplete}
-              onClick={() => exportCsv(state, c)}
+              onClick={() => exportCsv(c)}
             >
               {t.csv}
             </button>

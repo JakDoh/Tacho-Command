@@ -1,6 +1,6 @@
 "use client";
 import {useCallback, useEffect, useRef, useState} from 'react';
-export type EmailTrial = {status:'loading'|'not_started'|'active'|'owner'|'expired'|'unavailable'; remainingSeconds?:number; expiresAt?:number; serverNow?:number};
+export type EmailTrial = {status:'loading'|'not_started'|'active'|'owner'|'expired'|'unavailable'; remainingSeconds?:number; expiresAt?:number; serverNow?:number; offline?:boolean};
 export function useEmailTrial(onExpire:()=>void) {
   const [access,setAccess] = useState<EmailTrial>({status:'loading'});
   const permission = useRef(false);
@@ -33,9 +33,12 @@ export function useEmailTrial(onExpire:()=>void) {
       accessStatus.current = next.status;
       setAccess(next);
     } catch {
-      // Keep a verified owner session usable while connectivity drops during a read.
-      if (accessStatus.current !== 'owner') permission.current = false;
-      setAccess(accessStatus.current === 'owner' ? {status:'owner'} : {status:'unavailable'});
+      // A failed refresh cannot extend the already verified deadline. No offline grant survives a reload.
+      const retained = accessStatus.current === 'active' && performance.now() < deadline.current;
+      permission.current = accessStatus.current === 'owner' || retained;
+      setAccess(accessStatus.current === 'owner' ? {status:'owner',offline:true}
+        : retained ? {status:'active',offline:true,remainingSeconds:Math.max(0,Math.ceil((deadline.current-performance.now())/1000))}
+        : {status:'unavailable'});
     } finally { refreshing.current = false; }
   },[]);
   useEffect(()=>{

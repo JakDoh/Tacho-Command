@@ -1,5 +1,5 @@
 export type AppV2CardPipelineResult = Readonly<{
-  status: "accepted" | "rejected_parser_result" | "rejected_invalid" | "rejected_incomplete" | "storage_unavailable" | "storage_error";
+  status: "accepted" | "accepted_unsaved" | "rejected_parser_result" | "rejected_invalid" | "rejected_incomplete" | "storage_unavailable" | "storage_error";
   card: Readonly<Record<string, unknown>> | null;
   snapshot: Readonly<Record<string, unknown>> | null;
 }>;

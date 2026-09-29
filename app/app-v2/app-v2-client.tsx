@@ -1,4 +1,5 @@
 "use client";
+import { abortableBleDelay } from "../../lib/ble-operation.js";
 import EmailAccessPanel from "../email-access-panel";
 import { useEmailTrial } from "../../lib/use-email-trial";
 import { APP_LANGUAGES, type AppLocale } from "../../lib/product-app-copy.js";
@@ -48,23 +49,19 @@ const LIVE_TO_CARD_SETTLE_MS = 5000;
 const LIVE_MONITOR_IDLE_TIMEOUT_MS = 10000;
 const LIVE_MONITOR_IDLE_POLL_MS = 50;
 
-const waitForLiveRelease = () => new Promise<void>((resolve) => {
-  window.setTimeout(resolve, LIVE_TO_CARD_SETTLE_MS);
-});
+const waitForLiveRelease = (signal?: AbortSignal) => abortableBleDelay(LIVE_TO_CARD_SETTLE_MS, signal);
 
-async function waitForLiveMonitorIdle(isBusy: () => boolean) {
-  const deadline = Date.now() + LIVE_MONITOR_IDLE_TIMEOUT_MS;
+async function waitForLiveMonitorIdle(isBusy: () => boolean, signal?: AbortSignal) {
+  const deadline = performance.now() + LIVE_MONITOR_IDLE_TIMEOUT_MS;
   while (isBusy()) {
-    if (Date.now() >= deadline) {
+    if (performance.now() >= deadline) {
       throw new Error("LIVE provera se nije završila na vreme.");
     }
-    await new Promise<void>((resolve) => {
-      window.setTimeout(resolve, LIVE_MONITOR_IDLE_POLL_MS);
-    });
+    await abortableBleDelay(LIVE_MONITOR_IDLE_POLL_MS, signal);
   }
 }
 
-async function closeLiveForCard(transport: PersistentLiveTransport) {
+async function closeLiveForCard(transport: PersistentLiveTransport, signal?: AbortSignal) {
   const closeStartedAt = performance.now();
   let timeoutId: number | null = null;
   const outcome = await Promise.race([
@@ -80,7 +77,7 @@ async function closeLiveForCard(transport: PersistentLiveTransport) {
     throw new Error("LIVE_CLOSE_TIMEOUT");
   }
   const closeMs = Math.round(performance.now() - closeStartedAt);
-  await waitForLiveRelease();
+  await waitForLiveRelease(signal);
   return Object.freeze({ closeMs, settleMs: LIVE_TO_CARD_SETTLE_MS, totalMs: Math.round(performance.now() - closeStartedAt) });
 }
 
@@ -103,6 +100,10 @@ export default function AppV2Client() {
   const [savedCardVisible, setSavedCardVisible] = useState(false);
   const [clock, setClock] = useState(() => Date.now());
   const [screenAwake, setScreenAwake] = useState(false);
+  const liveOpenAbortRef = useRef<AbortController | null>(null);
+  const generationRef = useRef(0);
+  const mountedRef = useRef(true);
+  const liveOpeningRef = useRef(false);
   const readAbortRef = useRef<AbortController | null>(null);
   const [restoreState, setRestoreState] = useState<RestoreState>("checking");
   const [cardState, setCardState] = useState<Readonly<Record<string, unknown>> | null>(null);
@@ -176,12 +177,15 @@ export default function AppV2Client() {
     }
   };
 
-  const closePersistentLive = async (errorText: string | null = null) => {
+  const closePersistentLive = async (errorText: string | null = null, expected?: PersistentLiveTransport) => {
+    if (expected && liveTransportRef.current !== expected) return;
+    const generation = generationRef.current;
     stopSpeedGuard();
     const transport = liveTransportRef.current;
     liveTransportRef.current = null;
     setLiveConnected(false);
     try { await transport?.close(); } catch {}
+    if (!mountedRef.current || generationRef.current !== generation || liveTransportRef.current) return;
     setLastLiveSnapshot((previous) => previous ? { ...previous, connected: false } : previous);
     if (errorText) {
       setLiveSession(createAppV2LiveSession({ phase: "error", errorText }));
@@ -197,7 +201,7 @@ export default function AppV2Client() {
       try {
         await transport.assertStationary();
       } catch (error) {
-        await closePersistentLive(error instanceof Error ? error.message : "Brzina nije potvrđena — BLE veza je prekinuta.");
+        await closePersistentLive(error instanceof Error ? error.message : "Brzina nije potvrđena — BLE veza je prekinuta.", transport);
       } finally {
         udsMonitorBusyRef.current = false;
       }
@@ -211,7 +215,9 @@ export default function AppV2Client() {
         const refreshed = await runAppV2FieldLiveRead({
           sendUds: transport.sendUds,
           deviceLabel: transport.deviceLabel,
+          shouldContinue: () => mountedRef.current && !cardReadBusyRef.current && liveTransportRef.current === transport,
         });
+        if (!mountedRef.current || cardReadBusyRef.current || liveTransportRef.current !== transport) return;
         if (refreshed.status === "live") {
           setLastLiveSnapshot({
             ...refreshed.session.productLive,
@@ -225,7 +231,7 @@ export default function AppV2Client() {
           throw new Error(refreshed.session.errorText ?? "LIVE veza je prekinuta.");
         }
       } catch (error) {
-        await closePersistentLive(error instanceof Error ? error.message : "LIVE veza je prekinuta.");
+        await closePersistentLive(error instanceof Error ? error.message : "LIVE veza je prekinuta.", transport);
       } finally {
         udsMonitorBusyRef.current = false;
       }
@@ -262,12 +268,15 @@ export default function AppV2Client() {
     return () => window.clearTimeout(timer);
   }, []);
 
-  useEffect(() => () => {
+  useEffect(() => { mountedRef.current = true; return () => {
+    mountedRef.current = false;
+    generationRef.current += 1;
+    liveOpenAbortRef.current?.abort();
     stopSpeedGuard();
     readAbortRef.current?.abort();
     void liveTransportRef.current?.close();
     liveTransportRef.current = null;
-  }, []);
+  }; }, []);
 
   const zone = phoneTimeZone();
   const projectedCard = useMemo(() => projectCardTimelineForPhone(cardState, zone, { now: new Date(clock) }), [cardState, zone, clock]);
@@ -298,199 +307,134 @@ export default function AppV2Client() {
 
   const restoredLabel = formatRestoreTime(capturedAtIso, locale);
 
-  const trial = useEmailTrial(() => { readAbortRef.current?.abort(); void closePersistentLive(); });
+  const trial = useEmailTrial(() => { generationRef.current += 1; liveOpenAbortRef.current?.abort(); readAbortRef.current?.abort(); void closePersistentLive(); });
 
   const runLiveRead = async () => {
     if (!trial.permitsNow()) { void trial.refresh(); return; }
-    if (liveRunState === "running" || cardSession.busy || cardReadBusyRef.current) return;
+    if (liveOpeningRef.current || cardSession.busy || cardReadBusyRef.current) return;
+    liveOpeningRef.current = true;
+    const generation = ++generationRef.current;
+    const controller = new AbortController();
+    liveOpenAbortRef.current = controller;
     setLiveRunState("running");
     setLiveSession(createAppV2LiveSession({ phase: "connecting" }));
-    await closePersistentLive();
-
-    const result = await runAppV2LiveAttemptWithTelemetry({
-      openTransport: () => openBrowserAppV2FieldTransport(),
-      keepTransportOpen: true,
-    });
-
-    if (!trial.permitsNow()) {
-      try { await (result.transport as PersistentLiveTransport | undefined)?.close(); } catch {}
-      setLiveRunState("idle");
-      return;
+    try {
+      await closePersistentLive();
+      if (controller.signal.aborted) return;
+      const result = await runAppV2LiveAttemptWithTelemetry({
+        openTransport: () => openBrowserAppV2FieldTransport({ signal: controller.signal }),
+        keepTransportOpen: true,
+      });
+      if (!mountedRef.current || generationRef.current !== generation || controller.signal.aborted || !trial.permitsNow()) {
+        try { await (result.transport as PersistentLiveTransport | undefined)?.close(); } catch {}
+        return;
+      }
+      if (["live", "incomplete"].includes(result.status) && result.transport) {
+        const transport = result.transport as PersistentLiveTransport;
+        liveTransportRef.current = transport;
+        setLiveConnected(true);
+        startSpeedGuard(transport);
+        setLastLiveSnapshot({
+          ...result.session.productLive,
+          connected: true,
+          snapshotConfirmed: result.status === "live",
+          measuredAt: Date.now(),
+          deviceLabel: result.session.productLive.deviceLabel ?? transport.deviceLabel,
+          attemptCode: result.attemptCode,
+          telemetryAcceptedCount: result.telemetryAcceptedCount,
+        });
+        setLiveSession(createAppV2LiveSession({ phase: "live", deviceLabel: transport.deviceLabel,
+          lastLiveReadLabel: result.status === "live" ? result.session.productLive.lastLiveReadLabel : undefined,
+          attemptCode: result.attemptCode, telemetryAcceptedCount: result.telemetryAcceptedCount }));
+        setLiveRunState("success");
+      } else {
+        setLiveSession(createAppV2LiveSession({ phase: "error", errorText: result.session.errorText,
+          attemptCode: result.attemptCode, telemetryAcceptedCount: result.telemetryAcceptedCount }));
+        setLiveRunState("error");
+      }
+    } finally {
+      if (liveOpenAbortRef.current === controller) liveOpenAbortRef.current = null;
+      liveOpeningRef.current = false;
+      if (mountedRef.current && controller.signal.aborted) setLiveRunState("idle");
     }
-    if (["live", "incomplete"].includes(result.status) && result.transport) {
-      const transport = result.transport as PersistentLiveTransport;
-      liveTransportRef.current = transport;
-      setLiveConnected(true);
-      startSpeedGuard(transport);
-      const confirmedSnapshot = {
-        ...result.session.productLive,
-        connected: true,
-        snapshotConfirmed: result.status === "live",
-        measuredAt: Date.now(),
-        deviceLabel: result.session.productLive.deviceLabel ?? transport.deviceLabel,
-        attemptCode: result.attemptCode,
-        telemetryAcceptedCount: result.telemetryAcceptedCount,
-      };
-      setLastLiveSnapshot(confirmedSnapshot);
-      setLiveSession(createAppV2LiveSession({
-        phase: "live",
-        deviceLabel: result.session.productLive.deviceLabel,
-        lastLiveReadLabel: result.status === "live"
-          ? result.session.productLive.lastLiveReadLabel
-          : undefined,
-        attemptCode: result.attemptCode,
-        telemetryAcceptedCount: result.telemetryAcceptedCount,
-      }));
-      setLiveRunState("success");
-      return;
-    }
-
-    setLiveSession(createAppV2LiveSession({
-      phase: "error",
-      deviceLabel: result.session.productLive?.deviceLabel,
-      attemptCode: result.attemptCode,
-      telemetryAcceptedCount: result.telemetryAcceptedCount,
-      errorText: result.session.errorText,
-    }));
-    setLiveRunState("error");
   };
 
   const runCardRead = async () => {
     if (!trial.permitsNow()) { void trial.refresh(); return; }
-    if (cardSession.busy || cardReadBusyRef.current || liveRunState === "running") return;
+    if (cardSession.busy || cardReadBusyRef.current || liveOpeningRef.current) return;
     const transport = liveTransportRef.current;
     if (!transport || transport.isConnected?.() === false) {
-      setLiveSession(createAppV2LiveSession({
-        phase: "error",
-        errorText: "Prvo povežite tahograf za bezbednu LIVE vezu.",
-      }));
-      setLiveRunState("error");
-      return;
+      setLiveSession(createAppV2LiveSession({ phase: "error", errorText: "Prvo povežite tahograf za bezbednu LIVE vezu." }));
+      setLiveRunState("error"); return;
     }
-
-    // Freeze the LIVE monitor before entering the handoff. A speed guard or
-    // refresh request may already be in flight, so wait for that single UDS
-    // operation to finish rather than racing another request against it.
-    cardReadBusyRef.current = true;
-    setCardHandoffPreparing(true);
-    stopSpeedGuard();
-    try {
-      await waitForLiveMonitorIdle(() => udsMonitorBusyRef.current);
-    } catch (error) {
-      cardReadBusyRef.current = false;
-      setCardHandoffPreparing(false);
-      await closePersistentLive(error instanceof Error ? error.message : "LIVE provera nije završena.");
-      return;
-    }
-
-    if (liveTransportRef.current !== transport || transport.isConnected?.() === false) {
-      cardReadBusyRef.current = false;
-      setCardHandoffPreparing(false);
-      await closePersistentLive("LIVE veza je završena pre očitavanja kartice.");
-      return;
-    }
-
-    // LIVE and card download use separate GATT sessions, but they target the
-    // same browser-authorized BluetoothDevice. Reuse that handle so the
-    // handoff does not open a second chooser or depend on transient activation.
-    const selectedCardDevice = transport.device;
-    if (!selectedCardDevice?.gatt) {
-      cardReadBusyRef.current = false;
-      setCardHandoffPreparing(false);
-      setLiveSession(createAppV2LiveSession({
-        phase: "error",
-        errorText: "Tahograf iz LIVE veze nije dostupan za očitavanje kartice.",
-      }));
-      setLiveRunState("error");
-      return;
-    }
-
-    try {
-      await transport.assertStationary();
-    } catch (error) {
-      cardReadBusyRef.current = false;
-      setCardHandoffPreparing(false);
-      await closePersistentLive(error instanceof Error ? error.message : "Brzina nije potvrđena — BLE veza je prekinuta.");
-      return;
-    }
-
-    // Diagnostics/LIVE and the proven Download protocol remain separate
-    // sessions. End diagnostics cleanly, allow the DTCO to release that
-    // session, then let the locked card path reconnect the retained device.
-    stopSpeedGuard();
-    liveTransportRef.current = null;
-    setLiveConnected(false);
-    setLastLiveSnapshot((previous) => previous ? { ...previous, connected: false } : previous);
-    const handoffStartedAt = performance.now();
-    setCardDiagnostic(null);
-    setCardReadProgress(null);
-    setCardAttemptCode(null);
-    let handoff: CardTransportDiagnostic["handoff"];
-    try {
-      handoff = await closeLiveForCard(transport);
-    } catch (error) {
-      setCardDiagnostic(Object.freeze({
-        stage: "live_teardown", lastConfirmedStage: "stationary_confirmed",
-        errorCode: error instanceof Error && error.message === "LIVE_CLOSE_TIMEOUT"
-          ? "live_close_timeout" : "live_close_failed",
-        elapsedMs: Math.round(performance.now() - handoffStartedAt),
-        packets: 0, bytes: 0, pendingResponses: 0, firstPacketTimeoutMs: 90000,
-        events: [
-          { ms: 0, event: "live:close_start" },
-          { ms: Math.round(performance.now() - handoffStartedAt), event: "live:close_failed" },
-        ],
-      }));
-      cardReadBusyRef.current = false;
-      setCardHandoffPreparing(false);
-      setLiveSession(createAppV2LiveSession({
-        phase: "error",
-        errorText: "LIVE veza nije uredno zatvorena pre očitavanja kartice.",
-      }));
-      setLiveRunState("error");
-      return;
-    }
-
-    if (!trial.permitsNow()) {
-      cardReadBusyRef.current = false; setCardHandoffPreparing(false);
-      return;
-    }
-    const readingSession = beginAppV2CardRead(cardSession);
-    setCardHandoffPreparing(false);
-    setCardSession(readingSession);
-    setCardAttemptCode(null);
-    setCardDiagnostic(null);
-    setCardReadProgress(Object.freeze({ submessages: 0, byteLength: 0, complete: false }));
-
     const controller = new AbortController();
     readAbortRef.current = controller;
-    const result = await runBrowserAppV2GoldenCardRead({
-      session: readingSession,
-      storage: window.localStorage,
-      capturedAtIso: new Date().toISOString(),
-      transportOptions: {
-        device: selectedCardDevice,
-        disconnectOnFinish: true,
-        signal: controller.signal,
-      },
-      onDiagnostic: (diagnostic: CardTransportDiagnostic) => setCardDiagnostic(Object.freeze({ ...diagnostic, handoff })),
-      onProgress: (progress: CardReadProgress) => setCardReadProgress(progress),
-      onTelemetryAttempt: (attemptCode: string) => setCardAttemptCode(attemptCode),
-    }).catch((error: unknown) => ({
-      status: "error",
-      session: failAppV2CardRead(readingSession, error instanceof Error ? error.message : undefined),
-    })).finally(async () => {
+    const generation = generationRef.current;
+    const current = () => mountedRef.current && generationRef.current === generation && !controller.signal.aborted;
+    cardReadBusyRef.current = true;
+    setCardHandoffPreparing(true);
+    setCardDiagnostic(null); setCardReadProgress(null); setCardAttemptCode(null);
+    stopSpeedGuard();
+    let readingSession: ReturnType<typeof beginAppV2CardRead> | null = null;
+    try {
+      // The refresh yields between UDS requests; only its current request drains.
+      await waitForLiveMonitorIdle(() => udsMonitorBusyRef.current, controller.signal);
+      if (!current()) throw new Error("BLE_CANCELLED");
+      if (liveTransportRef.current !== transport || transport.isConnected?.() === false) throw new Error("LIVE veza je završena pre očitavanja kartice.");
+      const selectedCardDevice = transport.device;
+      if (!selectedCardDevice?.gatt) throw new Error("Tahograf iz LIVE veze nije dostupan za očitavanje kartice.");
+      await transport.assertStationary();
+      if (!current()) throw new Error("BLE_CANCELLED");
+      stopSpeedGuard();
+      liveTransportRef.current = null;
+      setLiveConnected(false);
+      setLastLiveSnapshot(previous => previous ? { ...previous, connected: false } : previous);
+      const handoffStartedAt = performance.now();
+      let handoff: CardTransportDiagnostic["handoff"];
+      try { handoff = await closeLiveForCard(transport, controller.signal); }
+      catch (error) {
+        if (current()) setCardDiagnostic(Object.freeze({
+          stage: "live_teardown", lastConfirmedStage: "stationary_confirmed",
+          errorCode: error instanceof Error && error.message === "LIVE_CLOSE_TIMEOUT" ? "live_close_timeout" : "live_close_failed",
+          elapsedMs: Math.round(performance.now() - handoffStartedAt), packets: 0, bytes: 0, pendingResponses: 0, firstPacketTimeoutMs: 90000,
+          events: [{ ms: 0, event: "live:close_start" }, { ms: Math.round(performance.now() - handoffStartedAt), event: "live:close_failed" }],
+        }));
+        throw error;
+      }
+      if (!current() || !trial.permitsNow()) throw new Error("BLE_CANCELLED");
+      readingSession = beginAppV2CardRead(cardSession);
+      setCardSession(readingSession); setCardHandoffPreparing(false);
+      setCardReadProgress(Object.freeze({ submessages: 0, byteLength: 0, complete: false }));
+      let storage: Storage | null = null;
+      try { storage = window.localStorage; } catch {}
+      const result = await runBrowserAppV2GoldenCardRead({
+        session: readingSession, storage, capturedAtIso: new Date().toISOString(),
+        transportOptions: { device: selectedCardDevice, disconnectOnFinish: true, signal: controller.signal },
+        onDiagnostic: diagnostic => { if (current()) setCardDiagnostic(Object.freeze({ ...diagnostic, handoff })); },
+        onProgress: progress => { if (current()) setCardReadProgress(progress); },
+        onTelemetryAttempt: code => { if (current()) setCardAttemptCode(code); },
+      });
+      if (!mountedRef.current || generationRef.current !== generation) return;
+      if (result.session) setCardSession(result.session);
+      if ((result.status === "accepted" || result.status === "accepted_unsaved") && result.session?.currentCard) {
+        setSavedCardVisible(true); setCardState(result.session.currentCard);
+        setCapturedAtIso(result.session.capturedAtIso); setRestoreState("restored");
+      }
+    } catch (error) {
+      if (liveTransportRef.current === transport) await closePersistentLive(null, transport);
+      else { try { await transport.close(); } catch {} }
+      if (!mountedRef.current) return;
+      if (readingSession) setCardSession(failAppV2CardRead(readingSession) ?? createAppV2CardSession());
+      setLiveSession(createAppV2LiveSession({ phase: controller.signal.aborted ? "idle" : "error",
+        errorText: error instanceof Error ? error.message : "LIVE veza je prekinuta." }));
+      setLiveRunState(controller.signal.aborted ? "idle" : "error");
+    } finally {
+      if (readAbortRef.current === controller) readAbortRef.current = null;
       cardReadBusyRef.current = false;
-      readAbortRef.current = null;
-    });
-
-    if (result.session) setCardSession(result.session);
-
-    if (result.status === "accepted" && result.session?.currentCard) {
-      setSavedCardVisible(true);
-      setCardState(result.session.currentCard);
-      setCapturedAtIso(result.session.capturedAtIso);
-      setRestoreState("restored");
-      return;
+      if (mountedRef.current) {
+        setCardHandoffPreparing(false);
+        if (controller.signal.aborted) setCardSession(previous => createAppV2CardSession({ ...previous, phase: "idle" }));
+      }
     }
   };
 
@@ -516,6 +460,8 @@ export default function AppV2Client() {
         <FieldProvenPremiumUi
           state={state}
           controls={{
+            canonicalCard: savedCardVisible ? cardState : null,
+            persisted: cardSession.persisted,
             phase: productPhase,
             accessAllowed: (trial.access.status === "active" || trial.access.status === "owner") && trial.permitsNow(),
             restoreState,
@@ -541,7 +487,7 @@ export default function AppV2Client() {
               setCardState(null); setCapturedAtIso(null); setSavedCardVisible(false);
               setCardSession(createAppV2CardSession()); setRestoreState("empty"); setCardReadProgress(null);
             },
-            onCancel: () => readAbortRef.current?.abort(),
+            onCancel: () => { liveOpenAbortRef.current?.abort(); readAbortRef.current?.abort(); },
             onConnect: runLiveRead,
             onReadCard: runCardRead,
             onDisconnect: () => { void closePersistentLive(); },

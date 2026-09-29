@@ -39,7 +39,7 @@ test('detailed diagnostics expose stalled progress and a local export action',()
 
 test('historical break finding is visible on overview without opening Attention',()=>{
  const state={...createFieldProvenProductState(),historyDays:[{dateIso:'2026-09-21',segments:[{kind:'drive',startMinute:760,endMinute:1037,minutes:277}]}]};
- assert.match(render(Ui,{state,controls}),/Periodi za proveru: 1/);
+ assert.match(render(Ui,{state,controls:{...controls,canonicalCard:state}}),/Periodi za proveru: 1/);
 });
 
 test('customer interface does not expose protocol diagnostics',()=>{
@@ -59,5 +59,17 @@ test('all seven app dictionaries contain the same complete key set',async()=>{
  assert.deepEqual(Object.keys(appCopy[locale]).sort(),expected);
  assert.equal(appCopy[locale].tabs.length,5);
  for(const value of Object.values(appCopy[locale])) assert.ok(Array.isArray(value)?value.every(Boolean):value.length>0);
+ }
+});
+
+test('verified but unsaved card never displays a saved-success claim',()=>{
+ const html=render(Ui,{state:createFieldProvenProductState(),controls:{...controls,accepted:true,persisted:false}});
+ assert.match(html,/Kartica proverena · nije sačuvana/);
+ assert.match(html,/Izvezite CSV pre zatvaranja/);
+ assert.doesNotMatch(html,/Kartica obrađena i sačuvana/);
+});
+test('connecting and handoff both expose cancellation',()=>{
+ for(const phase of ['connecting','card-preparing']) {
+  assert.match(render(Ui,{state:createFieldProvenProductState(),controls:{...controls,phase}}),/Prekini očitavanje/);
  }
 });

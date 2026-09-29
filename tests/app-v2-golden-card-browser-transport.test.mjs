@@ -246,3 +246,16 @@ for (const mode of ['pending', 'hung_ack']) test(`mid-transfer diagnostics ident
     assert.equal(device.gatt.connected,false);
   }finally{clearInterval(pendingTimer);}
 });
+
+test('repeated response-pending cannot extend a preparation command beyond its absolute deadline', async()=>{
+  const fifo=new FakeCharacteristic('29d3a479-1592-47df-80a4-afa742d369bb');
+  const credits=new FakeCharacteristic('db9c4128-bff3-41fe-a306-fb6f9a8aeb2d');
+  let timer;
+  const device={gatt:{connected:true,connect:async()=>({getPrimaryServices:async()=>[{uuid:'eef90782-55dd-4388-b80b-695aba7a69b5',getCharacteristics:async()=>[fifo,credits]}]}),disconnect(){this.connected=false;}}};
+  credits.onWrite=async bytes=>{if(bytes[0]===1)queueMicrotask(()=>credits.emit([8]));};
+  fifo.onWrite=async()=>{timer=setInterval(()=>fifo.emit(wrapIts(ddp([0x7f,0x81,0x78]))),3);};
+  try {
+    await assert.rejects(readAppV2GoldenCardPayload({device,p3GuardMs:0,requestTimeoutMs:100,commandDeadlineMs:30}),/COMMAND_DEADLINE_TIMEOUT/);
+    assert.equal(device.gatt.connected,false);
+  } finally {clearInterval(timer);}
+});

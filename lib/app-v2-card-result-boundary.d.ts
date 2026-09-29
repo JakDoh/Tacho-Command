@@ -1,5 +1,5 @@
 export type AppV2CardResultBoundaryResult = Readonly<{
-  status: "accepted" | "rejected_invalid" | "rejected_incomplete" | "storage_unavailable" | "storage_error";
+  status: "accepted" | "accepted_unsaved" | "rejected_invalid" | "rejected_incomplete" | "storage_unavailable" | "storage_error";
   card: Readonly<Record<string, unknown>> | null;
   snapshot: Readonly<Record<string, unknown>> | null;
   source: string | null;
