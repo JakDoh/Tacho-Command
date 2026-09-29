@@ -37,6 +37,11 @@ const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
+    if (url.hostname === "www.tachocommand.com") {
+      url.hostname = "tachocommand.com";
+      return Response.redirect(url.toString(), 308);
+    }
+
     if (url.pathname === "/sw.js" || url.pathname === "/manifest.webmanifest") {
       const assetResponse = await env.ASSETS.fetch(request);
       const headers = new Headers(assetResponse.headers);
