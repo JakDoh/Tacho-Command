@@ -479,26 +479,31 @@ export default function AppV2Client() {
     }
   };
 
+  const productPhase = cardSession.busy
+    ? "card-reading"
+    : cardHandoffPreparing
+      ? "card-preparing"
+      : liveRunState === "running"
+        ? "connecting"
+        : liveConnected
+          ? "connected"
+          : liveRunState === "error" || cardSession.phase === "error"
+            ? "error"
+            : "idle";
+  const visibleErrorText = productPhase === "error"
+    ? (cardSession.phase === "error" ? cardSession.errorText : liveSession.errorText)
+    : null;
+
   return (
     <div className={styles.stage}>
       <section className={styles.instrumentFrame} aria-label="TachoCommand premium instrument">
         <FieldProvenPremiumUi
           state={state}
           controls={{
-            phase: cardSession.busy
-              ? "card-reading"
-              : cardHandoffPreparing
-                ? "card-preparing"
-              : liveRunState === "running"
-                ? "connecting"
-                : liveConnected
-                  ? "connected"
-                  : liveRunState === "error" || cardSession.phase === "error"
-                    ? "error"
-                    : "idle",
+            phase: productPhase,
             restoreState,
             restoredLabel,
-            errorText: cardSession.errorText ?? liveSession.errorText ?? null,
+            errorText: visibleErrorText,
             cardReadProgress,
             cardAttemptCode,
             cardDiagnostic,
