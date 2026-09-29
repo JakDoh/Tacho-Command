@@ -75,3 +75,25 @@ First-packet wait remains 90 seconds. After a complete card submessage, an absol
 Local trace includes stage milestones, last 256 events, dropped-event count, FIFO fragment sequence/total/length, DDP SID and negative-response code, receive-credit and command write start/complete/failure, available transmit credits, ACK requested/written counters, queue depth, notification/packet ages and GATT status captured at failure. LIVE close/settle timings accompany transport diagnostics. ACK written means the browser write completed, not that the tachograph processed it. Partial count is a cumulative count of notifications awaiting assembly, not a count of lost packets. No card payload, identity, device name or arbitrary exception messages are exported. `Download diagnostics` exports JSON with build and attempt code from the current UI; no new backend logging or automatic transmission.
 
 Tests cover a stalled transfer despite repeated pending replies, an unresolved ACK write, bounded trace storage, identity/payload exclusion and rendered diagnostic export control. Existing full-transfer and first-packet timeout tests remain applicable. This candidate improves localization of the fault, not a claim that physical transfer stability is fixed.
+
+### 2026-09-29 — breaks.1 historical driving-break screening
+
+Replaced the Attention placeholder with a deliberately scoped standard Article 7
+check (45 minutes or >=15 followed by >=30; accumulated driving >270 minutes).
+Source: https://eur-lex.europa.eu/legal-content/EN/TXT/HTML/?uri=CELEX%3A02006R0561-20240522
+This is not a full infringement engine: special passenger/transport regimes,
+working-time, daily and weekly rest checks are explicitly excluded in all three
+languages. Findings are also surfaced on the overview; absence of findings is
+never presented as a clean compliance verdict.
+
+Adjacent rest fragments are accumulated; work/availability and midnight do not
+reset driving. Gaps reset inference and mark incomplete coverage. Ambiguous local
+time overlaps/duration mismatches are skipped, rather than manufacturing a DST
+finding. The first observed period is a lower bound, not proof of a preceding
+rest. Analysis is derived from the displayed card, without changing stored data
+or Bluetooth transport. No uploaded driver file is committed.
+
+Local validation against the supplied CSV found 277, 272 and 301 driving minutes
+in the three flagged periods, including the user-reported September 21 case.
+Synthetic regression tests cover split-break order, exact limit, short stops,
+rest fragments, midnight, gaps and overlap. Firmware/protocol unchanged.

@@ -377,3 +377,7 @@
 .daySummaryGrid strong { display:block; }
 .bottomNav button { min-height:56px; overflow-wrap:anywhere; }
 @media (max-width: 420px) { .topbar { flex-wrap:wrap; } .daySequenceRow { flex-wrap:wrap; gap:8px; } }
+
+.breakNotice { width:100%; padding:16px; margin:12px 0; border:1px solid #f0c35b; border-radius:16px; background:#302919; color:#ffe3a0; font:inherit; cursor:pointer; }
+.breakFinding { margin-top:16px; padding:16px; border:1px solid #f0c35b; border-radius:16px; color:#eaf2f5; text-align:left; }
+.breakFinding h2 { font-size:18px; }

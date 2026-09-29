@@ -32,3 +32,8 @@ test('detailed diagnostics expose stalled progress and a local export action',()
  const html=render(Ui,{state:createFieldProvenProductState(),controls:{...controls,phase:'card-reading',cardDiagnostic:{stage:'receiving',lastConfirmedStage:'receiving',errorCode:null,elapsedMs:80000,packets:107,bytes:26000,pendingResponses:1,firstPacketTimeoutMs:90000,cardIdleTimeoutMs:60000,packetIdleMs:11000,ackRequested:108,ackWritten:108,events:[{ms:69000,event:'ack:write_complete',counter:108}]}}});
  assert.match(html,/Prenos čeka sledeći paket/);assert.match(html,/Preuzmi dijagnostiku/);assert.match(html,/ack:write_complete/);assert.match(html,/counter=108/);
 });
+
+test('historical break finding is visible on overview without opening Attention',()=>{
+ const state={...createFieldProvenProductState(),historyDays:[{dateIso:'2026-09-21',segments:[{kind:'drive',startMinute:760,endMinute:1037,minutes:277}]}]};
+ assert.match(render(Ui,{state,controls}),/Periodi za proveru: 1/);
+});

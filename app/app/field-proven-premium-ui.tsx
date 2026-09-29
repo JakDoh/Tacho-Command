@@ -1,6 +1,7 @@
 "use client";
 import type { CardTransportDiagnostic } from "../../lib/card-transport-diagnostic";
 import Link from "next/link";
+import { analyzeCardBreaks } from "../../lib/card-break-analysis.js";
 import { useState } from "react";
 import styles from "./field-proven-premium-ui.module.css";
 import type {
@@ -287,6 +288,12 @@ export default function FieldProvenPremiumUi({
   const [tab, setTab] = useState<ProductTab>("live");
   const [selected, setSelected] = useState<string | null>(null);
   const t = copy[c.locale];
+  const analysis = analyzeCardBreaks(state.historyDays);
+  const warningCopy = {
+    sr: {title: "Provera pauza", scope: "Standardno pravilo: 4 h 30 min vožnje; pauza 45 min ili najmanje 15 + 30 min, tim redom. Nalazi važe za taj režim. Posebni režimi prevoza, radno vreme i dnevni/nedeljni odmori nisu provereni.", none: "Nema pronađenog prekoračenja po ovoj proveri. To nije potvrda da nema drugih prekršaja.", gap: "Nepotpuni ili vremenski nejasni podaci: deo istorije nije moguće proveriti.", excess: "Prekoračenje", count: "Periodi za proveru"},
+    en: {title: "Driving break check", scope: "Standard rule: 4 h 30 min driving; 45 min break or at least 15 + 30 min, in that order. Findings apply to this regime. Special transport regimes, working time and daily/weekly rest are not checked.", none: "No exceedance found by this check. This does not confirm the absence of other infringements.", gap: "Incomplete or ambiguous times: part of the history could not be checked.", excess: "Excess", count: "Periods to review"},
+    de: {title: "Lenkpausenprüfung", scope: "Standardregel: 4 Std. 30 Min. Lenkzeit; 45 Min. Pause oder mindestens 15 + 30 Min., in dieser Reihenfolge. Die Ergebnisse gelten für diese Regel. Sonderregelungen, Arbeitszeit sowie tägliche/wöchentliche Ruhezeiten werden nicht geprüft.", none: "Keine Überschreitung bei dieser Prüfung gefunden. Andere Verstöße sind damit nicht ausgeschlossen.", gap: "Unvollständige oder unklare Zeitangaben: Ein Teil des Verlaufs konnte nicht geprüft werden.", excess: "Überschreitung", count: "Zu prüfende Zeiträume"},
+  }[c.locale];
   const busy =
     c.phase === "card-reading" ||
     c.phase === "card-preparing" ||
@@ -366,6 +373,7 @@ export default function FieldProvenPremiumUi({
             </button>
           </section>
         )}
+        {tab !== "attention" && analysis.findings.length > 0 && <button className={styles.breakNotice} onClick={() => setTab("attention")}>{warningCopy.count}: {analysis.findings.length}</button>}
         {tab === "live" && (
           <div className={styles.screen}>
             <section className={styles.primaryControl}>
@@ -583,8 +591,17 @@ export default function FieldProvenPremiumUi({
         )}
         {tab === "attention" && (
           <section className={styles.emptyPanel}>
-            <h1>{t.noAnalysis}</h1>
-            <p>{t.noAnalysisText}</p>
+            <h1>{warningCopy.title}</h1>
+            <p>{warningCopy.scope}</p>
+            {!state.historyDays.length ? <p>{t.empty}</p> : <>
+              {analysis.incomplete && <p>{warningCopy.gap}</p>}
+              {!analysis.findings.length && <p>{warningCopy.none}</p>}
+              {analysis.findings.map((f, i) => <section className={styles.breakFinding} key={i}>
+                <h2>{f.startDate} · {clock(f.startMinute)}–{f.date !== f.startDate ? f.date + " " : ""}{clock(f.endMinute)}</h2>
+                <p>{t.drive}: <strong>{minutes(f.drivingMinutes)}</strong></p>
+                <p>{warningCopy.excess}: <strong>{f.excessMinutes} min</strong></p>
+              </section>)}
+            </>}
           </section>
         )}
         {tab === "card" && (

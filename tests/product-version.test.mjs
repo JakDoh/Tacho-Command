@@ -7,8 +7,8 @@ const fieldClient = await readFile(new URL("../app/field-test/read-only-field-te
 const landing = await readFile(new URL("../app/landing-page.tsx", import.meta.url), "utf8");
 
 test("product version manifest exposes factual independent surfaces", () => {
-  assert.equal(TACHOCOMMAND_VERSIONS.site, "2026.09.29-diagnostic.4");
-  assert.equal(TACHOCOMMAND_VERSIONS.app, "2026.09.29-diagnostic.4");
+  assert.equal(TACHOCOMMAND_VERSIONS.site, "2026.09.29-breaks.1");
+  assert.equal(TACHOCOMMAND_VERSIONS.app, "2026.09.29-breaks.1");
   assert.equal(TACHOCOMMAND_VERSIONS.cardEngine, "parser-native-history-2026.09.19");
   assert.equal(TACHOCOMMAND_VERSIONS.transport, "golden-0.32c");
 });
@@ -18,8 +18,8 @@ test("visible product surfaces use the shared version manifest", () => {
   assert.ok(fieldClient.includes("TACHOCOMMAND_VERSIONS.app"));
   assert.ok(landing.includes("formatTachoCommandVersionLine"));
   const line = formatTachoCommandVersionLine();
-  assert.match(line, /Site 2026\.09\.29-diagnostic\.4/);
-  assert.match(line, /App 2026\.09\.29-diagnostic\.4/);
+  assert.match(line, /Site 2026\.09\.29-breaks\.1/);
+  assert.match(line, /App 2026\.09\.29-breaks\.1/);
   assert.match(line, /Card parser-native-history-2026\.09\.19/);
   assert.match(line, /Transport golden-0\.32c/);
 });
