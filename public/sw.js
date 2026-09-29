@@ -1,4 +1,4 @@
-const CACHE_NAME = "tachocommand-shell-v49-email-beta";
+const CACHE_NAME = "tachocommand-shell-v50-canonical-origin";
 const CORE_ASSETS = ["/", "/app", "/manifest.webmanifest", "/favicon.svg", "/icon-192.png", "/icon-512.png"];
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS)));

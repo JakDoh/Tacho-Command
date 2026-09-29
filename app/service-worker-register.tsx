@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-const SERVICE_WORKER_URL = "/sw.js?v=2026-09-29-beta-2";
+const SERVICE_WORKER_URL = "/sw.js?v=2026-09-29-beta-2-origin-fix";
 export default function ServiceWorkerRegister() {
   const [waiting, setWaiting] = useState<ServiceWorker | null>(null);
   const [busy, setBusy] = useState(false);
