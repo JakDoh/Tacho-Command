@@ -1,4 +1,4 @@
-const CACHE_NAME = "tachocommand-shell-v48-audit";
+const CACHE_NAME = "tachocommand-shell-v49-email-beta";
 const CORE_ASSETS = ["/", "/app", "/manifest.webmanifest", "/favicon.svg", "/icon-192.png", "/icon-512.png"];
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS)));
@@ -20,7 +20,7 @@ self.addEventListener("fetch", (event) => {
   // RSC and HTML share URLs; never mix their representations in offline storage.
   if (url.search || request.headers.get("rsc") || request.headers.get("accept")?.includes("text/x-component")) return;
   const navigation = request.mode === "navigate";
-  const shell = ["/", "/app", "/sr", "/en", "/de"].includes(url.pathname);
+  const shell = ["/", "/app", "/sr", "/en", "/de", "/ru", "/bg", "/ro", "/hu"].includes(url.pathname);
   const asset = CORE_ASSETS.includes(url.pathname) || /\.(js|css|png|webp|svg|woff2)$/.test(url.pathname);
   if (navigation ? !shell : !asset) return;
   event.respondWith(fetch(request).then((response) => {

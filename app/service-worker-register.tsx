@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-const SERVICE_WORKER_URL = "/sw.js?v=2026-09-28-audit-1";
+const SERVICE_WORKER_URL = "/sw.js?v=2026-09-29-beta-2";
 export default function ServiceWorkerRegister() {
   const [waiting, setWaiting] = useState<ServiceWorker | null>(null);
   const [busy, setBusy] = useState(false);
@@ -54,18 +54,16 @@ export default function ServiceWorkerRegister() {
     waiting.postMessage({ type: "ACTIVATE_UPDATE" });
   };
   if (!waiting) return null;
-  const label =
-    locale === "de"
-      ? "Aktualisierung verfügbar"
-      : locale === "en"
-        ? "Update available"
-        : "Ažuriranje je dostupno";
-  const hint =
-    locale === "de"
-      ? "Nach dem Auslesen aktualisieren"
-      : locale === "en"
-        ? "Update after the read completes"
-        : "Ažuriranje nakon završetka očitavanja";
+  const updateCopy: Record<string, readonly [string,string]> = {
+    sr: ["Ažuriranje je dostupno", "Ažuriranje nakon završetka očitavanja"],
+    en: ["Update available", "Update after the read completes"],
+    de: ["Aktualisierung verfügbar", "Nach dem Auslesen aktualisieren"],
+    ru: ["Доступно обновление", "Обновить после завершения считывания"],
+    bg: ["Има актуализация", "Актуализирай след края на прочитането"],
+    ro: ["Actualizare disponibilă", "Actualizează după terminarea citirii"],
+    hu: ["Frissítés érhető el", "Frissítés a kiolvasás befejezése után"],
+  };
+  const [label,hint] = updateCopy[locale] ?? updateCopy.en;
   return (
     <aside
       role="status"

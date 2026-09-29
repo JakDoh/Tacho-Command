@@ -52,8 +52,8 @@ test('service worker excludes API and admin from online interception and offline
 });
 test('cache activation removes only prior app shell caches',async()=>{
  const handlers={},removed=[];let work;
- vm.runInNewContext(await readFile(new URL('../public/sw.js',import.meta.url),'utf8'),{self:{addEventListener:(name,fn)=>handlers[name]=fn,clients:{claim(){}}},caches:{keys:async()=>['unrelated-cache','tachocommand-shell-v47-app-v3','tachocommand-shell-v48-audit'],delete:async key=>removed.push(key)}});
- handlers.activate({waitUntil(p){work=p;}});await work;assert.deepEqual(removed,['tachocommand-shell-v47-app-v3']);
+ vm.runInNewContext(await readFile(new URL('../public/sw.js',import.meta.url),'utf8'),{self:{addEventListener:(name,fn)=>handlers[name]=fn,clients:{claim(){}}},caches:{keys:async()=>['unrelated-cache','tachocommand-shell-v47-app-v3','tachocommand-shell-v48-audit','tachocommand-shell-v49-email-beta'],delete:async key=>removed.push(key)}});
+ handlers.activate({waitUntil(p){work=p;}});await work;assert.deepEqual(removed,['tachocommand-shell-v47-app-v3','tachocommand-shell-v48-audit']);
 });
 test('retention runs without ingest for both event stores',async()=>{
  const calls=[];await purgeExpiredTechnicalEvents({prepare(sql){return {bind(value){calls.push([sql,value]);return {};}}},batch:async()=>[]},Date.UTC(2026,8,28));
