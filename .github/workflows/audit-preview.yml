@@ -2,6 +2,9 @@ name: Isolated audit preview
 on:
   push:
     branches: [audit/hardening-20260928]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
 permissions:
   contents: read
 concurrency:
@@ -9,10 +12,13 @@ concurrency:
   cancel-in-progress: true
 jobs:
   preview:
+    if: github.event_name == 'push' || (github.head_ref == 'audit/hardening-20260928' && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22.23.2
