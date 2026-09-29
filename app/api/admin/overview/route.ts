@@ -1,4 +1,4 @@
-import { summarizeCardAttempts } from "../../../../lib/admin-card-attempts.js";
+import { summarizeTechnicalAttempts } from "../../../../lib/admin-card-attempts.js";
 import {
   ADMIN_SESSION_COOKIE,
   readCookieValue,
@@ -104,7 +104,7 @@ export async function GET(request: Request) {
         "SELECT outcome AS key, COUNT(*) AS count FROM technical_telemetry_events WHERE created_at >= ?1 GROUP BY outcome ORDER BY count DESC",
       ).bind(since30).all(),
       env.DB.prepare(
-        "SELECT attempt_code, event, phase, outcome, error_code, packet_count, byte_count, duration_ms, created_at, stage, last_confirmed_stage, nrc FROM technical_telemetry_events WHERE attempt_code IS NOT NULL AND event LIKE 'card_%' ORDER BY created_at DESC, id DESC LIMIT 500",
+        "SELECT attempt_code, event, phase, outcome, error_code, packet_count, byte_count, duration_ms, created_at, stage, last_confirmed_stage, nrc FROM technical_telemetry_events WHERE attempt_code IS NOT NULL ORDER BY created_at DESC, id DESC LIMIT 1000",
       ).all(),
     ]);
 
@@ -157,7 +157,7 @@ export async function GET(request: Request) {
         lastEventAt: numeric(technicalSummary?.last_event_at) || null,
         outcomes: technicalOutcomes,
         recent: recentTechnical,
-        cardAttempts: summarizeCardAttempts(recentTechnical, now).slice(0, 50),
+        attemptDetails: summarizeTechnicalAttempts(recentTechnical, now).slice(0, 150),
       },
       privacy: {
         aggregateOnly: false,

@@ -125,21 +125,35 @@
   .loginCard { padding: 22px; }
 }
 
+
 .diagnosticPanel { max-width:1280px; margin:0 auto 12px; padding:20px; border:1px solid #25516a; border-radius:18px; background:#071723; }
-.attemptList { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:18px; }
+.attemptFilters { display:flex; flex-wrap:wrap; gap:8px; margin:18px 0 12px; }
+.attemptFilters button { border:1px solid #29485b; border-radius:999px; background:#0b2030; color:#a9bdc9; padding:8px 13px; cursor:pointer; font-weight:750; }
+.attemptFilters button[aria-pressed="true"] { border-color:#43c6e9; color:#e6faff; background:#16425a; }
+.diagnosticWorkspace { display:grid; grid-template-columns:minmax(280px, .9fr) minmax(0, 1.4fr); gap:12px; align-items:start; }
+.attemptList { display:grid; gap:8px; max-height:650px; overflow-y:auto; }
 .attemptList > p { color:#9bafba; }
-.attemptCard { min-width:0; padding:16px; border:1px solid #254154; border-radius:14px; background:#0b2030; }
-.attemptHead { display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px; align-items:center; }
-.attemptHead strong { font:850 15px ui-monospace,monospace; color:#e5f7ff; }
-.attemptHead span { border-radius:999px; padding:5px 8px; font-size:11px; font-weight:850; }
+.attemptPick { display:grid; gap:8px; width:100%; min-width:0; text-align:left; border:1px solid #254154; border-radius:12px; padding:13px; color:#e5f7ff; background:#0b2030; cursor:pointer; }
+.attemptPick:hover, .attemptPick[aria-pressed="true"] { border-color:#53cfec; background:#103047; }
+.attemptPick:focus-visible, .attemptFilters button:focus-visible { outline:2px solid #68e4ff; outline-offset:2px; }
+.pickTop { display:flex; align-items:center; gap:10px; }
+.pickTop strong { font-size:13px; line-height:1.35; }
+.diagnosticCode { display:inline-block; border-radius:8px; padding:5px 8px; color:#d8f8ff; background:#15516a; font:900 15px ui-monospace,monospace; }
+.pickMeta { color:#90a7b5; font-size:11px; overflow-wrap:anywhere; }
+.attemptDetail { min-width:0; min-height:300px; padding:20px; border:1px solid #254154; border-radius:14px; background:#0b2030; }
+.attemptDetail > p { color:#9bafba; }
+.attemptHead { display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px; align-items:start; }
+.attemptHead small { color:#7794a8; font-size:10px; font-weight:850; letter-spacing:.1em; }
+.attemptHead h3 { margin:8px 0 0; font-size:20px; line-height:1.35; }
+.attemptHead > span { border-radius:999px; padding:5px 8px; font-size:11px; font-weight:850; }
 .statusOk { color:#9df0ce; background:#113b30; }
 .statusFail { color:#ffb0a8; background:#482322; }
 .statusPending { color:#f1d298; background:#43351c; }
-.attemptFacts { display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:14px; color:#8fa6b5; font-size:11px; }
+.attemptFacts { display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:18px; color:#8fa6b5; font-size:11px; }
 .attemptFacts b { color:#f0faff; }
-.attemptReason { margin:14px 0 0; color:#eef6fa; font-size:13px; line-height:1.45; }
-.attemptReason small { color:#8da5b2; font:11px ui-monospace,monospace; }
-.attemptEvents { margin-top:12px; color:#9db5c2; font-size:11px; }
-.attemptEvents summary { cursor:pointer; }
-.attemptEvents ol { padding-left:20px; line-height:1.8; }
-@media(max-width:760px){ .attemptList { grid-template-columns:1fr; } }
+.attemptReason { margin:18px 0 0; color:#eef6fa !important; font-size:13px; line-height:1.45; overflow-wrap:anywhere; }
+.attemptDetail h4 { margin:25px 0 8px; font-size:13px; }
+.eventTimeline { display:grid; gap:8px; margin:0; padding-left:20px; color:#c5d9e4; font-size:11px; }
+.eventTimeline li { padding-left:4px; overflow-wrap:anywhere; }
+.eventTimeline time { display:block; color:#829baa; margin-bottom:3px; }
+@media(max-width:760px){ .diagnosticWorkspace { grid-template-columns:1fr; } .attemptList { max-height:320px; } }

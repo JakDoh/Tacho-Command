@@ -213,3 +213,14 @@ test("telemetry bridge stays outside Bluetooth, card transport and parser implem
     assert.equal(source.includes(forbidden), false, forbidden + " must stay outside telemetry bridge");
   }
 });
+
+test("known Bluetooth failure sends only an allowlisted error code", async () => {
+  let posted;
+  await runAppV2LiveAttemptWithTelemetry({
+    cryptoImpl: deterministicCrypto(),
+    openTransport: async () => { throw new Error("Web Bluetooth nije dostupan. PRIVATE"); },
+    postTelemetry: async (events) => { posted = events; return {status:"accepted",accepted:events.length}; },
+  });
+  assert.equal(posted[1].errorCode,"bluetooth_unavailable");
+  assert.equal(JSON.stringify(posted).includes("PRIVATE"),false);
+});

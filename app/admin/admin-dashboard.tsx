@@ -28,11 +28,12 @@ type Overview = Readonly<{
     totalEvents: number;
     lastEventAt: number | null;
     outcomes: Readonly<Record<string, number>>;
-    cardAttempts: readonly Readonly<{
+    attemptDetails: readonly Readonly<{
       attemptCode: string; startedAt: number; lastAt: number;
       packetCount: number; byteCount: number; stage: string | null;
       lastConfirmedStage: string | null; errorCode: string | null;
-      nrc: number | null; status: string;
+      nrc: number | null; status: string; kind: "card" | "live"; phase: string | null;
+      diagnostic: Readonly<{code: string; label: string}>;
       events: readonly Readonly<{event:string; at:number; packetCount:number; stage:string|null; errorCode:string|null}>[];
     }>[];
     recent: readonly Readonly<{
@@ -67,6 +68,8 @@ export default function AdminDashboard() {
   const [key, setKey] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [selectedAttemptCode, setSelectedAttemptCode] = useState<string | null>(null);
+  const [attemptFilter, setAttemptFilter] = useState<"all" | "failed" | "card" | "live">("all");
 
   const load = useCallback(async () => {
     try {
@@ -187,22 +190,12 @@ export default function AdminDashboard() {
     );
   }
 
-  const reasonLabels: Record<string, string> = {
-    packet_idle_timeout: "Novi paket nije stigao 60 s",
-    first_packet_timeout: "Prvi paket nije stigao 90 s",
-    peer_closed: "Tahograf je zatvorio prenos",
-    disconnected: "Bluetooth veza je prekinuta",
-    credit_write_failed: "Upis potvrde protoka nije uspeo",
-    gatt_write_timeout: "Bluetooth upis je istekao",
-    invalid_fragment: "Neispravan fragment paketa",
-    packet_sequence_error: "Pogrešan redosled paketa",
-    credits_timeout: "Potvrda protoka nije stigla",
-    negative_response: "Tahograf je vratio negativan odgovor",
-    payload_invalid: "Preuzeti sadržaj nije validan",
-    parser_rejected: "Obrada kartice nije prihvatila sadržaj",
-    storage_error: "Čuvanje na telefonu nije uspelo",
-    unknown: "Uzrok nije utvrđen",
-  };
+  const attempts = overview.technical.attemptDetails ?? [];
+  const visibleAttempts = attempts.filter((item) =>
+    attemptFilter === "all" || (attemptFilter === "failed" ? item.status === "failed" : item.kind === attemptFilter)
+  );
+  const selectedAttempt = visibleAttempts.find((item) => item.attemptCode === selectedAttemptCode) ?? visibleAttempts[0];
+  const statusLabel = (status: string) => status === "complete" ? "Završeno" : status === "failed" ? "Greška" : status === "in_progress" ? "U toku" : status === "transfer_complete" ? "Prenos završen" : "Bez završnog događaja";
   const cards = [
     ["Sesije", overview.product.sessions, "30 dana"],
     ["Landing views", overview.product.landingViews, "30 dana"],
@@ -247,32 +240,50 @@ export default function AdminDashboard() {
 
 
       <section className={styles.diagnosticPanel}>
-        <div className={styles.panelTitle}><div><small>CARD DIAGNOSTICS</small><h2>Očitavanja kartice po pokušaju</h2></div><span>Bez ličnih podataka</span></div>
-        <p className={styles.meta}>Poslednji potvrđeni paket i tehnički signal. Kod pokušaja povezuje događaje; signal nije dokaz fizičkog uzroka.</p>
-        <div className={styles.attemptList}>
-          {overview.technical.cardAttempts.length === 0 ? <p>Nema pristiglih događaja očitavanja.</p> : overview.technical.cardAttempts.map((attempt) => (
-            <article key={attempt.attemptCode} className={styles.attemptCard}>
+        <div className={styles.panelTitle}><div><small>DIJAGNOSTIKA</small><h2>Lista pokušaja</h2></div><span>Bez ličnih podataka</span></div>
+        <p className={styles.meta}>Izaberi pokušaj da vidiš tok, broj paketa i zabeleženi tehnički signal. Brojčani kod opisuje signal; TC oznaka povezuje događaje.</p>
+        <div className={styles.attemptFilters} aria-label="Filter pokušaja">
+          {([["all", "Svi"], ["failed", "Greške"], ["card", "Kartica"], ["live", "LIVE"]] as const).map(([value, label]) =>
+            <button type="button" key={value} aria-pressed={attemptFilter === value} onClick={() => setAttemptFilter(value)}>{label}</button>
+          )}
+        </div>
+        <div className={styles.diagnosticWorkspace}>
+          <div className={styles.attemptList} aria-label="Pokušaji">
+            {visibleAttempts.length === 0 ? <p>Nema pokušaja za izabrani filter.</p> : visibleAttempts.map((attempt) => (
+              <button
+                type="button" key={attempt.attemptCode}
+                className={styles.attemptPick}
+                aria-pressed={selectedAttempt?.attemptCode === attempt.attemptCode}
+                onClick={() => setSelectedAttemptCode(attempt.attemptCode)}
+              >
+                <span className={styles.pickTop}><b className={styles.diagnosticCode}>{attempt.diagnostic.code}</b><strong>{attempt.diagnostic.label}</strong></span>
+                <span className={styles.pickMeta}>{attempt.kind === "card" ? "Kartica" : "LIVE"} · {statusLabel(attempt.status)} · {formatNumber(attempt.packetCount)} paketa</span>
+                <span className={styles.pickMeta}>{formatTime(attempt.lastAt)} · {attempt.attemptCode}</span>
+              </button>
+            ))}
+          </div>
+          <div className={styles.attemptDetail}>
+            {selectedAttempt ? <>
               <div className={styles.attemptHead}>
-                <strong>{attempt.attemptCode}</strong>
-                <span className={attempt.status === "complete" ? styles.statusOk : attempt.status === "failed" ? styles.statusFail : styles.statusPending}>
-                  {attempt.status === "complete" ? "Završeno" : attempt.status === "failed" ? "Prekinuto" : attempt.status === "in_progress" ? "U toku" : attempt.status === "transfer_complete" ? "Prenos završen · obrada nepotvrđena" : "Nema završnog događaja"}
-                </span>
+                <div><small>DIJAGNOSTIČKI KOD</small><h3><span className={styles.diagnosticCode}>{selectedAttempt.diagnostic.code}</span> {selectedAttempt.diagnostic.label}</h3></div>
+                <span className={selectedAttempt.status === "complete" ? styles.statusOk : selectedAttempt.status === "failed" ? styles.statusFail : styles.statusPending}>{statusLabel(selectedAttempt.status)}</span>
               </div>
+              <p className={styles.meta}>Pokušaj {selectedAttempt.attemptCode} · {selectedAttempt.kind === "card" ? "Očitavanje kartice" : "LIVE očitavanje"}</p>
               <div className={styles.attemptFacts}>
-                <span><b>{formatNumber(attempt.packetCount)}</b> paketa</span>
-                <span><b>{(attempt.byteCount / 1000).toLocaleString("sr-RS", { maximumFractionDigits: 1 })} KB</b> preneto</span>
-                <span><b>{formatTime(attempt.lastAt)}</b> poslednji signal</span>
+                <span><b>{formatNumber(selectedAttempt.packetCount)}</b> paketa</span>
+                <span><b>{(selectedAttempt.byteCount / 1000).toLocaleString("sr-RS", { maximumFractionDigits: 1 })} KB</b> preneto</span>
+                <span><b>{formatTime(selectedAttempt.startedAt)}</b> početak</span>
+                <span><b>{formatTime(selectedAttempt.lastAt)}</b> poslednji signal</span>
               </div>
-              <p className={styles.attemptReason}>
-                {attempt.errorCode ? (reasonLabels[attempt.errorCode] ?? attempt.errorCode.replaceAll("_", " ")) : attempt.status === "complete" ? "Očitavanje i obrada su završeni." : "Nema zabeleženog razloga prekida."}
-                {attempt.errorCode ? <small> · {attempt.errorCode}{attempt.nrc != null ? " · NRC 0x" + attempt.nrc.toString(16).padStart(2, "0").toUpperCase() : ""}</small> : null}
-              </p>
-              <p className={styles.meta}>Faza: {attempt.stage ?? "nije zabeležena"} · poslednja potvrđena: {attempt.lastConfirmedStage ?? "nije zabeležena"}</p>
-              <details className={styles.attemptEvents}><summary>Tok događaja ({attempt.events.length})</summary>
-                <ol>{attempt.events.slice().reverse().map((item, index) => <li key={item.event + item.at + index}>{formatTime(item.at)} · {item.event} · {item.packetCount} paketa{item.stage ? " · " + item.stage : ""}</li>)}</ol>
-              </details>
-            </article>
-          ))}
+              <p className={styles.attemptReason}>Signal: <b>{selectedAttempt.errorCode ?? "nije zabeležen"}</b>{selectedAttempt.nrc != null ? " · NRC 0x" + selectedAttempt.nrc.toString(16).padStart(2, "0").toUpperCase() : ""}</p>
+              <p className={styles.meta}>Faza: {selectedAttempt.stage ?? selectedAttempt.phase ?? "nije zabeležena"} · poslednja potvrđena: {selectedAttempt.lastConfirmedStage ?? "nije zabeležena"}</p>
+              <h4>Tok događaja</h4>
+              <ol className={styles.eventTimeline}>{selectedAttempt.events.slice().reverse().map((item, index) =>
+                <li key={item.event + item.at + index}><time>{formatTime(item.at)}</time><span>{item.event} · {formatNumber(item.packetCount)} paketa{item.stage ? " · " + item.stage : ""}</span></li>
+              )}</ol>
+              <p className={styles.meta}>Tehnički signal ne dokazuje fizički uzrok prekida. Ako nema završnog događaja, status ostaje nepotvrđen.</p>
+            </> : <p>Izaberi pokušaj sa liste.</p>}
+          </div>
         </div>
       </section>
 
