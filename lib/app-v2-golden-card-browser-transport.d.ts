@@ -1,3 +1,4 @@
+import type { CardTransportDiagnostic } from "./card-transport-diagnostic";
 export type AppV2GoldenCardTransportResult = Readonly<{
   payload: Uint8Array;
   submessages: number;
@@ -20,11 +21,15 @@ export declare function readAppV2GoldenCardPayload(input?: Readonly<{
   bluetooth?: {
     requestDevice: (options: unknown) => Promise<unknown>;
   } | null;
+  signal?: AbortSignal;
   device?: unknown;
   disconnectOnFinish?: boolean;
   requestTimeoutMs?: number;
+  firstPacketTimeoutMs?: number;
   cardIdleTimeoutMs?: number;
   p3GuardMs?: number;
+    writeTimeoutMs?: number;
+  onDiagnostic?: (value: CardTransportDiagnostic) => void;
   onProgress?: (progress: Readonly<{
     submessages: number;
     byteLength: number;
@@ -34,11 +39,15 @@ export declare function readAppV2GoldenCardPayload(input?: Readonly<{
 
 export declare function readBrowserAppV2GoldenCardPayload(
   options?: Readonly<{
+    signal?: AbortSignal;
     device?: unknown;
     disconnectOnFinish?: boolean;
     requestTimeoutMs?: number;
+    firstPacketTimeoutMs?: number;
     cardIdleTimeoutMs?: number;
     p3GuardMs?: number;
+    writeTimeoutMs?: number;
+    onDiagnostic?: (value: CardTransportDiagnostic) => void;
     onProgress?: (progress: Readonly<{
       submessages: number;
       byteLength: number;

@@ -9,7 +9,7 @@ const routeSource = fs.readFileSync(
 
 test("telemetry GET probe verifies storage without returning telemetry rows", () => {
   assert.match(routeSource, /export async function GET\(\)/);
-  assert.match(routeSource, /db\.select\(\{ id: technicalTelemetryEvents\.id \}\)\.from\(technicalTelemetryEvents\)\.limit\(1\)/);
+  assert.match(routeSource, /db\.select\(\)\.from\(technicalTelemetryEvents\)\.limit\(1\)/);
   assert.match(routeSource, /status:\s*"ready"/);
   assert.match(routeSource, /schema:\s*TECHNICAL_TELEMETRY_SCHEMA/);
   assert.match(routeSource, /retentionDays:\s*TECHNICAL_TELEMETRY_RETENTION_DAYS/);

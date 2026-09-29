@@ -1,3 +1,4 @@
+import { readLimitedJson, requestRateAllowed, RequestLimitError } from "../../../lib/request-guards";
 import { lt } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { technicalTelemetryEvents } from "../../../db/schema";
@@ -20,7 +21,7 @@ const json = (body: unknown, init: ResponseInit = {}) =>
 export async function GET() {
   try {
     const db = await getDb();
-    await db.select({ id: technicalTelemetryEvents.id }).from(technicalTelemetryEvents).limit(1);
+    await db.select().from(technicalTelemetryEvents).limit(1);
 
     return json({
       status: "ready",
@@ -33,10 +34,12 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  if (!(await requestRateAllowed(request, 60))) return json({status: "rate_limited"}, {status: 429, headers: {"retry-after":"60"}});
   let payload: unknown;
   try {
-    payload = await request.json();
-  } catch {
+    payload = await readLimitedJson(request);
+  } catch (error) {
+    if (error instanceof RequestLimitError) return json({status:"request_rejected"}, {status:error.status});
     return json({ status: "invalid_json" }, { status: 400 });
   }
 

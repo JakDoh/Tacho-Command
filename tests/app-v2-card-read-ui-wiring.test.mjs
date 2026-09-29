@@ -40,14 +40,14 @@ test("App V3 reuses the LIVE device for card reading after bounded teardown", as
   assert.match(source, /Promise\.race\(\[/);
   assert.match(source, /transport\.device\?\.gatt\?\.disconnect\?\.\(\)/);
   assert.match(source, /await closeLiveForCard\(transport\)/);
-  assert.match(source, /LIVE_TO_CARD_SETTLE_MS = 3000/);
+  assert.match(source, /LIVE_TO_CARD_SETTLE_MS = 5000/);
   assert.match(source, /device: selectedCardDevice/);
   assert.match(source, /disconnectOnFinish: true/);
   assert.match(source, /window\.setInterval/);
   assert.match(source, /setLiveConnected\(true\)/);
   assert.match(source, /connected: liveConnected/);
   assert.match(source, /\["live", "incomplete"\]\.includes\(result\.status\)/);
-  assert.match(source, /refreshed\.status !== "incomplete"/);
+  assert.match(source, /refreshed\.status === "incomplete"/);
 });
 
 test("App V3 drains the LIVE monitor before starting the card handoff", async () => {
@@ -70,8 +70,8 @@ test("App V3 drains the LIVE monitor before starting the card handoff", async ()
 
 test("App V3 holds a screen wake lock only while the card read is active", async () => {
   const source = await readFile(clientUrl, "utf8");
-  assert.match(source, /wakeLock\.request\("screen"\)/);
-  assert.match(source, /wakeLock\?\.release\(\)/);
+  assert.match(source, /wakeLock\?\.request\("screen"\)/);
+  assert.match(source, /lock\?\.release\(\)/);
   assert.match(source, /\.finally\(async \(\) =>/);
 });
 
@@ -84,9 +84,17 @@ test("App V2 derives visible LIVE state from the retained transport", async () =
 
   assert.match(clientSource, /setLiveConnected\(false\)/);
   assert.match(clientSource, /liveConnected\s*\? "connected"/);
-  assert.match(uiSource, /LIVE veza je aktivna/);
-  assert.match(uiSource, /LIVE povezano/);
-  assert.match(uiSource, /controls\.phase === "connected"/);
+  const { appCopy } = await import("../lib/product-app-copy.js");
+  assert.equal(appCopy.sr.connected, "Veza je uspostavljena");
+  assert.equal(appCopy.sr.live, "LIVE · potvrđeni podaci");
+  assert.match(uiSource, /c\.phase\s*===\s*['"]connected['"]/);
+});
+
+test("a previous card error is hidden after a successful LIVE reconnect", async () => {
+  const source = await readFile(clientUrl, "utf8");
+  assert.match(source, /const visibleErrorText = productPhase === "error"/);
+  assert.match(source, /errorText: visibleErrorText/);
+  assert.doesNotMatch(source, /errorText: cardSession\.errorText \?\? liveSession\.errorText/);
 });
 
 test("App V2 keeps card transport details out of UI source", async () => {

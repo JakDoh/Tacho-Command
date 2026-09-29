@@ -9,8 +9,8 @@ const serviceWorker = await readFile(new URL("../public/sw.js", import.meta.url)
 const appRecovery = await readFile(new URL("../app/app/page.tsx", import.meta.url), "utf8");
 const workerSource = await readFile(new URL("../worker/index.ts", import.meta.url), "utf8");
 
-test("field-test route uses the read-only core candidate", () => {
-  assert.match(pageSource, /read-only-field-test-client/);
+test("field-test route redirects to the account-gated app", () => {
+  assert.match(pageSource, /redirect\("\/app"\)/);
   assert.doesNotMatch(pageSource, /from\s+["']\.\/field-test-client["']/);
   assert.match(clientSource, /TACHOCOMMAND_VERSIONS\.app/);
   assert.match(clientSource, /formatTachoCommandVersionLine/);
@@ -98,7 +98,7 @@ test("PWA opens App V2 while field-test stays separately available", () => {
   assert.equal(manifest.start_url, "/app");
   assert.equal(manifest.short_name, "TachoCommand");
   assert.doesNotMatch(manifest.name, /Core Field Test|0\.31|RHMI|0\.16/);
-  assert.match(serviceWorker, /tachocommand-shell-v47-app-v3/);
+  assert.match(serviceWorker, /tachocommand-shell-v49-email-beta/);
   assert.match(serviceWorker, /caches\.match\("\/"\)/);
   assert.match(appRecovery, /AppV2Client/);
   assert.doesNotMatch(appRecovery, /recovered=031/);

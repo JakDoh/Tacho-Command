@@ -130,3 +130,119 @@ test("browser card transport keeps the scoped physical field-proof marker in sou
   assert.doesNotMatch(source, /fieldProven: false/);
   assert.doesNotMatch(source, /saveLastGoodCardSnapshot|localStorage|parseAppV2CardPayload/);
 });
+
+test('disconnection during a silent card transfer rejects without waiting for idle timeout', async () => {
+  const fifo = new FakeCharacteristic('29d3a479-1592-47df-80a4-afa742d369bb');
+  const credits = new FakeCharacteristic('db9c4128-bff3-41fe-a306-fb6f9a8aeb2d');
+  const handlers = new Map();
+  const device = {addEventListener:(n,f)=>handlers.set(n,f),removeEventListener:n=>handlers.delete(n),gatt:{connected:true,connect:async()=>({getPrimaryServices:async()=>[{uuid:'eef90782-55dd-4388-b80b-695aba7a69b5',getCharacteristics:async()=>[fifo,credits]}]}),disconnect(){this.connected=false;}}};
+  credits.onWrite=async write=>{if(write[0]===1)queueMicrotask(()=>credits.emit([8]));};
+  fifo.onWrite=async write=>{
+    const body=write.slice(2),sid=body[4];queueMicrotask(()=>credits.emit([1]));
+    if(body[0]===0x81)queueMicrotask(()=>fifo.emit(wrapIts(ddp([0xc1,0xea,0x8f]))));
+    else if(sid===0x10)queueMicrotask(()=>fifo.emit(wrapIts(ddp([0x50,0x81]))));
+    else if(sid===0x35)queueMicrotask(()=>fifo.emit(wrapIts(ddp([0x75,0x00,0xff]))));
+    else if(sid===0x36)queueMicrotask(()=>{device.gatt.connected=false;handlers.get('gattserverdisconnected')?.();});
+  };
+  await assert.rejects(readAppV2GoldenCardPayload({device,disconnectOnFinish:true,p3GuardMs:0,requestTimeoutMs:100,cardIdleTimeoutMs:60000}),/prekinut/);
+  assert.equal(handlers.size,0);
+});
+
+for (const pending of [false, true]) test(`first packet deadline stops zero-data read (pending=${pending})`, async () => {
+  const fifo = new FakeCharacteristic('29d3a479-1592-47df-80a4-afa742d369bb');
+  const credits = new FakeCharacteristic('db9c4128-bff3-41fe-a306-fb6f9a8aeb2d');
+  let pendingTimer;
+  const diagnostics = [];
+  const device = {gatt:{connected:true,connect:async()=>({getPrimaryServices:async()=>[{uuid:'eef90782-55dd-4388-b80b-695aba7a69b5',getCharacteristics:async()=>[fifo,credits]}]}),disconnect(){this.connected=false;}}};
+  credits.onWrite = async write => {if(write[0]===1) queueMicrotask(()=>credits.emit([8]));};
+  fifo.onWrite = async write => {
+    const body=write.slice(2),sid=body[4];
+    queueMicrotask(()=>credits.emit([1]));
+    let response;
+    if(body[0]===0x81) response=[0xc1,0xea,0x8f];
+    else if(sid===0x10) response=[0x50,0x81];
+    else if(sid===0x35) response=[0x75,0x00,0xff];
+    else if(sid===0x36 && pending) pendingTimer=setInterval(()=>fifo.emit(wrapIts(ddp([0x7f,0x36,0x78]))),5);
+    else if(sid===0x37) {clearInterval(pendingTimer);response=[0x77];}
+    else if(sid===0x82) response=[0xc2];
+    if(response) queueMicrotask(()=>fifo.emit(wrapIts(ddp(response))));
+  };
+  try {
+    await assert.rejects(readAppV2GoldenCardPayload({device,disconnectOnFinish:true,p3GuardMs:0,requestTimeoutMs:100,firstPacketTimeoutMs:40,cardIdleTimeoutMs:1000,onDiagnostic:d=>diagnostics.push(d)}),/FIRST_PACKET_TIMEOUT/);
+    const last=diagnostics.at(-1);
+    assert.equal(last.stage,'waiting_first_packet');
+    assert.equal(last.lastConfirmedStage,'request_upload');
+    assert.equal(last.errorCode,'first_packet_timeout');
+    assert.equal(last.packets,0);
+    assert.equal(last.bytes,0);
+    assert.equal(last.pendingResponses > 0,pending);
+    assert.equal(device.gatt.connected,false);
+    assert.deepEqual(credits.writes.at(-1),[0xff]);
+  } finally {clearInterval(pendingTimer);}
+});
+
+test("failed receive-credit write aborts and preserves a specific diagnostic", async () => {
+  const fifo = new FakeCharacteristic('29d3a479-1592-47df-80a4-afa742d369bb');
+  const credits = new FakeCharacteristic('db9c4128-bff3-41fe-a306-fb6f9a8aeb2d');
+  let failCredits = false;
+  const diagnostics = [];
+  const device = {gatt:{connected:true,connect:async()=>({getPrimaryServices:async()=>[{uuid:'eef90782-55dd-4388-b80b-695aba7a69b5',getCharacteristics:async()=>[fifo,credits]}]}),disconnect(){this.connected=false;}}};
+  credits.onWrite = async write => {if(write[0]===1) { if(failCredits) throw new Error('simulated GATT write failure'); queueMicrotask(()=>credits.emit([8])); }};
+  fifo.onWrite = async write => {
+    const body=write.slice(2),sid=body[4];
+    queueMicrotask(()=>credits.emit([1]));
+    let response;
+    if(body[0]===0x81) response=[0xc1,0xea,0x8f];
+    else if(sid===0x10) response=[0x50,0x81];
+    else if(sid===0x35) response=[0x75,0x00,0xff];
+    else if(sid===0x36) {failCredits=true;response=[0x7f,0x36,0x78];}
+    else if(sid===0x37) {response=[0x77];}
+    else if(sid===0x82) response=[0xc2];
+    if(response) queueMicrotask(()=>fifo.emit(wrapIts(ddp(response))));
+  };
+    await assert.rejects(readAppV2GoldenCardPayload({device,disconnectOnFinish:true,p3GuardMs:0,requestTimeoutMs:100,firstPacketTimeoutMs:1000,cardIdleTimeoutMs:1000,onDiagnostic:d=>diagnostics.push(d)}),/CREDIT_WRITE_FAILED/);
+    const last=diagnostics.at(-1);
+    assert.equal(last.stage,'waiting_first_packet');
+    assert.equal(last.lastConfirmedStage,'request_upload');
+    assert.equal(last.errorCode,'credit_write_failed');
+    assert.equal(last.packets,0);
+    assert.equal(last.bytes,0);
+    assert.equal(last.pendingResponses,1);
+    assert.equal(device.gatt.connected,false);
+    assert.deepEqual(credits.writes.at(-1),[1], "failed write seals the queue; disconnect handles teardown");
+});
+
+for (const mode of ['pending', 'hung_ack']) test(`mid-transfer diagnostics identify ${mode}`, async () => {
+  const fifo = new FakeCharacteristic('29d3a479-1592-47df-80a4-afa742d369bb');
+  const credits = new FakeCharacteristic('db9c4128-bff3-41fe-a306-fb6f9a8aeb2d');
+  const diagnostics=[];
+  let pendingTimer;
+  const device={gatt:{connected:true,connect:async()=>({getPrimaryServices:async()=>[{uuid:'eef90782-55dd-4388-b80b-695aba7a69b5',getCharacteristics:async()=>[fifo,credits]}]}),disconnect(){this.connected=false;}}};
+  credits.onWrite=async write=>{if(write[0]===1)queueMicrotask(()=>credits.emit([8]));};
+  fifo.onWrite=async write=>{
+    const body=write.slice(2),sid=body[4];queueMicrotask(()=>credits.emit([1]));
+    let response;
+    if(body[0]===0x81)response=[0xc1,0xea,0x8f];
+    else if(sid===0x10)response=[0x50,0x81];
+    else if(sid===0x35)response=[0x75,0x00,0xff];
+    else if(sid===0x36)response=[0x76,0x06,0,1,...new Array(251).fill(0x11)];
+    else if(sid===0x83){
+      if(mode==='hung_ack')await new Promise(()=>{});
+      else if(!pendingTimer)pendingTimer=setInterval(()=>fifo.emit(wrapIts(ddp([0x7f,0x36,0x78]))),5);
+    }
+    else if(sid===0x37){clearInterval(pendingTimer);response=[0x77];}
+    else if(sid===0x82)response=[0xc2];
+    if(response)queueMicrotask(()=>fifo.emit(wrapIts(ddp(response))));
+  };
+  try{
+    await assert.rejects(readAppV2GoldenCardPayload({device,disconnectOnFinish:true,p3GuardMs:0,requestTimeoutMs:100,firstPacketTimeoutMs:1000,cardIdleTimeoutMs:50,writeTimeoutMs:25,onDiagnostic:d=>diagnostics.push(d)}),mode==='pending'?/PACKET_IDLE_TIMEOUT/:/GATT_WRITE_TIMEOUT/);
+    const last=diagnostics.at(-1);
+    assert.equal(last.packets,1);assert.equal(last.ackRequested,2);
+    assert.equal(last.ackWritten,mode==='pending'?2:null);
+    assert.equal(last.errorCode,mode==='pending'?'packet_idle_timeout':'gatt_write_timeout');
+    assert.ok(last.events.some(e=>e.event==='ack:requested'&&e.counter===2));
+    if(mode==='hung_ack')assert.ok(last.events.some(e=>e.event==='command:write_timeout'));
+    else assert.ok(last.pendingResponses>0,'pending replies must not extend the no-new-packet deadline');
+    assert.equal(device.gatt.connected,false);
+  }finally{clearInterval(pendingTimer);}
+});

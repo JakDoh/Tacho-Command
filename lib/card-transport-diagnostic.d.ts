@@ -1,0 +1,27 @@
+export type CardTransportDiagnostic = Readonly<{
+  stage: string;
+  lastConfirmedStage: string;
+  errorCode: string | null;
+  elapsedMs: number;
+  packets: number;
+  bytes: number;
+  pendingResponses: number;
+  firstPacketTimeoutMs: number;
+  cardIdleTimeoutMs?: number;
+  connected?: boolean;
+  serverCredits?: number;
+  queuedWrites?: number;
+  activeWrite?: string | null;
+  notificationCount?: number;
+  partialMessages?: number;
+  ignoredMessages?: number;
+  ackRequested?: number | null;
+  ackWritten?: number | null;
+  packetIdleMs?: number | null;
+  notificationIdleMs?: number | null;
+  droppedEvents?: number;
+  failureState?: Readonly<{ connected: boolean; serverCredits: number; queuedWrites: number; activeWrite: string | null; ackRequested: number | null; ackWritten: number | null }> | null;
+  handoff?: Readonly<{ closeMs: number; settleMs: number; totalMs: number }>;
+  events?: readonly Readonly<{ ms: number; event: string; [key: string]: string | number }>[];
+  milestones?: readonly Readonly<{ ms: number; event: string; [key: string]: string | number }>[];
+}>;

@@ -2,6 +2,11 @@ name: Cloudflare production deploy
 
 on:
   workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Full reviewed main commit SHA to promote
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -23,7 +28,8 @@ jobs:
       - name: Check out approved main
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -35,10 +41,23 @@ jobs:
         run: npm ci
 
       - name: Verify source identity
-        run: test "$(git branch --show-current)" = "main"
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          git merge-base --is-ancestor HEAD origin/main
+
+      - name: Validate source
+        run: |
+          npm run typecheck
+          npm run lint
 
       - name: Build production artifact
         run: npm run build:cloudflare
+
+      - name: Test the built candidate
+        run: node --test tests/*.test.mjs
 
       - name: Verify locked production target
         run: >-

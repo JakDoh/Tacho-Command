@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import vinext from "vinext";
 import { defineConfig } from "vite";
 import hostingConfig from "./.openai/hosting.json";
@@ -16,7 +17,6 @@ const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
 
 const localBindingConfig = {
   main: "./worker/index.ts",
-  compatibility_flags: ["nodejs_compat"],
   d1_databases: d1
     ? [
         {
@@ -47,6 +47,7 @@ export default defineConfig(async () => {
   const { cloudflare } = await import("@cloudflare/vite-plugin");
 
   return {
+    define: { __TACHO_BUILD_SHA__: JSON.stringify(execFileSync("git", ["rev-parse", "--short=12", "HEAD"], { encoding: "utf8" }).trim()) },
     server: {
       host: "0.0.0.0",
       allowedHosts: ["terminal.local"],

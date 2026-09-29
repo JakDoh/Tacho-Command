@@ -2,9 +2,13 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import LandingPage, { type Locale } from "../landing-page";
 
-const locales = ["sr", "en", "de"] as const satisfies readonly Locale[];
+const locales = ["sr", "en", "de", "ru", "bg", "ro", "hu"] as const satisfies readonly Locale[];
 
 const seo = {
+  hu: {"title": "TachoCommand — A te napod. A te kezedben.", "description": "Csatlakoztasd a tachográfot. Olvasd ki a kártyát. Tekintsd át az 56 napodat — érthetően, a telefonodon.", "openGraphLocale": "hu_HU"},
+  ro: {"title": "TachoCommand — Ziua ta. În mâinile tale.", "description": "Conectează tahograful. Citește cardul. Înțelege cele 56 de zile — clar și direct pe telefon.", "openGraphLocale": "ro_RO"},
+  bg: {"title": "TachoCommand — Твоят ден. В твоите ръце.", "description": "Свържи тахографа. Прочети картата. Разгледай своите 56 дни — ясно и направо на телефона.", "openGraphLocale": "bg_BG"},
+  ru: {"title": "TachoCommand — Твой день. В твоих руках.", "description": "Подключи тахограф. Считай карту. Посмотри свои 56 дней — понятно и прямо на телефоне.", "openGraphLocale": "ru_RU"},
   sr: {
     title: "TachoCommand — Smart Tacho 2 cockpit za profesionalne vozače",
     description:
@@ -26,6 +30,10 @@ const seo = {
 } as const;
 
 const languageAlternates = {
+  hu: "/hu",
+  ro: "/ro",
+  bg: "/bg",
+  ru: "/ru",
   sr: "/sr",
   en: "/en",
   de: "/de",

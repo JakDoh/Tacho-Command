@@ -1,3 +1,4 @@
+import { readLimitedJson, requestRateAllowed, RequestLimitError } from "../../../../lib/request-guards";
 import {
   ADMIN_SESSION_COOKIE,
   ADMIN_SESSION_SECONDS,
@@ -37,15 +38,17 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  if (!(await requestRateAllowed(request, 10))) return json({status: "rate_limited"}, {status: 429, headers: {"retry-after":"60"}});
   if (!isAdminRequestHost(request)) return json({ status: "not_found" }, { status: 404 });
   const { accessKey, signingSecret } = adminSecrets();
   if (!accessKey || !signingSecret) return json({ status: "unavailable" }, { status: 503 });
 
   let provided = "";
   try {
-    const body = await request.json() as { key?: unknown };
+    const body = await readLimitedJson(request) as { key?: unknown };
     provided = typeof body.key === "string" ? body.key : "";
-  } catch {
+  } catch (error) {
+    if (error instanceof RequestLimitError) return json({status:"request_rejected"}, {status:error.status});
     return json({ status: "invalid" }, { status: 400 });
   }
 

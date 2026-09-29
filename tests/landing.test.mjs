@@ -1,86 +1,33 @@
-import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import test from "node:test";
-
-const landing = await readFile(new URL("../app/landing-page.tsx", import.meta.url), "utf8");
-const landingStyles = await readFile(new URL("../app/landing-oled.css", import.meta.url), "utf8");
-const launcher = await readFile(new URL("../app/trial-launcher.tsx", import.meta.url), "utf8");
-const appPage = await readFile(new URL("../app/app/page.tsx", import.meta.url), "utf8");
-const installGuide = await readFile(new URL("../app/install-guide.tsx", import.meta.url), "utf8");
-const installGuideStyles = await readFile(new URL("../app/install-guide.module.css", import.meta.url), "utf8");
-const rootPage = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
-const localePage = await readFile(new URL("../app/[locale]/page.tsx", import.meta.url), "utf8");
-const manifest = JSON.parse(await readFile(new URL("../public/manifest.webmanifest", import.meta.url), "utf8"));
-const serviceWorker = await readFile(new URL("../public/sw.js", import.meta.url), "utf8");
-
-test("public root tells the field-proven 2026-09-16 product story", () => {
-  assert.match(landing, /FIELD PROVEN/);
-  assert.match(landing, /VDO DTCO 4\.1a/);
-  assert.match(landing, /GEN2 V2/);
-  assert.match(landing, /217/);
-  assert.match(landing, /56 \/ 56/);
-  assert.match(landing, /67\.295 B/);
-  assert.match(landing, /data-release=\{LANDING_RELEASE\}/);
-  assert.match(appPage, /AppV2Client/);
+import assert from 'node:assert/strict';import test from 'node:test';import {readFile} from 'node:fs/promises';
+import {component,render} from './helpers/render-component.mjs';
+const Landing=await component('app/landing-page.tsx');
+test('all locales expose direct beta access and bounded hardware claims',()=>{
+ for(const locale of ['sr','en','de','ru','bg','ro','hu']) {const html=render(Landing,{initialLocale:locale});assert.match(html,/href="\/app"/);assert.match(html,/4\.1a/);assert.match(html,/Android/);assert.match(html,/72/);assert.match(html,/id="connect"/);assert.doesNotMatch(html,/AT LINE|9,99|TrialLauncher|03:45/);}
 });
-
-test("landing offers SR, EN and DE without fabricating field screenshots", () => {
-  assert.match(landing, /value="sr"/);
-  assert.match(landing, /value="en"/);
-  assert.match(landing, /value="de"/);
-  assert.match(landing, /PRODUCT VIEWS • FIELD DATA/);
-  assert.match(landing, /Finalni landing će dobiti i prave screenshotove produkcijskog UI-ja/);
-  assert.doesNotMatch(landing, /screenshots\/cockpit\.(?:webp|png)/);
-  assert.match(landing, /legal: \{ privacy:/);
-  assert.match(launcher, /loadingLabel/);
-  assert.match(launcher, /errorLabel/);
+test('Serbian landing explains stationary use, local data and scope of break analysis',()=>{
+ const html=render(Landing,{initialLocale:'sr'});assert.match(html,/vozilo miruje/);assert.match(html,/nije potpuna analiza prekršaja/);assert.match(html,/ITS/);assert.match(html,/šestocifreni PIN/);
 });
-
-test("landing keeps compatibility claims bounded to real field evidence", () => {
-  assert.match(landing, /FIELD TESTED/);
-  assert.match(landing, /PLANNED \/ NOT YET CLAIMED/);
-  assert.match(landing, /iPhone \/ Safari Web Bluetooth path/);
-  assert.match(landing, /Drugi Smart Tacho 2 modeli bez field testa/);
-  assert.match(landing, /Potpuna kriptografska signature validacija u UI-ju/);
-  assert.doesNotMatch(landing, /100% Read-Only/);
+test('install event is consumed before prompting, including dismissal',async()=>{
+ const source=await readFile(new URL('../app/install-guide.tsx',import.meta.url),'utf8');
+ assert.ok(source.indexOf('setInstallPrompt(null);',source.indexOf('const installNow'))<source.indexOf('await prompt.prompt()'));
 });
-
-test("mobile landing hero stays inside narrow phone viewports", () => {
-  assert.match(landingStyles, /\.tcx-hero-copy \{[^}]*width: 100%;[^}]*min-width: 0;/);
-  assert.match(landingStyles, /\.tcx-hero h1 \{[^}]*font-size: clamp\(2\.35rem, 12vw, 3\.5rem\);[^}]*overflow-wrap: anywhere;/);
-  assert.doesNotMatch(landingStyles, /font-size: clamp\(3rem, 16vw, 4\.7rem\)/);
+test('PWA identity remains unchanged',async()=>{
+ const manifest=JSON.parse(await readFile(new URL('../public/manifest.webmanifest',import.meta.url),'utf8'));
+ assert.equal(manifest.id,'/app');assert.equal(manifest.start_url,'/app');assert.equal(manifest.display,'standalone');
 });
-
-test("beginner install guide documents Chrome home-screen installation and direct PWA prompt", () => {
-  assert.match(installGuide, /tri tačke gore desno/);
-  assert.match(installGuide, /Install app/);
-  assert.match(installGuide, /Dodaj na početni ekran/);
-  assert.match(installGuide, /beforeinstallprompt/);
-  assert.match(installGuide, /appinstalled/);
-  assert.match(installGuide, /display-mode: standalone/);
-  assert.match(installGuide, /tachocommand-locale/);
+test('shared product version remains the final visible landing item',async()=>{
+ const source=await readFile(new URL('../app/landing-page.tsx',import.meta.url),'utf8');
+ const version=source.indexOf('className="tcx-version-line"');
+ const footerClose=source.indexOf('</footer>',version);
+ assert.ok(version>0);assert.ok(footerClose>version);assert.doesNotMatch(source.slice(version,footerClose),/<(?:p|nav|section|a)\b/);
 });
-
-test("landing install button opens the native Chrome prompt in one tap when available", () => {
-  assert.match(installGuide, /onClick=\{\(\) => installPrompt \? void installNow\(\) : setOpen\(true\)\}/);
-});
-
-test("install action lives in the landing hero and never sticks over page content", () => {
-  assert.match(landing, /<InstallGuide locale=\{locale\} \/>/);
-  assert.doesNotMatch(rootPage, /InstallGuide/);
-  assert.doesNotMatch(localePage, /InstallGuide/);
-  assert.doesNotMatch(installGuideStyles, /\.fab\{[^}]*position:fixed/);
-  assert.doesNotMatch(installGuideStyles, /\.fab\{[^}]*bottom:/);
-  assert.match(installGuide, /if \(installed\) return null/);
-});
-
-test("PWA identity opens the TachoCommand shell instead of the legacy field-test start URL", () => {
-  assert.equal(manifest.name, "TachoCommand — Driver Cockpit");
-  assert.equal(manifest.id, "/app");
-  assert.equal(manifest.start_url, "/app");
-  assert.equal(manifest.display, "standalone");
-  assert.equal(manifest.theme_color, "#020304");
-  assert.match(serviceWorker, /tachocommand-shell-v47-app-v3/);
-  assert.match(serviceWorker, /CORE_ASSETS = \["\/", "\/app"/);
-  assert.match(serviceWorker, /caches\.match\("\/"\)/);
+test('all seven legal translations identify the supplied private controller and retain access policy',async()=>{
+ const {legalCopy}=await import('../lib/legal-copy.js');
+ for(const locale of ['sr','en','de','ru','bg','ro','hu']){
+   assert.equal(legalCopy[locale].titles.length,3);
+   assert.match(legalCopy[locale].terms[0][1],/72/);
+   assert.ok(legalCopy[locale].privacy.length>=5);
+ }
+ const source=await readFile(new URL('../app/localized-legal-page.tsx',import.meta.url),'utf8');
+ assert.match(source,/Boban Canic/);assert.match(source,/Beim Spitzerriegel 2/);assert.match(source,/2500 Baden/);
 });

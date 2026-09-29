@@ -1,3 +1,5 @@
+import { cleanupEmailAuth } from "../lib/email-trial.js";
+import { purgeExpiredTechnicalEvents } from "../lib/retention-cleanup.js";
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
@@ -19,7 +21,19 @@ interface ExecutionContext {
   passThroughOnException(): void;
 }
 
+function secure(response: Response): Response {
+  const headers = new Headers(response.headers);
+  headers.set("X-Content-Type-Options", "nosniff");
+  headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  headers.set("Content-Security-Policy", "frame-ancestors 'none'");
+  headers.set("X-Frame-Options", "DENY");
+  headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  return new Response(response.body, {status:response.status,statusText:response.statusText,headers});
+}
 const worker = {
+  scheduled(_event: unknown, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(Promise.all([purgeExpiredTechnicalEvents(env.DB), cleanupEmailAuth(env.DB, Math.floor(Date.now()/1000))]));
+  },
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
@@ -47,7 +61,7 @@ const worker = {
       }, allowedWidths);
     }
 
-    return handler.fetch(request, env, ctx);
+    return secure(await handler.fetch(request, env, ctx));
   },
 };
 

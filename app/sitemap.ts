@@ -4,6 +4,7 @@ const origin = "https://tachocommand.com";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
+    ...["ru", "bg", "ro", "hu"].map(locale => ({ url: `${origin}/${locale}`, lastModified: new Date("2026-09-29"), changeFrequency: "weekly" as const, priority: 0.9 })),
     {
       url: `${origin}/`,
       lastModified: new Date("2026-09-18"),

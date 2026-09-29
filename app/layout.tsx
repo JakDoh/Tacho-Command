@@ -11,8 +11,7 @@ export const metadata: Metadata = {
     template: "%s | TachoCommand",
   },
   description:
-    "TachoCommand čita podržanu Smart Tacho 2 driver karticu preko telefona, pretvara Gen2 v2 istoriju u jasan 56-day timeline i prikazuje vožnju, pauze, upozorenja i pravne rule profile bez nagađanja.",
-  manifest: "/manifest.webmanifest",
+    "TachoCommand čita podržanu Smart Tacho 2 driver karticu preko telefona, prikazuje dostupnu istoriju do 56 dana, aktivnosti i potvrđene zbirne podatke.",
   applicationName: "TachoCommand",
   appleWebApp: {
     capable: true,
@@ -31,7 +30,6 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
   viewportFit: "cover",
   themeColor: "#020304",
   colorScheme: "dark",
@@ -40,6 +38,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="sr">
+      <head>
+        {/* Keep installation local to this origin; metadataBase is for SEO. */}
+        <link rel="manifest" href="/manifest.webmanifest" />
+      </head>
       <body>
         <ServiceWorkerRegister />
         <ProductAnalyticsObserver />
