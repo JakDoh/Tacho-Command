@@ -9,8 +9,8 @@ const serviceWorker = await readFile(new URL("../public/sw.js", import.meta.url)
 const appRecovery = await readFile(new URL("../app/app/page.tsx", import.meta.url), "utf8");
 const workerSource = await readFile(new URL("../worker/index.ts", import.meta.url), "utf8");
 
-test("field-test route uses the read-only core candidate", () => {
-  assert.match(pageSource, /read-only-field-test-client/);
+test("field-test route redirects to the account-gated app", () => {
+  assert.match(pageSource, /redirect\("\/app"\)/);
   assert.doesNotMatch(pageSource, /from\s+["']\.\/field-test-client["']/);
   assert.match(clientSource, /TACHOCOMMAND_VERSIONS\.app/);
   assert.match(clientSource, /formatTachoCommandVersionLine/);

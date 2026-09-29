@@ -49,7 +49,7 @@ test("admin app and field-test surfaces are explicitly noindex", () => {
 
 
 test("localized landing routes are crawlable and self-canonical with hreflang", () => {
-  assert.match(localePage, /const locales = \["sr", "en", "de"\]/);
+  assert.match(localePage, /const locales = \["sr", "en", "de", "ru", "bg", "ro", "hu"\]/);
   assert.match(localePage, /canonical: \`\/\$\{locale\}\`/);
   assert.match(localePage, /"x-default": "\/"/);
   assert.match(localePage, /sr: "\/sr"/);

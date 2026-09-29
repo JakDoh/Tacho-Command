@@ -34,11 +34,13 @@ test("retired standalone and RHMI field-test sources stay deleted", async () => 
   }
 });
 
-test("server activation and trial routes fail closed without configured signing secret", async () => {
+test("trial uses configured email accounts and the former activation path is retired", async () => {
   const trial = await readFile(new URL("../app/api/trial/route.ts", import.meta.url), "utf8");
   const activate = await readFile(new URL("../app/api/activate/route.ts", import.meta.url), "utf8");
-  assert.match(trial, /TRIAL_SIGNING_SECRET\?\.trim\(\) \|\| null/);
-  assert.match(trial, /status: "unavailable".*status: 503/s);
-  assert.match(activate, /TRIAL_SIGNING_SECRET\?\.trim\(\)/);
-  assert.match(activate, /status: "unavailable".*status: 503/s);
+  const server = await readFile(new URL("../lib/email-auth-server.ts", import.meta.url), "utf8");
+  assert.match(trial, /sessionStatus/);
+  assert.match(trial, /unavailable.*503/);
+  assert.match(activate, /email_required.*410/);
+  assert.match(server, /EMAIL_ID_SECRET/);
+  assert.match(server, /secret.length < 32/);
 });

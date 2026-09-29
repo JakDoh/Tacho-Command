@@ -30,6 +30,7 @@ type ProductControls = {
   } | null;
   cardDiagnostic?: CardTransportDiagnostic | null;
   diagnosticsEnabled?: boolean;
+  accessAllowed?: boolean;
   cardAttemptCode: string | null;
   versionLine: string;
   locale: Locale;
@@ -192,7 +193,7 @@ export default function FieldProvenPremiumUi({
               <p>{c.phase === "connected" ? t.connected : t.offline}</p>
               <button
                 onClick={c.onConnect}
-                disabled={busy || c.phase === "connected"}
+                disabled={c.accessAllowed === false || busy || c.phase === "connected"}
               >
                 {c.phase === "connecting" ? t.connecting : t.connect}
               </button>
@@ -274,14 +275,14 @@ export default function FieldProvenPremiumUi({
                 <button onClick={c.onCancel}>{t.cancel}</button>
               ) : (
                 <button
-                  disabled={busy || c.phase !== "connected"}
+                  disabled={c.accessAllowed === false || busy || c.phase !== "connected"}
                   onClick={c.onReadCard}
                 >
                   {t.read}
                 </button>
               )}
             </section>
-            <a href={"/" + (["sr", "en", "de"].includes(c.locale) ? c.locale : "en") + "#connect"}>{t.help}</a>
+            <a href={"/" + c.locale + "#connect"}>{t.help}</a>
           </div>
         )}
         {tab === "periods" && (

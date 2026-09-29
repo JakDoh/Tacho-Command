@@ -44,3 +44,23 @@ export const productAnalyticsEvents = sqliteTable(
     index("product_analytics_surface_idx").on(table.surface),
   ],
 );
+
+// Email addresses are delivered to the mail provider, not stored in these tables.
+export const betaAccounts = sqliteTable('beta_accounts', {
+  id: text('id').primaryKey().notNull(),
+  createdAt: integer('created_at').notNull(),
+  trialStartedAt: integer('trial_started_at'),
+});
+export const betaLoginTokens = sqliteTable('beta_login_tokens', {
+  tokenHash: text('token_hash').primaryKey().notNull(),
+  accountId: text('account_id').notNull().references(()=>betaAccounts.id),
+  expiresAt: integer('expires_at').notNull(),
+},table=>[index('beta_login_expiry_idx').on(table.expiresAt)]);
+export const betaSessions = sqliteTable('beta_sessions', {
+  tokenHash: text('token_hash').primaryKey().notNull(),
+  accountId: text('account_id').notNull().references(()=>betaAccounts.id),
+  expiresAt: integer('expires_at').notNull(),
+},table=>[index('beta_session_expiry_idx').on(table.expiresAt)]);
+export const betaRequestLimits = sqliteTable('beta_request_limits', {
+  id: text('id').primaryKey().notNull(), count:integer('count').notNull(), expiresAt:integer('expires_at').notNull(),
+});

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import ReadOnlyFieldTestClient from "./read-only-field-test-client";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
   title: "Core Read-Only Field Test",
@@ -12,5 +12,5 @@ export const metadata: Metadata = {
 };
 
 export default function FieldTestPage() {
-  return <ReadOnlyFieldTestClient />;
+  redirect("/app");
 }

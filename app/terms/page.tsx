@@ -1,24 +1,3 @@
-import type { Metadata } from "next";
-import LegalPage from "../legal-page";
-
-export const metadata: Metadata = {
-  title: "Uslovi beta korišćenja",
-  description: "Uslovi korišćenja TachoCommand zatvorene beta verzije za profesionalne vozače.",
-  alternates: { canonical: "/terms" },
-};
-
-export default function TermsPage() {
-  return (
-    <LegalPage kicker="CLOSED BETA" title="Uslovi beta korišćenja" updated="Radna verzija • 28. septembar 2026.">
-      <h2>Pomoćni alat</h2>
-      <p>TachoCommand je tokom bete pomoćni, eksperimentalni prikaz. Tahograf, kartica vozača, zvanični zapisi i važeći propisi ostaju merodavni.</p>
-      <h2>Bezbedna upotreba</h2>
-      <p>Bluetooth povezivanje, podešavanje i pregled telefona obavljaju se samo dok je vozilo bezbedno zaustavljeno. Aplikacija se ne koristi tokom vožnje.</p>
-      <h2>Direktan beta ulaz</h2>
-      <p>Aktivni ulaz vodi direktno u beta aplikaciju. Ne zahteva platnu karticu i ne uključuje automatsku naplatu. Trodnevni demo nije ograničenje ovog ulaza.</p>
-      <h2>Beta pristup</h2>
-      <p>Funkcije se mogu menjati na osnovu terenskih rezultata. Kupovina još nije dostupna i nijedna cena na sajtu trenutno ne predstavlja aktivnu ponudu za zaključenje ugovora.</p>
-    </LegalPage>
-  );
-}
-
+import LocalizedLegalPage from '../localized-legal-page';
+export const metadata = {title: 'Uslovi beta korišćenja', alternates: {canonical: '/terms'}};
+export default function Page() {return <LocalizedLegalPage kind="terms"/>;}

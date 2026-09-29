@@ -1,4 +1,6 @@
 "use client";
+import EmailAccessPanel from "../email-access-panel";
+import { useEmailTrial } from "../../lib/use-email-trial";
 import { APP_LANGUAGES, type AppLocale } from "../../lib/product-app-copy.js";
 
 import type { CardTransportDiagnostic } from "../../lib/card-transport-diagnostic";
@@ -296,7 +298,10 @@ export default function AppV2Client() {
 
   const restoredLabel = formatRestoreTime(capturedAtIso, locale);
 
+  const trial = useEmailTrial(() => { readAbortRef.current?.abort(); void closePersistentLive(); });
+
   const runLiveRead = async () => {
+    if (!trial.permitsNow()) { void trial.refresh(); return; }
     if (liveRunState === "running" || cardSession.busy || cardReadBusyRef.current) return;
     setLiveRunState("running");
     setLiveSession(createAppV2LiveSession({ phase: "connecting" }));
@@ -307,6 +312,11 @@ export default function AppV2Client() {
       keepTransportOpen: true,
     });
 
+    if (!trial.permitsNow()) {
+      try { await (result.transport as PersistentLiveTransport | undefined)?.close(); } catch {}
+      setLiveRunState("idle");
+      return;
+    }
     if (["live", "incomplete"].includes(result.status) && result.transport) {
       const transport = result.transport as PersistentLiveTransport;
       liveTransportRef.current = transport;
@@ -346,6 +356,7 @@ export default function AppV2Client() {
   };
 
   const runCardRead = async () => {
+    if (!trial.permitsNow()) { void trial.refresh(); return; }
     if (cardSession.busy || cardReadBusyRef.current || liveRunState === "running") return;
     const transport = liveTransportRef.current;
     if (!transport || transport.isConnected?.() === false) {
@@ -439,6 +450,10 @@ export default function AppV2Client() {
       return;
     }
 
+    if (!trial.permitsNow()) {
+      cardReadBusyRef.current = false; setCardHandoffPreparing(false);
+      return;
+    }
     const readingSession = beginAppV2CardRead(cardSession);
     setCardHandoffPreparing(false);
     setCardSession(readingSession);
@@ -496,11 +511,13 @@ export default function AppV2Client() {
 
   return (
     <div className={styles.stage}>
+      <EmailAccessPanel locale={locale} access={trial.access} onRefresh={() => void trial.refresh()} />
       <section className={styles.instrumentFrame} aria-label="TachoCommand premium instrument">
         <FieldProvenPremiumUi
           state={state}
           controls={{
             phase: productPhase,
+            accessAllowed: trial.access.status === "active" && trial.permitsNow(),
             restoreState,
             restoredLabel,
             errorText: visibleErrorText,

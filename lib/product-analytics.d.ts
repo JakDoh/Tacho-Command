@@ -9,7 +9,7 @@ export type ProductAnalyticsEventName =
   | "locale_change";
 
 export type ProductAnalyticsSurface = "landing" | "app" | "legal" | "other";
-export type ProductAnalyticsLocale = "sr" | "en" | "de" | "unknown";
+export type ProductAnalyticsLocale = "sr" | "en" | "de" | "ru" | "bg" | "ro" | "hu" | "unknown";
 export type ProductAnalyticsSource =
   | "direct"
   | "internal"

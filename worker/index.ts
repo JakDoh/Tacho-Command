@@ -1,3 +1,4 @@
+import { cleanupEmailAuth } from "../lib/email-trial.js";
 import { purgeExpiredTechnicalEvents } from "../lib/retention-cleanup.js";
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
@@ -31,7 +32,7 @@ function secure(response: Response): Response {
 }
 const worker = {
   scheduled(_event: unknown, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(purgeExpiredTechnicalEvents(env.DB));
+    ctx.waitUntil(Promise.all([purgeExpiredTechnicalEvents(env.DB), cleanupEmailAuth(env.DB, Math.floor(Date.now()/1000))]));
   },
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);

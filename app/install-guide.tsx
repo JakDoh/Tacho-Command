@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import styles from "./install-guide.module.css";
 
-type Locale = "sr" | "en" | "de";
+import { extraInstallCopy } from "../lib/install-extra-copy.js";
+import type { Locale } from "./landing-page";
 
 type InstallGuideProps = Readonly<{
   locale?: Locale;
@@ -15,6 +16,7 @@ type BeforeInstallPromptEvent = Event & {
 };
 
 const copy = {
+  ...extraInstallCopy,
   sr: {
     button: "Instaliraj TachoCommand",
     installed: "TachoCommand je instaliran",
@@ -72,9 +74,10 @@ function readLocale(): Locale {
   if (typeof window === "undefined") return "sr";
   let saved: string | null = null;
   try { saved = window.localStorage.getItem("tachocommand-locale"); } catch {}
-  if (saved === "sr" || saved === "en" || saved === "de") return saved;
+  if (saved && ["sr", "en", "de", "ru", "bg", "ro", "hu"].includes(saved)) return saved as Locale;
   const language = window.navigator.language.toLowerCase();
-  if (language.startsWith("de")) return "de";
+  const detected = language.split("-")[0];
+  if (["sr", "en", "de", "ru", "bg", "ro", "hu"].includes(detected)) return detected as Locale;
   if (language.startsWith("en")) return "en";
   return "sr";
 }

@@ -5,8 +5,11 @@ import { useRouter } from "next/navigation";
 import { trackProductAnalytics } from "../lib/product-analytics-client.js";
 import InstallGuide from "./install-guide";
 import { formatTachoCommandVersionLine } from "../lib/product-version.js";
-export type Locale = "sr" | "en" | "de";
+import { emailAuthCopy } from "../lib/email-auth-copy.js";
+import { extraLandingCopy } from "../lib/landing-extra-copy.js";
+export type Locale = "sr" | "en" | "de" | "ru" | "bg" | "ro" | "hu";
 const copy = {
+  ...extraLandingCopy,
   sr: {
     title: "Tvoj dan. U tvojim rukama.",
     body: "Poveži tahograf. Očitaj karticu. Razumi svojih 56 dana — mirno, jasno i na svom telefonu.",
@@ -180,11 +183,19 @@ export default function LandingPage({
     t = copy[locale],
     router = useRouter();
   const visual = {
+    hu: {"label": "VEZETŐKNEK KÉSZÜLT", "languages": "7 nyelv az alkalmazásban", "ready": "Készen állsz a következő szünetre?", "proof": "Ellenőrizve: DTCO 4.1 / 4.1a", "device": "Android · Chrome"},
+    ro: {"label": "PENTRU ȘOFERI", "languages": "7 limbi în aplicație", "ready": "Pregătit pentru următoarea pauză?", "proof": "Verificat pe DTCO 4.1 / 4.1a", "device": "Android · Chrome"},
+    bg: {"label": "ЗА ВОДАЧИТЕ", "languages": "7 езика в приложението", "ready": "Готов ли си за следващата почивка?", "proof": "Потвърдено на DTCO 4.1 / 4.1a", "device": "Android · Chrome"},
+    ru: {"label": "ДЛЯ ВОДИТЕЛЕЙ", "languages": "7 языков в приложении", "ready": "Готов к следующему перерыву?", "proof": "Проверено на DTCO 4.1 / 4.1a", "device": "Android · Chrome"},
     sr: {label:"NAPRAVLJENO ZA VOZAČE", languages:"7 jezika u aplikaciji", ready:"Spreman za sledeću pauzu?", proof:"Potvrđeno na DTCO 4.1 / 4.1a", device:"Android · Chrome"},
     en: {label:"BUILT FOR DRIVERS", languages:"7 languages in the app", ready:"Ready for your next break?", proof:"Verified on DTCO 4.1 / 4.1a", device:"Android · Chrome"},
     de: {label:"FÜR FAHRER GEMACHT", languages:"7 Sprachen in der App", ready:"Bereit für die nächste Pause?", proof:"Bestätigt auf DTCO 4.1 / 4.1a", device:"Android · Chrome"},
   }[locale];
   const fieldProof = {
+    hu: {"eyebrow": "VALÓDI KIOLVASÁS · DTCO 4.1", "title": "Megmutatjuk az eredményt.", "body": "Buszon rögzítve: LIVE-adatok és kártyaolvasás 269 csomagig.", "action": "12 másodperc valódi kiolvasás · angol feliratok", "stat": "269 csomag · 67,3 KB · kész", "poster": "/field-proof-en.webp", "video": "/field-proof-en.mp4"},
+    ro: {"eyebrow": "CITIRE REALĂ · DTCO 4.1", "title": "Arătăm rezultatul.", "body": "Înregistrat în autobuz: LIVE și citirea cardului până la 269 de pachete.", "action": "12 secunde de citire reală · text în engleză", "stat": "269 pachete · 67,3 KB · finalizat", "poster": "/field-proof-en.webp", "video": "/field-proof-en.mp4"},
+    bg: {"eyebrow": "РЕАЛНО ПРОЧИТАНЕ · DTCO 4.1", "title": "Показваме резултата.", "body": "Запис от автобус: LIVE и прочитане на картата до 269 пакета.", "action": "12 секунди реално прочитане · надписи на английски", "stat": "269 пакета · 67,3 KB · успешно", "poster": "/field-proof-en.webp", "video": "/field-proof-en.mp4"},
+    ru: {"eyebrow": "РЕАЛЬНОЕ СЧИТЫВАНИЕ · DTCO 4.1", "title": "Показываем результат.", "body": "Запись из автобуса: LIVE и считывание карты до 269 пакетов.", "action": "12 секунд реального считывания · подписи на английском", "stat": "269 пакетов · 67,3 КБ · успешно", "poster": "/field-proof-en.webp", "video": "/field-proof-en.mp4"},
     sr: {
       eyebrow: "STVARNO OČITAVANJE · DTCO 4.1",
       title: "Ne obećavamo. Pokazujemo.",
@@ -241,6 +252,8 @@ export default function LandingPage({
           <option value="sr">Srpski</option>
           <option value="en">English</option>
           <option value="de">Deutsch</option>
+          <option value="ru">Русский</option><option value="bg">Български</option>
+          <option value="ro">Română</option><option value="hu">Magyar</option>
         </select>
         <Link
           href="/app"
@@ -250,7 +263,7 @@ export default function LandingPage({
         </Link>
       </header>
       <section className="tcx-hero">
-        <div className="tcx-hero-image" role="img" aria-label="TachoCommand u autobuskoj kabini pre polaska" />
+        <div className="tcx-hero-image" role="img" aria-label={{"sr": "TachoCommand u autobuskoj kabini pre polaska", "en": "TachoCommand in a bus cab before departure", "de": "TachoCommand in der Buskabine vor der Abfahrt", "ru": "TachoCommand в кабине автобуса перед выездом", "bg": "TachoCommand в кабината на автобус преди потегляне", "ro": "TachoCommand în cabina autobuzului înainte de plecare", "hu": "TachoCommand a busz vezetőfülkéjében indulás előtt"}[locale]} />
         <div className="tcx-hero-shade" aria-hidden="true" />
         <div className="tcx-hero-copy">
           <span className="tcx-badge"><i />{visual.label}</span>
@@ -337,7 +350,7 @@ export default function LandingPage({
       </section>
       <section className="tcx-section tcx-final">
         <span className="tcx-eyebrow">{t.beta}</span><h2>{visual.ready}</h2>
-        <p>{t.betaText}</p>
+        <p>{emailAuthCopy[locale].intro}</p>
         <Link
           href="/app"
           onClick={openApp}
@@ -350,7 +363,7 @@ export default function LandingPage({
         <p>{t.footer}</p>
         <nav>
           {["privacy", "terms", "impressum"].map((path, i) => (
-            <Link key={path} href={"/" + path}>
+            <Link key={path} href={"/" + path + "?lang=" + locale}>
               {t.legal[i]}
             </Link>
           ))}
