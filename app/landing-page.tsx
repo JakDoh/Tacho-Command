@@ -350,6 +350,7 @@ export default function LandingPage({
       </section>
       <section className="tcx-section tcx-final">
         <span className="tcx-eyebrow">{t.beta}</span><h2>{visual.ready}</h2>
+        <p><strong>{emailAuthCopy[locale].title}</strong></p>
         <p>{emailAuthCopy[locale].intro}</p>
         <Link
           href="/app"
