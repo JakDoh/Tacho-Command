@@ -54,3 +54,8 @@ User reports card recognition followed by zero packets while Bluetooth stays con
 Candidate `2026.09.29-diagnostic.1` adds a 90-second absolute first-card-packet deadline, unaffected by response-pending messages. After the first data packet, existing idle handling applies. Transport diagnostics show stage, last confirmed stage, bounded error code, event elapsed time and pending count in the UI, retained after failure. No card contents or identity are included. Diagnostics are local UI evidence; the isolated preview has no telemetry database.
 
 The deadline is an experimental operational bound, not a manufacturer specification or a fix for the underlying no-data cause. Bluetooth setup and teardown retain their existing behavior. Three-second LIVE handoff and protocol command bytes remain unchanged. Main, production and golden HTML remain unchanged. Field retest is required before release.
+
+
+## Diagnostic candidate 2: five-second handoff experiment
+
+`2026.09.29-diagnostic.2` changes only the LIVE-to-card settling delay from 3 to 5 seconds and makes receive-credit write failures visible as `credit_write_failed`, terminating the failed transport instead of silently waiting. Protocol request bytes and first-packet deadline remain unchanged. Five seconds is an experimental value, not an established device requirement. The field evidence includes one completed 269-packet read and subsequent zero-packet reads with one pending response, including an automatic first-packet timeout. Neither company remote download nor handoff timing is a proven cause.

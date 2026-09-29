@@ -40,7 +40,7 @@ test("App V3 reuses the LIVE device for card reading after bounded teardown", as
   assert.match(source, /Promise\.race\(\[/);
   assert.match(source, /transport\.device\?\.gatt\?\.disconnect\?\.\(\)/);
   assert.match(source, /await closeLiveForCard\(transport\)/);
-  assert.match(source, /LIVE_TO_CARD_SETTLE_MS = 3000/);
+  assert.match(source, /LIVE_TO_CARD_SETTLE_MS = 5000/);
   assert.match(source, /device: selectedCardDevice/);
   assert.match(source, /disconnectOnFinish: true/);
   assert.match(source, /window\.setInterval/);

@@ -41,7 +41,7 @@ type PersistentLiveTransport = {
   close: () => Promise<void>;
 };
 const LIVE_TEARDOWN_TIMEOUT_MS = 1500;
-const LIVE_TO_CARD_SETTLE_MS = 3000;
+const LIVE_TO_CARD_SETTLE_MS = 5000;
 const LIVE_MONITOR_IDLE_TIMEOUT_MS = 10000;
 const LIVE_MONITOR_IDLE_POLL_MS = 50;
 
