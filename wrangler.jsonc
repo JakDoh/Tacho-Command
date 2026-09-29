@@ -15,6 +15,10 @@
   "images": {
     "binding": "IMAGES"
   },
+  "vars": {
+    "AUTH_EMAIL_FROM": "TachoCommand <support@tachocommand.com>",
+    "AUTH_PUBLIC_ORIGIN": "https://tachocommand.com"
+  },
   "triggers": { "crons": ["17 3 * * *"] },
   "observability": {
     "enabled": true
