@@ -63,3 +63,18 @@ test("card black box records a complete transport and accepted pipeline", async 
   assert.equal(posted.at(-1).packetCount, 269);
   assert.equal(posted.at(-1).byteCount, 67_295);
 });
+
+test("diagnostic stage and exact timeout code survive the sanitized card failure", async () => {
+ let final;
+ const telemetry=createAppV2CardTelemetry({cryptoImpl,postTelemetry:async events=>{if(events.length>1)final=sanitizeTechnicalTelemetryBatch(events);return {status:"accepted",accepted:events.length};}});
+ telemetry.diagnostic({stage:"receiving",lastConfirmedStage:"receiving"});
+ telemetry.progress({submessages:135,byteLength:34000});
+ telemetry.diagnostic({stage:"receiving",lastConfirmedStage:"receiving",errorCode:"packet_idle_timeout"});
+ telemetry.transportError(new Error("PACKET_IDLE_TIMEOUT"));
+ await telemetry.finish({status:"read_error"});
+ const failed=final.at(-1);
+ assert.equal(failed.packetCount,135);
+ assert.equal(failed.errorCode,"packet_idle_timeout");
+ assert.equal(failed.stage,"receiving");
+ assert.equal(failed.lastConfirmedStage,"receiving");
+});

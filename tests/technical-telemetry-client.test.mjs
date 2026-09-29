@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { postTechnicalTelemetry } from "../lib/technical-telemetry-client.js";
+import { postTechnicalTelemetry, flushQueuedTechnicalTelemetry } from "../lib/technical-telemetry-client.js";
 
 const sessionId = "123e4567-e89b-42d3-a456-426614174000";
 
@@ -63,4 +63,18 @@ test("client transport refuses an empty invalid batch without any fetch", async 
   });
   assert.deepEqual(result, { status: "no_valid_events", accepted: 0 });
   assert.equal(called, false);
+});
+
+test("offline terminal report is sanitized, retained and delivered on reconnection", async () => {
+ const entries=new Map();
+ const storage={getItem:key=>entries.get(key)??null,setItem:(key,value)=>entries.set(key,value)};
+ const failed={...validEvent,event:"card_transfer_error",phase:"card_transfer",outcome:"error",attemptCode:"TC-ABCDEF",packetCount:135,errorCode:"packet_idle_timeout",driverName:"secret"};
+ await postTechnicalTelemetry([failed],{storage,fetchImpl:async()=>{throw new Error("offline");}});
+ assert.equal(JSON.stringify([...entries.values()]).includes("secret"),false);
+ let sent;
+ const count=await flushQueuedTechnicalTelemetry({storage,fetchImpl:async(_url,init)=>{sent=JSON.parse(init.body);return {status:202,json:async()=>({status:"accepted",accepted:1})};}});
+ assert.equal(count,1);
+ assert.equal(sent.events[0].packetCount,135);
+ assert.equal(sent.events[0].errorCode,"packet_idle_timeout");
+ assert.equal(JSON.parse([...entries.values()][0]).length,0);
 });

@@ -14,6 +14,8 @@ export const technicalTelemetryEvents = sqliteTable(
     nrc: integer("nrc"),
     deviceFamily: text("device_family").notNull(),
     errorCode: text("error_code"),
+    stage: text("stage"),
+    lastConfirmedStage: text("last_confirmed_stage"),
     packetCount: integer("packet_count"),
     byteCount: integer("byte_count"),
     createdAt: integer("created_at").notNull(),

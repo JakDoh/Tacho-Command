@@ -28,6 +28,13 @@ type Overview = Readonly<{
     totalEvents: number;
     lastEventAt: number | null;
     outcomes: Readonly<Record<string, number>>;
+    cardAttempts: readonly Readonly<{
+      attemptCode: string; startedAt: number; lastAt: number;
+      packetCount: number; byteCount: number; stage: string | null;
+      lastConfirmedStage: string | null; errorCode: string | null;
+      nrc: number | null; status: string;
+      events: readonly Readonly<{event:string; at:number; packetCount:number; stage:string|null; errorCode:string|null}>[];
+    }>[];
     recent: readonly Readonly<{
       attemptCode: string;
       event: string;
@@ -156,7 +163,7 @@ export default function AdminDashboard() {
         <section className={styles.loginCard}>
           <div className={styles.brand}><span>TC</span><div><small>PRIVATE CONTROL PLANE</small><strong>TachoCommand Admin</strong></div></div>
           <h1>Super-user cockpit</h1>
-          <p>Samo agregatni podaci o proizvodu. Bez imena vozača, kartica, registracija, lokacije ili raw tahografskih podataka.</p>
+          <p>Agregatni podaci i anonimni tehnički pokušaji. Bez imena vozača, brojeva kartica, registracija, lokacije ili raw tahografskih podataka.</p>
           <form onSubmit={login}>
             <label htmlFor="admin-key">Admin access key</label>
             <input id="admin-key" type="password" value={key} onChange={(event) => setKey(event.target.value)} autoComplete="current-password" required minLength={24} />
@@ -180,6 +187,22 @@ export default function AdminDashboard() {
     );
   }
 
+  const reasonLabels: Record<string, string> = {
+    packet_idle_timeout: "Novi paket nije stigao 60 s",
+    first_packet_timeout: "Prvi paket nije stigao 90 s",
+    peer_closed: "Tahograf je zatvorio prenos",
+    disconnected: "Bluetooth veza je prekinuta",
+    credit_write_failed: "Upis potvrde protoka nije uspeo",
+    gatt_write_timeout: "Bluetooth upis je istekao",
+    invalid_fragment: "Neispravan fragment paketa",
+    packet_sequence_error: "Pogrešan redosled paketa",
+    credits_timeout: "Potvrda protoka nije stigla",
+    negative_response: "Tahograf je vratio negativan odgovor",
+    payload_invalid: "Preuzeti sadržaj nije validan",
+    parser_rejected: "Obrada kartice nije prihvatila sadržaj",
+    storage_error: "Čuvanje na telefonu nije uspelo",
+    unknown: "Uzrok nije utvrđen",
+  };
   const cards = [
     ["Sesije", overview.product.sessions, "30 dana"],
     ["Landing views", overview.product.landingViews, "30 dana"],
@@ -220,6 +243,37 @@ export default function AdminDashboard() {
             <small>{hint}</small>
           </article>
         ))}
+      </section>
+
+
+      <section className={styles.diagnosticPanel}>
+        <div className={styles.panelTitle}><div><small>CARD DIAGNOSTICS</small><h2>Očitavanja kartice po pokušaju</h2></div><span>Bez ličnih podataka</span></div>
+        <p className={styles.meta}>Poslednji potvrđeni paket i tehnički signal. Kod pokušaja povezuje događaje; signal nije dokaz fizičkog uzroka.</p>
+        <div className={styles.attemptList}>
+          {overview.technical.cardAttempts.length === 0 ? <p>Nema pristiglih događaja očitavanja.</p> : overview.technical.cardAttempts.map((attempt) => (
+            <article key={attempt.attemptCode} className={styles.attemptCard}>
+              <div className={styles.attemptHead}>
+                <strong>{attempt.attemptCode}</strong>
+                <span className={attempt.status === "complete" ? styles.statusOk : attempt.status === "failed" ? styles.statusFail : styles.statusPending}>
+                  {attempt.status === "complete" ? "Završeno" : attempt.status === "failed" ? "Prekinuto" : attempt.status === "in_progress" ? "U toku" : attempt.status === "transfer_complete" ? "Prenos završen · obrada nepotvrđena" : "Nema završnog događaja"}
+                </span>
+              </div>
+              <div className={styles.attemptFacts}>
+                <span><b>{formatNumber(attempt.packetCount)}</b> paketa</span>
+                <span><b>{(attempt.byteCount / 1000).toLocaleString("sr-RS", { maximumFractionDigits: 1 })} KB</b> preneto</span>
+                <span><b>{formatTime(attempt.lastAt)}</b> poslednji signal</span>
+              </div>
+              <p className={styles.attemptReason}>
+                {attempt.errorCode ? (reasonLabels[attempt.errorCode] ?? attempt.errorCode.replaceAll("_", " ")) : attempt.status === "complete" ? "Očitavanje i obrada su završeni." : "Nema zabeleženog razloga prekida."}
+                {attempt.errorCode ? <small> · {attempt.errorCode}{attempt.nrc != null ? " · NRC 0x" + attempt.nrc.toString(16).padStart(2, "0").toUpperCase() : ""}</small> : null}
+              </p>
+              <p className={styles.meta}>Faza: {attempt.stage ?? "nije zabeležena"} · poslednja potvrđena: {attempt.lastConfirmedStage ?? "nije zabeležena"}</p>
+              <details className={styles.attemptEvents}><summary>Tok događaja ({attempt.events.length})</summary>
+                <ol>{attempt.events.slice().reverse().map((item, index) => <li key={item.event + item.at + index}>{formatTime(item.at)} · {item.event} · {item.packetCount} paketa{item.stage ? " · " + item.stage : ""}</li>)}</ol>
+              </details>
+            </article>
+          ))}
+        </div>
       </section>
 
       <section className={styles.panelGrid}>
@@ -276,19 +330,6 @@ export default function AdminDashboard() {
             ))}
           </div>
           <p className={styles.meta}>Poslednji tehnički događaj: {formatTime(overview.technical.lastEventAt)}</p>
-        </article>
-
-        <article className={styles.panel}>
-          <div className={styles.panelTitle}><div><small>CARD BLACK BOX</small><h2>Poslednji pokušaji</h2></div><span>bez identiteta</span></div>
-          <div className={styles.rows}>
-            {overview.technical.recent.length === 0 ? <p>Nema detaljnih pokušaja.</p> : overview.technical.recent.slice(0, 20).map((item, index) => (
-              <div key={`${item.attemptCode}-${item.createdAt}-${item.event}-${index}`}>
-                <span>{item.attemptCode} · {item.phase} · {item.event}</span>
-                <strong>{item.outcome}{item.errorCode ? ` · ${item.errorCode}` : ""}</strong>
-                <small>{item.packetCount} paketa · {(item.byteCount / 1000).toLocaleString("sr-RS", { maximumFractionDigits: 1 })} KB · {formatTime(item.createdAt)}</small>
-              </div>
-            ))}
-          </div>
         </article>
 
         <article className={styles.panel}>

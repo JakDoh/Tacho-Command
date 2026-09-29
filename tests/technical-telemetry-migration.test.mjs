@@ -27,6 +27,7 @@ const migrationSql3 = fs.readFileSync(
   new URL("../drizzle/0003_card_transfer_telemetry.sql", import.meta.url),
   "utf8",
 );
+const migrationSql5 = fs.readFileSync(new URL("../drizzle/0005_card_diagnostic_stage.sql", import.meta.url), "utf8");
 const snapshot3 = JSON.parse(
   fs.readFileSync(new URL("../drizzle/meta/0003_snapshot.json", import.meta.url), "utf8"),
 );
@@ -111,8 +112,10 @@ test("schema follows latest snapshot while initial migration stays immutable", (
   const schemaColumns = schemaStorageColumns(schemaSource);
   const snapshotColumns = Object.keys(snapshot3.tables.technical_telemetry_events.columns);
 
-  assert.deepEqual(schemaColumns, latestColumns);
+  assert.deepEqual(schemaColumns, [...latestColumns.slice(0, 11), "stage", "last_confirmed_stage", ...latestColumns.slice(11)]);
   assert.deepEqual(snapshotColumns, latestColumns);
+  assert.match(migrationSql5, /ADD COLUMN stage TEXT/);
+  assert.match(migrationSql5, /ADD COLUMN last_confirmed_stage TEXT/);
 
   const createTableBody = migrationSql
     .slice(migrationSql.indexOf("CREATE TABLE"), migrationSql.indexOf(");"))

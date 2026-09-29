@@ -124,3 +124,22 @@
   .metricCard { padding: 15px; }
   .loginCard { padding: 22px; }
 }
+
+.diagnosticPanel { max-width:1280px; margin:0 auto 12px; padding:20px; border:1px solid #25516a; border-radius:18px; background:#071723; }
+.attemptList { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:18px; }
+.attemptList > p { color:#9bafba; }
+.attemptCard { min-width:0; padding:16px; border:1px solid #254154; border-radius:14px; background:#0b2030; }
+.attemptHead { display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px; align-items:center; }
+.attemptHead strong { font:850 15px ui-monospace,monospace; color:#e5f7ff; }
+.attemptHead span { border-radius:999px; padding:5px 8px; font-size:11px; font-weight:850; }
+.statusOk { color:#9df0ce; background:#113b30; }
+.statusFail { color:#ffb0a8; background:#482322; }
+.statusPending { color:#f1d298; background:#43351c; }
+.attemptFacts { display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:14px; color:#8fa6b5; font-size:11px; }
+.attemptFacts b { color:#f0faff; }
+.attemptReason { margin:14px 0 0; color:#eef6fa; font-size:13px; line-height:1.45; }
+.attemptReason small { color:#8da5b2; font:11px ui-monospace,monospace; }
+.attemptEvents { margin-top:12px; color:#9db5c2; font-size:11px; }
+.attemptEvents summary { cursor:pointer; }
+.attemptEvents ol { padding-left:20px; line-height:1.8; }
+@media(max-width:760px){ .attemptList { grid-template-columns:1fr; } }

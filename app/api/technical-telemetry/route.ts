@@ -69,6 +69,8 @@ export async function POST(request: Request) {
         nrc: event.nrc,
         deviceFamily: event.deviceFamily,
         errorCode: event.errorCode,
+        stage: event.stage,
+        lastConfirmedStage: event.lastConfirmedStage,
         packetCount: event.packetCount,
         byteCount: event.byteCount,
         createdAt,

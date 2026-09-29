@@ -8,7 +8,13 @@ export type TechnicalTelemetryEventName =
   | "timeout"
   | "nrc"
   | "disconnected"
-  | "error";
+  | "error"
+  | "card_read_start"
+  | "card_transfer_progress"
+  | "card_transfer_complete"
+  | "card_transfer_error"
+  | "card_pipeline_complete"
+  | "card_pipeline_error";
 
 export type TechnicalTelemetryPhase =
   | "bluetooth"
@@ -16,7 +22,10 @@ export type TechnicalTelemetryPhase =
   | "transport"
   | "tester_present"
   | "live_read"
-  | "teardown";
+  | "teardown"
+  | "card_transport"
+  | "card_transfer"
+  | "card_pipeline";
 
 export type TechnicalTelemetryOutcome =
   | "start"
@@ -47,6 +56,8 @@ export type TechnicalTelemetrySanitizedEvent = Readonly<{
   nrc: number | null;
   deviceFamily: TechnicalTelemetryDeviceFamily;
   errorCode: string | null;
+  stage: string | null;
+  lastConfirmedStage: string | null;
   packetCount: number | null;
   byteCount: number | null;
 }>;
@@ -56,6 +67,7 @@ export const TECHNICAL_TELEMETRY_RETENTION_DAYS: 60;
 export const TECHNICAL_TELEMETRY_MAX_BATCH: 20;
 export const TECHNICAL_TELEMETRY_EVENTS: readonly TechnicalTelemetryEventName[];
 export const TECHNICAL_TELEMETRY_PHASES: readonly TechnicalTelemetryPhase[];
+export const TECHNICAL_TELEMETRY_STAGES: readonly string[];
 export const TECHNICAL_TELEMETRY_OUTCOMES: readonly TechnicalTelemetryOutcome[];
 export const TECHNICAL_TELEMETRY_DIDS: readonly TechnicalTelemetryDid[];
 export const TECHNICAL_TELEMETRY_DEVICE_FAMILIES: readonly TechnicalTelemetryDeviceFamily[];

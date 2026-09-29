@@ -1,3 +1,4 @@
+import { summarizeCardAttempts } from "../../../../lib/admin-card-attempts.js";
 import {
   ADMIN_SESSION_COOKIE,
   readCookieValue,
@@ -17,6 +18,9 @@ type TechnicalRow = Readonly<{
   phase?: string | null;
   outcome?: string | null;
   error_code?: string | null;
+  stage?: string | null;
+  last_confirmed_stage?: string | null;
+  nrc?: number | string | null;
   packet_count?: number | string | null;
   byte_count?: number | string | null;
   duration_ms?: number | string | null;
@@ -100,7 +104,7 @@ export async function GET(request: Request) {
         "SELECT outcome AS key, COUNT(*) AS count FROM technical_telemetry_events WHERE created_at >= ?1 GROUP BY outcome ORDER BY count DESC",
       ).bind(since30).all(),
       env.DB.prepare(
-        "SELECT attempt_code, event, phase, outcome, error_code, packet_count, byte_count, duration_ms, created_at FROM technical_telemetry_events WHERE attempt_code IS NOT NULL ORDER BY created_at DESC, id DESC LIMIT 100",
+        "SELECT attempt_code, event, phase, outcome, error_code, packet_count, byte_count, duration_ms, created_at, stage, last_confirmed_stage, nrc FROM technical_telemetry_events WHERE attempt_code IS NOT NULL AND event LIKE 'card_%' ORDER BY created_at DESC, id DESC LIMIT 500",
       ).all(),
     ]);
 
@@ -114,6 +118,9 @@ export async function GET(request: Request) {
       phase: typeof row.phase === "string" ? row.phase : "unknown",
       outcome: typeof row.outcome === "string" ? row.outcome : "unknown",
       errorCode: typeof row.error_code === "string" ? row.error_code : null,
+      stage: typeof row.stage === "string" ? row.stage : null,
+      lastConfirmedStage: typeof row.last_confirmed_stage === "string" ? row.last_confirmed_stage : null,
+      nrc: row.nrc == null ? null : numeric(row.nrc),
       packetCount: numeric(row.packet_count),
       byteCount: numeric(row.byte_count),
       durationMs: numeric(row.duration_ms),
@@ -150,9 +157,10 @@ export async function GET(request: Request) {
         lastEventAt: numeric(technicalSummary?.last_event_at) || null,
         outcomes: technicalOutcomes,
         recent: recentTechnical,
+        cardAttempts: summarizeCardAttempts(recentTechnical, now).slice(0, 50),
       },
       privacy: {
-        aggregateOnly: true,
+        aggregateOnly: false,
         productRetentionDays: 90,
         technicalRetentionDays: 60,
         technicalAttemptDetails: true,

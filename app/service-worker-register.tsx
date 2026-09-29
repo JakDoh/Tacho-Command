@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { flushQueuedTechnicalTelemetry } from "../lib/technical-telemetry-client.js";
 const SERVICE_WORKER_URL = "/sw.js?v=2026-09-29-beta-2-origin-fix";
 export default function ServiceWorkerRegister() {
   const [waiting, setWaiting] = useState<ServiceWorker | null>(null);
@@ -30,7 +31,11 @@ export default function ServiceWorkerRegister() {
         return r.update();
       })
       .catch(() => {});
+    const flush = () => { void flushQueuedTechnicalTelemetry(); };
+    flush();
+    window.addEventListener("online", flush);
     const visible = () => {
+      if (document.visibilityState === "visible") flush();
       sync();
       if (document.visibilityState === "visible")
         void registration?.update().catch(() => {});
@@ -39,6 +44,7 @@ export default function ServiceWorkerRegister() {
     document.addEventListener("visibilitychange", visible);
     return () => {
       cancelled = true;
+      window.removeEventListener("online", flush);
       window.removeEventListener("tacho-busy-change", sync);
       document.removeEventListener("visibilitychange", visible);
     };

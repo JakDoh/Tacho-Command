@@ -11,5 +11,8 @@ export function postTechnicalTelemetry(
     endpoint?: string;
     timeoutMs?: number;
     fetchImpl?: typeof fetch;
+    storage?: Storage | null;
   },
 ): Promise<TechnicalTelemetryPostResult>;
+
+export function flushQueuedTechnicalTelemetry(options?: { storage?: Storage | null; fetchImpl?: typeof fetch }): Promise<number>;
