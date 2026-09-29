@@ -1,13 +1,20 @@
 export async function authEnvironment() {
   const {env} = await import('cloudflare:workers');
-  const secret = process.env.EMAIL_ID_SECRET?.trim();
-  const apiKey = process.env.RESEND_API_KEY?.trim();
-  const from = process.env.AUTH_EMAIL_FROM?.trim();
-  const origin = process.env.AUTH_PUBLIC_ORIGIN?.trim();
-  if (!env.DB || !secret || secret.length < 32 || !apiKey || !from || !origin) throw new Error('auth_unavailable');
+  const bindings = env as unknown as {
+    DB?: D1Database;
+    EMAIL_ID_SECRET?: string;
+    RESEND_API_KEY?: string;
+    AUTH_EMAIL_FROM?: string;
+    AUTH_PUBLIC_ORIGIN?: string;
+  };
+  const secret = bindings.EMAIL_ID_SECRET?.trim();
+  const apiKey = bindings.RESEND_API_KEY?.trim();
+  const from = bindings.AUTH_EMAIL_FROM?.trim();
+  const origin = bindings.AUTH_PUBLIC_ORIGIN?.trim();
+  if (!bindings.DB || !secret || secret.length < 32 || !apiKey || !from || !origin) throw new Error('auth_unavailable');
   const url = new URL(origin);
   if (url.protocol !== 'https:' || url.origin !== origin) throw new Error('invalid_auth_origin');
-  return {db:env.DB, secret, apiKey, from, origin};
+  return {db:bindings.DB, secret, apiKey, from, origin};
 }
 export const authJson = (body: unknown, status = 200, headers: Record<string,string> = {}) =>
   Response.json(body, {status, headers:{'cache-control':'no-store', ...headers}});
