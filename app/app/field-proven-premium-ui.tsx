@@ -225,7 +225,21 @@ export default function FieldProvenPremiumUi({
                 )}
                 {c.phase === "card-reading" && (
                   <>
-                    <progress aria-label={t.reading} />
+                    <div
+                      className={styles.transferTrack}
+                      role="progressbar"
+                      aria-label={c.cardReadProgress?.complete ? t.processing : t.reading}
+                      aria-valuetext={`${t.packets}: ${c.cardReadProgress?.submessages ?? 0}`}
+                    >
+                      <span
+                        className={styles.transferPulse}
+                        style={{
+                          // Packet activity, not a percentage: the total is unknown.
+                          left: `${((c.cardReadProgress?.submessages ?? 0) % 32) * 2.5}%`,
+                          opacity: c.cardReadProgress?.submessages ? 1 : 0.3,
+                        }}
+                      />
+                    </div>
                     <p>{c.screenAwake ? t.awake : t.noWake}</p>
                   </>
                 )}
