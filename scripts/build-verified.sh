@@ -26,3 +26,23 @@ timeout \
   "${vinext}" build
 
 "${script_dir}/validate-artifact.sh"
+
+# Deduplicate D1 bindings in the generated wrangler.json (vinext bug workaround)
+node -e "
+const fs = require('fs');
+const f = 'dist/server/wrangler.json';
+const c = JSON.parse(fs.readFileSync(f, 'utf8'));
+if (c.d1_databases) {
+  const seen = new Set();
+  const before = c.d1_databases.length;
+  c.d1_databases = c.d1_databases.filter(b => {
+    if (seen.has(b.binding)) return false;
+    seen.add(b.binding);
+    return true;
+  });
+  if (c.d1_databases.length < before) {
+    console.log('Removed ' + (before - c.d1_databases.length) + ' duplicate D1 binding(s)');
+  }
+}
+fs.writeFileSync(f, JSON.stringify(c, null, 2));
+"
