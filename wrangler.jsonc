@@ -16,8 +16,8 @@
     "binding": "IMAGES"
   },
   "vars": {
-    "AUTH_EMAIL_FROM": "TachoCommand <support@tachocommand.com>",
-    "AUTH_PUBLIC_ORIGIN": "https://tachocommand.com"
+    "AUTH_EMAIL_FROM": "onboarding@resend.dev",
+    "AUTH_PUBLIC_ORIGIN": "https://tacho-command.jak-doh-work.workers.dev/"
   },
   "secrets": {
     "required": ["EMAIL_ID_SECRET", "RESEND_API_KEY"]
