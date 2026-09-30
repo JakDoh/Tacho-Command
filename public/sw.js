@@ -1,4 +1,4 @@
-const CACHE_NAME = "tachocommand-shell-v51-read-reliability";
+const CACHE_NAME = "tachocommand-shell-v52-transfer-indicator";
 const CORE_ASSETS = ["/", "/app", "/manifest.webmanifest", "/favicon.svg", "/icon-192.png", "/icon-512.png"];
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS)));

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { flushQueuedTechnicalTelemetry } from "../lib/technical-telemetry-client.js";
-const SERVICE_WORKER_URL = "/sw.js?v=2026-09-30-read-reliability-1";
+const SERVICE_WORKER_URL = "/sw.js?v=2026-09-30-transfer-indicator-1";
 export default function ServiceWorkerRegister() {
   const [waiting, setWaiting] = useState<ServiceWorker | null>(null);
   const [busy, setBusy] = useState(false);
