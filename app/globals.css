@@ -482,3 +482,7 @@ button { -webkit-tap-highlight-color: transparent; }
   .activation-form > div { grid-template-columns: 1fr; }
   .activation-form button { min-height: 2.7rem; }
 }
+
+.tc-analytics-settings{position:fixed;right:12px;bottom:82px;z-index:40;border:1px solid #586a72;border-radius:8px;background:#101d26;color:#eef7fa;padding:7px 10px;font-size:11px;cursor:pointer}
+.tc-analytics-consent{position:fixed;left:12px;right:12px;bottom:90px;margin:auto;max-width:540px;z-index:60;background:#10232d;color:#eef7fa;border:1px solid #8ba3af;border-radius:14px;padding:18px;box-shadow:0 8px 32px #0009;font-size:14px;max-height:65vh;overflow:auto}
+.tc-analytics-consent p{margin:10px 0;line-height:1.5}.tc-analytics-consent div{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.tc-analytics-consent button{padding:9px 12px;border:1px solid #8ba3af;background:#193541;color:#fff;border-radius:8px;cursor:pointer}.tc-analytics-consent a{color:#b6f5de;text-decoration:underline}

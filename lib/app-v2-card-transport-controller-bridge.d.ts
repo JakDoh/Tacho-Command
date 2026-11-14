@@ -1,5 +1,6 @@
 import type { CardTransportDiagnostic } from "./card-transport-diagnostic";
 import type { AppV2CardReadControllerResult } from "./app-v2-card-read-controller.js";
+import { createAppV2CardTelemetry } from "./app-v2-card-telemetry.js";
 
 export declare function runBrowserAppV2GoldenCardRead(input?: Readonly<{
   session?: Readonly<Record<string, unknown>>;
@@ -10,6 +11,7 @@ export declare function runBrowserAppV2GoldenCardRead(input?: Readonly<{
   onDiagnostic?: (value: CardTransportDiagnostic) => void;
   onProgress?: (progress: Readonly<{ submessages: number; byteLength: number; complete: boolean }>) => void;
   onTelemetryAttempt?: (attemptCode: string) => void;
+  telemetry?: ReturnType<typeof createAppV2CardTelemetry>;
   transportOptions?: Readonly<{
     device?: unknown;
     disconnectOnFinish?: boolean;

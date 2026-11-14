@@ -1,6 +1,9 @@
 "use client";
 import type { CardTransportDiagnostic } from "../../lib/card-transport-diagnostic";
 import Link from "next/link";
+import { firstReadCopy } from "../../lib/first-read-copy.js";
+import { localizedLandingHref } from "../../lib/product-locale.js";
+import DayTimeline from "./day-timeline";
 import { diagnosticCopy } from "../../lib/product-diagnostic-copy.js";
 import { appCopy as copy, APP_LANGUAGES, type AppLocale } from "../../lib/product-app-copy.js";
 import { reviewUtcCardBreaks, exportUtcCardCsv } from "../../lib/card-utc-review.js";
@@ -84,6 +87,8 @@ export default function FieldProvenPremiumUi({
   const [selected, setSelected] = useState<string | null>(null);
   const t = copy[c.locale];
   const d = diagnosticCopy[c.locale];
+  const first = firstReadCopy[c.locale];
+  const showFirstConnection = c.phase === "idle" && !state.live && !state.liveSnapshotAvailable && !c.accepted && !c.savedAvailable && !state.historyDays.length;
   const unsavedTitle = {sr:'Kartica proverena · nije sačuvana',en:'Card verified · not saved',de:'Karte geprüft · nicht gespeichert',ru:'Карта проверена · не сохранена',bg:'Картата е проверена · не е запазена',ro:'Card verificat · nesalvat',hu:'Kártya ellenőrizve · nincs mentve'}[c.locale];
   const cutoffLabel = {sr:'Podaci do početka očitavanja',en:'Data cutoff: read start',de:'Datenstand: Beginn der Auslesung',ru:'Данные на момент начала считывания',bg:'Данни към началото на прочитането',ro:'Date până la începutul citirii',hu:'Adatok a kiolvasás kezdetéig'}[c.locale];
   const unsavedCopy = {
@@ -151,7 +156,7 @@ export default function FieldProvenPremiumUi({
     <div className={styles.shell} lang={c.locale}>
       <header className={styles.topbar}>
         <div className={styles.brand}>
-          <Link href="/" className={styles.brandMark} aria-label="TachoCommand">
+          <Link href={localizedLandingHref(c.locale)} className={styles.brandMark} aria-label="TachoCommand">
             TC
           </Link>
           <strong>TachoCommand</strong>
@@ -184,6 +189,19 @@ export default function FieldProvenPremiumUi({
           </section>
         )}
         {tab !== "attention" && analysis.findings.length > 0 && <button className={styles.breakNotice} onClick={() => setTab("attention")}>{warningCopy.count}: {analysis.findings.length}</button>}
+        {showFirstConnection && <section className={styles.firstConnectionPanel} aria-labelledby="first-connection-title">
+          <span className={styles.firstConnectionKicker}>TachoCommand</span>
+          <h1 id="first-connection-title">{first.title}</h1>
+          <p>{first.intro}</p>
+          <p className={styles.compatibilityNote}>{first.ready}</p>
+          <ol>{first.steps.map(step => <li key={step}>{step}</li>)}</ol>
+          <div className={styles.firstConnectionActions}>
+            <button disabled={c.accessAllowed === false || busy} onClick={c.onConnect}>{t.connect}</button>
+            <a href={localizedLandingHref(c.locale, "", "#connect")}>{t.help}</a>
+          </div>
+          <p>{first.help}</p>
+        </section>}
+        {!showFirstConnection && <>
         {tab === "live" && (
           <div className={styles.screen}>
             <section className={styles.primaryControl}>
@@ -331,41 +349,9 @@ export default function FieldProvenPremiumUi({
                 <button onClick={() => setSelected(null)}>← {t.back}</button>
                 <h2>{day.dateIso}</h2>
                 <p>{t.dayNote}</p>
+                {!day.coverageComplete && <p>{warningCopy.gap}</p>}
                 {day.timingComplete && (
-                  <section className={styles.dayTimelinePanel}>
-                    <div className={styles.dayTimelineHeader}>
-                      <span>00:00</span>
-                      <span>12:00</span>
-                      <span>24:00</span>
-                    </div>
-                    <div
-                      className={styles.dayTimelineTrack}
-                      aria-label={t.history}
-                    >
-                      {day.segments.map((seg, i) =>
-                        seg.startMinute !== null && seg.endMinute !== null ? (
-                          <span
-                            key={i}
-                            className={styles[seg.kind]}
-                            style={{
-                              left: (seg.startMinute / 1440) * 100 + "%",
-                              width:
-                                ((seg.endMinute - seg.startMinute) / 1440) *
-                                  100 +
-                                "%",
-                            }}
-                            title={
-                              kinds[seg.kind] +
-                              " " +
-                              clock(seg.startMinute) +
-                              "–" +
-                              clock(seg.endMinute)
-                            }
-                          />
-                        ) : null,
-                      )}
-                    </div>
-                  </section>
+                  <DayTimeline key={day.dateIso} day={day} kinds={kinds} locale={c.locale} />
                 )}
                 <div className={styles.daySummaryGrid}>
                   {Object.entries(day.activityTotals).map(([kind, value]) => (
@@ -379,7 +365,7 @@ export default function FieldProvenPremiumUi({
                   <ul>
                     {day.events.map((event, i) => (
                       <li key={i}>
-                        <time>{clock(event.minute)}</time> ·{" "}
+                        <time>{event.timeLabel ?? clock(event.minute)}</time> ·{" "}
                         {event.kind === "card-inserted"
                           ? t.inserted
                           : t.removed}
@@ -391,7 +377,7 @@ export default function FieldProvenPremiumUi({
                   {day.segments.map((seg, i) => (
                     <div className={styles.daySequenceRow} key={i}>
                       <time>
-                        {clock(seg.startMinute)}–{clock(seg.endMinute)}
+                        {seg.timeLabel ?? `${clock(seg.startMinute)}–${clock(seg.endMinute)}`}
                       </time>
                       <span>{kinds[seg.kind]}</span>
                       <strong>{minutes(seg.minutes)}</strong>
@@ -477,6 +463,7 @@ export default function FieldProvenPremiumUi({
             <p className={styles.versionLine}>{c.versionLine}</p>
           </div>
         )}
+        </>}
       </main>
       <nav className={styles.bottomNav} aria-label={t.tabs[0]}>
         {(

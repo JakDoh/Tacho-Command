@@ -1,5 +1,7 @@
 # TachoCommand — Sites ownership recovery checkpoint — 2026-09-19
 
+> Historical checkpoint. The current application source/configuration uses independent Cloudflare hosting; see [canonical state](TACHOCOMMAND-CANONICAL-STATE.md). The hold and deployment target below describe the 2026-09-19 incident, not current deployment instructions. Original incident details are preserved; support-ticket resolution is not claimed.
+
 ## Purpose
 
 This checkpoint records the current production-source state and the ChatGPT Sites ownership/access incident discovered on 2026-09-19. It is documentation only. It must not change the live Site, custom domains, DNS, secrets, D1 binding, PWA behavior, or the golden 0.32c transport.

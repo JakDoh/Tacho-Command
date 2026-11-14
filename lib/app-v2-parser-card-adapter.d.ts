@@ -12,6 +12,7 @@ export type AppV2ParserCardDay = Readonly<{
   dateIso?: string;
   dateLabel?: string | null;
   segments: readonly AppV2ParserCardSegment[];
+  events?: readonly Readonly<{kind: "card-inserted" | "card-removed"; minute: number}>[];
 }>;
 
 export declare function normalizeParserCardResult(input?: Readonly<{

@@ -8,3 +8,8 @@
   min-height: 100dvh;
   background: #081219;
 }
+
+.betaNotice { background:#10251f; color:#d7eee3; font-size:13px; }
+.betaNotice details { max-width:840px; margin:auto; padding:0 18px; }
+.betaNotice summary { cursor:pointer; min-height:40px; padding:10px 0; font-weight:650; }
+.betaNotice p { margin:0; padding:4px 0 16px; line-height:1.5; color:#b8ccc4; }

@@ -1,235 +1,104 @@
 # TachoCommand — Canonical Project State
 
-Updated: 2026-09-18
+Updated: **2026-10-01**. Reviewed application source: `62220e78a161a6ec07e2f7cfdc5f651982cc4d00` (`2026.09.30-beta.3`). This is a documentation checkpoint, not a new application release.
 
-## Purpose
+## Authority and identity
 
-This document is the durable source-of-truth checkpoint for TachoCommand. GitHub `main`, golden field evidence, and verified production behavior outrank chat memory or abandoned candidate branches.
+GitHub `main`, recorded field evidence and independently checked live behavior outrank chat memory or old candidates. Source establishes implementation; physical records establish only their tested combinations.
 
-## Canonical repository state
+| Item | Source-backed state |
+| --- | --- |
+| Repository / integration | `canicboban-source/Tacho-Command` / `main` |
+| Active app | `/app` and `/app-v2` render `AppV2Client` |
+| Access | Open free beta; no signup/email confirmation, purchase or configured expiry |
+| Version | `2026.09.30-beta.3` |
+| PWA cache | `tachocommand-shell-v53-open-beta` |
+| Card / transport labels | `parser-native-history-2026.09.19` / `golden-0.32c` |
+| Production configuration | Independent Cloudflare Worker `tachocommand` |
+| Storage binding | `DB`, database `tachocommand-prod` |
+| Public origins | `tachocommand.com`; current Worker redirects `www` to apex |
+| Admin | `admin.tachocommand.com`, authenticated APIs |
 
-- Repository: `canicboban-source/Tacho-Command`
-- Default and only active integration branch: `main`
-- Canonical `main` before this documentation refresh: `5eabb15b24c0e8f2a0049b786213fd7874d2fb97`
-- Open pull requests after cleanup: **0**
-- Historical branches are preserved as evidence/reference; they are not active integration lanes.
-- Production is not to be overwritten from a historical branch or old candidate.
+GitHub records show successful CI/quality and production deployment workflow for the reviewed source on 2026-09-30. No fresh live browser/API smoke or hardware run was performed in this documentation task. DNS, runtime secrets and infrastructure ownership are not proved by configuration alone.
 
-### Integrated and authoritative on main
+The 2026-09-18 source-provenance hold is historical: PR #85 recorded App V2 source cutover, and current `/app` does not use the old recovery route. The [Sites incident](2026-09-19-sites-ownership-recovery.md) is preserved history, not today's hosting plan. Its old support-ticket resolution is not claimed.
 
-- premium OLED landing and current public product claims;
-- privacy-safe technical telemetry foundation;
-- D1 telemetry storage schema and binding;
-- field-test telemetry instrumentation;
-- telemetry readiness endpoint;
-- byte-exact golden 0.32c Driver Card Slot 1 field artifact;
-- anonymous per-attempt support code `TC-XXXXXX` with indexed telemetry lookup;
-- historical physical verification record from 2026-09-17.
+## Golden 0.32c — permanently locked
 
-## Golden 0.32c transport — permanently locked
+**Closed decision:** preserve the proven Driver Card Slot 1 protocol. Do not edit, modernize, reformat or replace its immutable HTML reference. Preserve request bytes, credit flow, multipart sequence/ACK and completion gates. Protocol research requires a separate isolated candidate and cannot silently become production transport.
 
-**Closed decision:** the field-proven 0.32c Driver Card Slot 1 communication/transport path is the most valuable proven asset in TachoCommand and must not be changed again. Future product work must be built around it. If a future incompatibility appears, investigate adapters, detection, UI, recovery, diagnostics, or a separate experimental transport candidate first; do not mutate the golden 0.32c path itself. Any research that needs protocol experimentation must live in a separate isolated artifact/branch and can never silently replace the golden implementation.
+Reference: `docs/field-evidence/2026-09-16/TachoCommand-0.32c-driver-card-slot1-field-test.html`
 
-Golden artifact:
+SHA-256: `cd9caab9829cd1523c68b5cc8725edf81c42ba27c45135a6d00934f49d092908`
 
-`docs/field-evidence/2026-09-16/TachoCommand-0.32c-driver-card-slot1-field-test.html`
+Original proof: DTCO 4.1a / GEN2 V2, Slot 1 TREP06, 269 submessages, 67,295 bytes, 61 TLV objects, positive transfer exit/communication stop and 56-day analysis coverage. The [App V2 proof](../field-evidence/2026-09-19-app-v2-card-field-proof.md) records the later equivalent physical path. Counts are sample-specific.
 
-SHA-256:
+Current wrappers contain bounded setup/write/command waits, cancellation, five-second LIVE release settling, a 90-second first-packet bound and a 60-second no-new-packet bound. Older documents' 20-minute timeout describes their dated version, not current wrapper settings. This update changes none of them.
 
-`cd9caab9829cd1523c68b5cc8725edf81c42ba27c45135a6d00934f49d092908`
+## Implemented product and boundaries
 
-Proven physical result:
+- LIVE: activity, continuous driving and cumulative break; optional daily/weekly values; refresh and stationary guard. Unknown values remain unknown. Previously confirmed snapshots and connection/freshness status are distinguished.
+- Card: full Slot 1 download, packet/byte activity, cancellation, wake-lock request and disconnect handling. LIVE closes before card download; the selected device is reused. Automatic LIVE resumption is not implemented.
+- History: up to 56 UTC calendar days, local-zone display, descending dates, timeline/list, totals and available card events. Interactive zoom/segment selection are not implemented.
+- Periods: previous calendar week plus elapsed current week. Missing dates leave the aggregate unknown; within-day coverage is an open finding.
+- Attention: standard driving-break screening only. No full rest/working-time/special-transport infringement engine or clean compliance verdict.
+- Storage: failed reads retain the last good snapshot; unsaved successful reads remain exportable in memory. Restored identity is hidden until selection. Storage belongs to the browser profile, not separate accounts.
+- CSV: UTC instants, local offsets, elapsed durations and read-start cutoff. No signed DDD export or signature/certificate validation.
+- Languages: SR/EN/DE/RU/BG/RO/HU landing and app surfaces. Guide parity and native review are separate from dictionary presence.
+- PWA: explicit updates, current-tab communication guard, own-cache cleanup and API/admin/RSC exclusion. Multi-tab/background/installed-upgrade behavior still needs mobile evidence.
+- Support: restricted technical telemetry, offline retry, attempt-code lookup and authenticated admin. Analytics covers selected events, not a complete paid-conversion funnel.
 
-- Continental VDO DTCO 4.1a / GEN2 V2;
-- direct Driver Card Slot 1 TREP 06;
-- 269 transfer submessages;
-- 67,295 bytes;
-- 61 top-level TLV objects;
-- positive RequestTransferExit;
-- positive StopCommunication;
-- full 56/56-day offline-analysis coverage.
+Current policy: [open beta](../releases/2026-09-30-open-beta.md). Email access and 72-hour trial are historical. Disabled endpoints/modules and earlier records remain; no deletion without classification.
 
-Do not modernize, refactor, reformat, or reuse this artifact as an editable product source. New work must wrap around it or be implemented separately.
+## Evidence and open findings
 
-## Verified product behavior — 2026-09-18
+Strongest checked-in proof: DTCO 4.1a / Android Chrome / Slot 1. Owner-reported DTCO 4.1 success is additional feedback, not universal firmware certification. Future runs must record model/firmware, phone/browser, build and actual result. Stoneridge, iPhone/Safari and other combinations remain unconfirmed.
 
-Physical product verification now shows:
+Synthetic source-review reproductions on 2026-10-01, **not fixed**:
 
-- LIVE values populated from the tachograph;
-- current activity and continuous-driving context;
-- F99A daily and F99B weekly values;
-- Periodi with real current totals;
-- 56/56-day card history rendered as activity timelines;
-- Pažnja screen with no fabricated warning when no current warning exists;
-- Kartica/status screen with successful card-read state;
-- privacy-safe technical diagnostics;
-- telemetry report received end-to-end without driver/card/vehicle/location/raw-data leakage.
+1. `TC-DATA-01`: dates alone can mark a period complete despite unknown intervals inside days.
+2. `TC-TIME-02`: distinct UTC intervals in the repeated winter hour project to identical local positions; the display cannot distinguish them.
+3. `TC-EVENT-03`: removing unknown card-out activity can discard insertion/removal transitions.
 
-The product has therefore moved beyond basic transport feasibility.
+See [review evidence and acceptance criteria](../audit/2026-10-01-source-review.md). These are not claims of failure on the owner's card.
 
-## Anonymous support code
+Other limits: no continuous app-side speed measurement throughout download; no independently certified complete parser accuracy; nonconsecutive retained dates currently rejected; shared-browser card boundaries; no signed-file trust chain. Infrastructure/privacy/retention operation needs independent checks. [rc.1 notes](../releases/2026-09-30-rc-1.md) retain dated details, with their email/trial gates superseded by open beta.
 
-Each new technical attempt may carry a support code in the form:
+## Privacy and support contract
 
-`TC-XXXXXX`
+- Card identity/history stays local unless an export is explicitly shared.
+- Technical telemetry excludes driver/card/vehicle identity, location, device name, raw bytes and measured tachograph values.
+- `TC-XXXXXX` support codes use secure randomness, never identity; one attempt retains one code.
+- Product analytics uses random visit IDs and restricted events. Retention is 60 days technical / 90 days analytics; scheduled cleanup exists, but successful execution must be checked.
+- Local technical diagnostic exports exclude card payload/identity. Diagnostic display mode is not server authorization.
+- Restricted payloads do not establish blanket anonymity or completed privacy compliance. Legal pages remain drafts; operator details and privacy basis need completion/review before commercial release.
 
-Rules:
+## Pairing evidence
 
-- generated with secure randomness;
-- ambiguity-free alphabet;
-- no derivation from driver, card, vehicle, Bluetooth name, location, or tachograph values;
-- one code reused for all telemetry events in one attempt;
-- new attempt receives a new code;
-- legacy telemetry without the code remains valid;
-- D1 stores it in nullable `attempt_code` with an index for support lookup.
+A landing connection guide exists; not every language/firmware/menu path is field-verified.
 
-The internal UUID session ID remains internal and is not the support code shown to a user.
+Owner-verified 2026-09-18 DTCO 4.1a paths:
 
-## Archived candidate work
+- ITS: `OK -> down x2 -> DRIVER 1 -> OK -> down x2 -> SETTINGS -> OK -> ITS DATA -> OK -> OK`.
+- Pairing menu: `OK -> down x2 -> DRIVER 1 -> OK -> down x3 -> BLUETOOTH -> OK -> PAIRING`.
 
-The following old PRs were intentionally closed during the 2026-09-18 cleanup. Their branches remain preserved for evidence/reference; none is authoritative:
+The [previous checkpoint version](https://github.com/canicboban-source/Tacho-Command/blob/62220e78a161a6ec07e2f7cfdc5f651982cc4d00/docs/project-state/TACHOCOMMAND-CANONICAL-STATE.md) preserves exact Serbian button wording and the VDO-manual continuation. Do not invent additional button counts or remove an existing pairing as routine onboarding. Refreshed guidance should use one action per line and recovery for invisible devices, ITS and Android permissions.
 
-- PR #30 — 0.32a feasibility probe: superseded by golden 0.32c.
-- PR #32 — 0.32b overview probe: superseded by golden 0.32c.
-- PR #33 — parser v1: archived because audit reproduced a duplicate-minute overlap case; do not merge as-is.
-- PR #34 — compliance v1: archived because it depends on the parser candidate and has intentionally incomplete rule scope.
-- PR #36 — premium shell candidate: archived because it is older than the currently field-tested product UI and is not its authoritative source.
+## Working and delivery rules
 
-No historical branch was deleted during cleanup.
+1. Start focused work from current `main`; one coherent task per PR.
+2. Preserve golden protocol/reference and historical evidence. No destructive cleanup without classification.
+3. Keep known/unknown, source-tested and hardware-tested status separate.
+4. No invented activity, compatibility, progress percentage, current value or legal verdict.
+5. Documentation/visual work must not change transport, timing, parsing, telemetry or legal interpretation.
+6. Use the existing exact-reviewed-SHA Cloudflare workflow; independently confirm live build/APIs and required hardware results.
+7. DNS, domains, secrets, database identity and access settings are separate work, unchanged here.
+8. Documentation-only changes do not require production deployment.
 
-## Remaining provenance gap
+Open drafts observed: #88 (older hosting preparation) and #91 (hardening against an older release branch). Neither is current source or an instruction to merge. Preserve pending classification. Earlier archived candidates remain historical evidence, not integration targets.
 
-The exact version-controlled source snapshot that produced the currently field-tested premium app UI is still not present in the visible GitHub `main` history.
+## Next work
 
-The current repository `/app` code still contains legacy recovery routing, while the physically tested application shows the newer integrated LIVE / Periodi / 56 dana / Pažnja / Kartica product.
+First correct detailed-day integrity (`TC-DATA-01`, `TC-TIME-02`, `TC-EVENT-03`) without changing BLE transport; then activity contrast, zoom and segment details. Independent accuracy and release evidence precede payments/advertising expansion. Speed research is deferred.
 
-Therefore:
-
-- do not deploy `main` over the working product until the exact production source is recovered or reconstructed and verified;
-- do not treat archived PR #36 as that source;
-- keep the production app unchanged while provenance is reconciled.
-
-## Known non-transport hardening findings
-
-These remain separate tasks and must not be mixed with the golden transport:
-
-- legacy Worker `/app` interception versus the current premium app source;
-- service-worker API caching/readiness behavior;
-- service-worker cache cleanup scope;
-- parser duplicate-minute invariant;
-- STOP/cancellation semantics in the older read-only field-test client;
-- independent retention execution rather than cleanup only on ingest;
-- full release/deploy identity and rollback proof.
-
-## Visual direction after source reconciliation
-
-The current premium OLED direction is approved as the base.
-
-Next visual refinements should be small and instrument-like:
-
-- slightly thicker and clearer panel borders;
-- stronger separation between primary and secondary surfaces;
-- continuous-driving progress should visually transition **green -> yellow -> red** as the relevant threshold approaches;
-- color must support, not replace, numeric time and text;
-- no alarm-like red while values are safely far from the threshold;
-- no change to protocol behavior, timing, parser semantics, telemetry privacy, or legal interpretation as part of a visual task.
-
-Suggested visual semantics for the continuous-driving bar:
-
-- early/safe range: green;
-- approaching preventive zone: green-to-yellow;
-- near the applicable limit: yellow-to-red;
-- at/over a confirmed applicable threshold: red, accompanied by explicit text.
-
-Exact transition points must come from the selected rule/profile logic rather than being hard-coded as legal conclusions in CSS.
-
-## Working rules
-
-1. `main` is the only active integration target.
-2. Golden 0.32c is locked.
-3. No destructive deletion without classification and evidence preservation.
-4. Historical branches may remain as archives, but no parallel product work starts from them.
-5. New feature work starts from current `main`.
-6. One focused change per PR/task.
-7. No production deploy until source/deploy provenance is explicit.
-8. Privacy-safe telemetry never includes driver identity, card number, vehicle identity, location, full Bluetooth name, raw protocol bytes, or tachograph values.
-9. Never fabricate history, current values, compatibility, warnings, or legal verdicts.
-10. Visual polish must not alter transport, parser, telemetry, or compliance behavior.
-
-## Pending product task — ultra-simple DTCO 4.1a phone pairing guide
-
-Before public release, TachoCommand must include a literal, non-technical step-by-step guide for first-time phone pairing. The guide must be written for a driver who has never paired the tachograph before.
-
-Physical DTCO 4.1a button sequence verified by the operator on 2026-09-18:
-
-### 1. Enable ITS data
-
-From the normal tachograph screen:
-
-`OK -> ↓ x2 -> VOZAČ 1 -> OK -> ↓ x2 -> PODEŠAVANJA -> OK -> ITS PODACI -> OK -> OK`
-
-Result: **ITS data enabled**.
-
-This exact physical button count is now verified and may be used in the in-app guide.
-
-### 2. Open Bluetooth pairing
-
-From the normal tachograph screen:
-
-`OK -> ↓ x2 -> VOZAČ 1 -> OK -> ↓ x3 -> BLUETOOTH -> OK -> PAIRING`
-
-This sequence is physically verified up to the **PAIRING** menu.
-
-After the PAIRING screen, continue the guide only with physically verified steps. Do not guess the next OK/button count from memory.
-
-### 3. What "Geräte verwalten" means
-
-German `Geräte verwalten` = **Upravljanje uređajima**; in this context: **Upravljanje Bluetooth uređajima**.
-
-According to the VDO DTCO 4.1a manual, this menu is for already paired devices. Pressing OK shows paired device names, ▲ / ▼ browses them, and selecting one leads to an `entfernen? Nein` (remove? No) prompt. It is therefore not the normal pairing step.
-
-If the operator's phone is already listed here, treat that as evidence that Android-level pairing already exists. Do not remove it during normal onboarding.
-
-VDO also marks this management menu as available from DTCO 4.1a and requiring a company or workshop card.
-
-### 4. Official VDO continuation for pairing
-
-For a new phone pairing, use the separate Driver 1 Bluetooth pairing path.
-
-After:
-`OK -> ↓ x2 -> VOZAČ 1 -> OK -> ↓ x3 -> BLUETOOTH -> OK -> PAIRING`
-
-continue as follows:
-
-1. Press **OK** on `PAIRING / Koppelung`.
-2. The DTCO displays `Bitte verbinden` (Please connect).
-3. On the phone, open Bluetooth and select the DTCO 4.1x.
-4. A 6-digit PIN appears on both the phone and the tachograph.
-5. Confirm that both PINs are identical.
-6. Confirm `Pair / Koppeln` on the phone.
-7. On DTCO 4.1a, press **↓** to confirm the displayed `Ja`.
-8. Press **OK** to finish pairing.
-9. The DTCO displays `Eingabe gespeichert` (entry saved).
-10. The Bluetooth symbol appears in the top line of the standard display.
-
-VDO notes that removing the driver card makes Bluetooth inactive and reinserting the driver card makes it active again.
-
-Only after Android-level pairing succeeds should TachoCommand attempt Web Bluetooth connection.
-
-The final in-app wording must stay literal, one action per line, for example:
-
-`Pritisni OK.`
-`Pritisni strelicu dole 2 puta.`
-`Na ekranu piše VOZAČ 1.`
-`Pritisni OK.`
-
-Do not compress these into technical menu paths for the normal driver-facing guide.
-
-Also include a recovery branch:
-- if the phone does not see the tachograph;
-- if ITS data permission is not enabled;
-- if Android Nearby devices/Bluetooth permission is denied;
-- if pairing already exists but Web Bluetooth does not list the device.
-
-This onboarding task is UI/help only and must not alter the golden 0.32c transport.
-
+The [roadmap](../product/TACHOCOMMAND-ROADMAP.md) proposes scope and gates; it does not certify implementation or promise a launch date.

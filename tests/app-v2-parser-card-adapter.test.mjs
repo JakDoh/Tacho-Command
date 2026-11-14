@@ -72,15 +72,19 @@ test("parser card adapter keeps only the latest 56 normalized days", () => {
   assert.ok(result);
   assert.equal(result.historyDaysAvailable, 56);
   assert.equal(result.historyDays.length, 56);
-  assert.equal(result.fortnightDrivingMinutes, 9 * 60);
+  assert.equal(result.fortnightDrivingMinutes, null); // Dates alone cannot certify the unrecorded hours.
   assert.equal(result.historyRangeEndIso, days.at(-1).date);
 });
 
-test("two-week total means previous calendar week plus current week to read day", () => {
+test("two-week total means previous calendar week plus current week with complete activity coverage", () => {
   const start = Date.parse("2026-09-09T00:00:00.000Z");
   const days = Array.from({ length: 14 }, (_, index) => ({
     date: new Date(start + index * 86400000).toISOString().slice(0, 10),
-    segments: [{ activity: "driving", startMinute: 60, endMinute: 120, cardStatus: "inserted" }],
+    segments: [
+      { activity: "rest", startMinute: 0, endMinute: 60 },
+      { activity: "driving", startMinute: 60, endMinute: 120, cardStatus: "inserted" },
+      { activity: "rest", startMinute: 120, endMinute: 1440 },
+    ],
   }));
 
   const result = normalizeParserCardResult({ complete: true, days });

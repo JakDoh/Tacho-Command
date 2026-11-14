@@ -195,7 +195,7 @@ export default function AdminDashboard() {
     attemptFilter === "all" || (attemptFilter === "failed" ? item.status === "failed" : item.kind === attemptFilter)
   );
   const selectedAttempt = visibleAttempts.find((item) => item.attemptCode === selectedAttemptCode) ?? visibleAttempts[0];
-  const statusLabel = (status: string) => status === "complete" ? "Završeno" : status === "failed" ? "Greška" : status === "in_progress" ? "U toku" : status === "transfer_complete" ? "Prenos završen" : "Bez završnog događaja";
+  const statusLabel = (status: string) => status === "complete" ? "Završeno" : status === "failed" ? "Greška" : status === "cancelled" ? "Otkazano" : status === "in_progress" ? "U toku" : status === "transfer_complete" ? "Prenos završen" : "Bez završnog događaja";
   const cards = [
     ["Sesije", overview.product.sessions, "30 dana"],
     ["Landing views", overview.product.landingViews, "30 dana"],

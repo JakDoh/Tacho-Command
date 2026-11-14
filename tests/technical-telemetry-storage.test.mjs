@@ -3,6 +3,7 @@ import fs from "node:fs";
 import test from "node:test";
 
 const routeSource = fs.readFileSync(new URL("../app/api/technical-telemetry/route.ts", import.meta.url), "utf8");
+const storageSource = fs.readFileSync(new URL("../lib/technical-telemetry-storage.ts", import.meta.url), "utf8");
 const schemaSource = fs.readFileSync(new URL("../db/schema.ts", import.meta.url), "utf8");
 
 test("technical telemetry storage table contains only allow-listed technical fields", () => {
@@ -41,14 +42,13 @@ test("technical telemetry storage table contains only allow-listed technical fie
 test("ingest route sanitizes before storage and performs 60-day retention cleanup", () => {
   assert.match(routeSource, /sanitizeTechnicalTelemetryBatch\(input\)/);
   assert.match(routeSource, /technicalTelemetryRetentionCutoffEpochSeconds/);
-  assert.match(routeSource, /db\.delete\(technicalTelemetryEvents\)\.where\(lt\(technicalTelemetryEvents\.createdAt, cutoff\)\)/);
-  assert.match(routeSource, /db\.insert\(technicalTelemetryEvents\)\.values/);
-  assert.match(routeSource, /attemptCode:\s*event\.attemptCode/);
+  assert.match(storageSource, /db\.delete\(technicalTelemetryEvents\)\.where\(lt\(technicalTelemetryEvents\.createdAt, cutoff\)\)/);
+  assert.match(storageSource, /db\.insert\(technicalTelemetryEvents\)\.values/);
+  assert.match(storageSource, /attemptCode:\s*event\.attemptCode/);
   assert.match(routeSource, /retentionDays:\s*TECHNICAL_TELEMETRY_RETENTION_DAYS/);
 
-  const deletePosition = routeSource.indexOf("db.delete(technicalTelemetryEvents)");
-  const insertPosition = routeSource.indexOf("db.insert(technicalTelemetryEvents)");
-  assert.ok(deletePosition >= 0 && insertPosition > deletePosition, "retention cleanup must run before insert");
+  assert.match(routeSource, /storeTechnicalTelemetry\(db, events, createdAt, cutoff\)/);
+  assert.match(storageSource, /await db\.batch\(\[\s*db\.delete[\s\S]*first, \.\.\.rest/);
 });
 
 test("ingest route fails closed without leaking storage errors or payload values", () => {

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import styles from "./install-guide.module.css";
 
 import { extraInstallCopy } from "../lib/install-extra-copy.js";
+import { PRODUCT_LOCALE_EVENT } from "../lib/product-locale.js";
 import type { Locale } from "./landing-page";
 
 type InstallGuideProps = Readonly<{
@@ -86,7 +87,8 @@ function subscribeLocale(onStoreChange: () => void) {
   if (typeof window === "undefined") return () => undefined;
   const handler = () => onStoreChange();
   window.addEventListener("storage", handler);
-  return () => window.removeEventListener("storage", handler);
+  window.addEventListener(PRODUCT_LOCALE_EVENT, handler);
+  return () => { window.removeEventListener("storage", handler); window.removeEventListener(PRODUCT_LOCALE_EVENT, handler); };
 }
 
 export default function InstallGuide({ locale: explicitLocale }: InstallGuideProps) {

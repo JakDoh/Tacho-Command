@@ -1,8 +1,9 @@
 "use client";
+import { readProductLocale, publishProductLocale } from "../../lib/product-locale.js";
+import { trackGa4 } from "../../lib/ga4-client.js";
 import { abortableBleDelay } from "../../lib/ble-operation.js";
-import EmailAccessPanel from "../email-access-panel";
-import { useEmailTrial } from "../../lib/use-email-trial";
-import { APP_LANGUAGES, type AppLocale } from "../../lib/product-app-copy.js";
+import { openBetaCopy } from "../../lib/open-beta-copy.js";
+import { type AppLocale } from "../../lib/product-app-copy.js";
 
 import type { CardTransportDiagnostic } from "../../lib/card-transport-diagnostic";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -19,6 +20,7 @@ import { beginAppV2CardRead, createAppV2CardSession, failAppV2CardRead } from ".
 import { runBrowserAppV2GoldenCardRead } from "../../lib/app-v2-card-transport-controller-bridge.js";
 import { openBrowserAppV2FieldTransport } from "../../lib/app-v2-field-transport.js";
 import { runAppV2LiveAttemptWithTelemetry } from "../../lib/app-v2-technical-telemetry-bridge.js";
+import { createAppV2CardTelemetry } from "../../lib/app-v2-card-telemetry.js";
 import { runAppV2FieldLiveRead } from "../../lib/app-v2-field-live-adapter.js";
 import { phoneTimeZone, projectCardTimelineForPhone } from "../../lib/app-v2-phone-timeline.js";
 import { calendarCardPeriod } from "../../lib/card-period.js";
@@ -96,7 +98,7 @@ function formatRestoreTime(value: string | null, locale: string) {
 
 export default function AppV2Client() {
   const [diagnosticsEnabled, setDiagnosticsEnabled] = useState(false);
-  const [locale, setLocale] = useState<AppLocale>("sr");
+  const [locale, setLocale] = useState<AppLocale>("en");
   const [savedCardVisible, setSavedCardVisible] = useState(false);
   const [clock, setClock] = useState(() => Date.now());
   const [screenAwake, setScreenAwake] = useState(false);
@@ -126,9 +128,8 @@ export default function AppV2Client() {
   useEffect(() => {
     queueMicrotask(() => setDiagnosticsEnabled(new URLSearchParams(window.location.search).get("diagnostics") === "1"));
     try {
-      const saved = localStorage.getItem("tachocommand-locale");
-      const initial = saved ?? navigator.language.slice(0, 2);
-      if (Object.hasOwn(APP_LANGUAGES, initial)) queueMicrotask(() => setLocale(initial as AppLocale));
+      const initial = readProductLocale();
+      queueMicrotask(() => { setLocale(initial); publishProductLocale(initial); });
     } catch {}
     const tick = () => setClock(Date.now());
     const timer = window.setInterval(tick, 10000);
@@ -307,10 +308,8 @@ export default function AppV2Client() {
 
   const restoredLabel = formatRestoreTime(capturedAtIso, locale);
 
-  const trial = useEmailTrial(() => { generationRef.current += 1; liveOpenAbortRef.current?.abort(); readAbortRef.current?.abort(); void closePersistentLive(); });
 
   const runLiveRead = async () => {
-    if (!trial.permitsNow()) { void trial.refresh(); return; }
     if (liveOpeningRef.current || cardSession.busy || cardReadBusyRef.current) return;
     liveOpeningRef.current = true;
     const generation = ++generationRef.current;
@@ -325,7 +324,7 @@ export default function AppV2Client() {
         openTransport: () => openBrowserAppV2FieldTransport({ signal: controller.signal }),
         keepTransportOpen: true,
       });
-      if (!mountedRef.current || generationRef.current !== generation || controller.signal.aborted || !trial.permitsNow()) {
+      if (!mountedRef.current || generationRef.current !== generation || controller.signal.aborted) {
         try { await (result.transport as PersistentLiveTransport | undefined)?.close(); } catch {}
         return;
       }
@@ -360,10 +359,16 @@ export default function AppV2Client() {
   };
 
   const runCardRead = async () => {
-    if (!trial.permitsNow()) { void trial.refresh(); return; }
     if (cardSession.busy || cardReadBusyRef.current || liveOpeningRef.current) return;
+    trackGa4("card_read_start");
+    const telemetry = createAppV2CardTelemetry({ preparing: true });
+    setCardAttemptCode(telemetry?.attemptCode ?? null);
     const transport = liveTransportRef.current;
     if (!transport || transport.isConnected?.() === false) {
+      trackGa4("card_read_error");
+      telemetry?.preparationStage("live_validation");
+      telemetry?.preparationError(new Error("Prvo povežite tahograf za bezbednu LIVE vezu."));
+      void telemetry?.finish({ status: "preparation_error" });
       setLiveSession(createAppV2LiveSession({ phase: "error", errorText: "Prvo povežite tahograf za bezbednu LIVE vezu." }));
       setLiveRunState("error"); return;
     }
@@ -373,24 +378,29 @@ export default function AppV2Client() {
     const current = () => mountedRef.current && generationRef.current === generation && !controller.signal.aborted;
     cardReadBusyRef.current = true;
     setCardHandoffPreparing(true);
-    setCardDiagnostic(null); setCardReadProgress(null); setCardAttemptCode(null);
+    setCardDiagnostic(null); setCardReadProgress(null);
     stopSpeedGuard();
     let readingSession: ReturnType<typeof beginAppV2CardRead> | null = null;
     try {
       // The refresh yields between UDS requests; only its current request drains.
+      telemetry?.preparationStage("live_idle_wait");
       await waitForLiveMonitorIdle(() => udsMonitorBusyRef.current, controller.signal);
       if (!current()) throw new Error("BLE_CANCELLED");
+      telemetry?.preparationStage("live_validation");
       if (liveTransportRef.current !== transport || transport.isConnected?.() === false) throw new Error("LIVE veza je završena pre očitavanja kartice.");
       const selectedCardDevice = transport.device;
       if (!selectedCardDevice?.gatt) throw new Error("Tahograf iz LIVE veze nije dostupan za očitavanje kartice.");
+      telemetry?.preparationStage("stationary_check");
       await transport.assertStationary();
       if (!current()) throw new Error("BLE_CANCELLED");
+      telemetry?.preparationStage("stationary_confirmed");
       stopSpeedGuard();
       liveTransportRef.current = null;
       setLiveConnected(false);
       setLastLiveSnapshot(previous => previous ? { ...previous, connected: false } : previous);
       const handoffStartedAt = performance.now();
       let handoff: CardTransportDiagnostic["handoff"];
+      telemetry?.preparationStage("live_teardown");
       try { handoff = await closeLiveForCard(transport, controller.signal); }
       catch (error) {
         if (current()) setCardDiagnostic(Object.freeze({
@@ -401,19 +411,21 @@ export default function AppV2Client() {
         }));
         throw error;
       }
-      if (!current() || !trial.permitsNow()) throw new Error("BLE_CANCELLED");
+      if (!current()) throw new Error("BLE_CANCELLED");
       readingSession = beginAppV2CardRead(cardSession);
       setCardSession(readingSession); setCardHandoffPreparing(false);
       setCardReadProgress(Object.freeze({ submessages: 0, byteLength: 0, complete: false }));
       let storage: Storage | null = null;
       try { storage = window.localStorage; } catch {}
       const result = await runBrowserAppV2GoldenCardRead({
+        telemetry,
         session: readingSession, storage, capturedAtIso: new Date().toISOString(),
         transportOptions: { device: selectedCardDevice, disconnectOnFinish: true, signal: controller.signal },
         onDiagnostic: diagnostic => { if (current()) setCardDiagnostic(Object.freeze({ ...diagnostic, handoff })); },
         onProgress: progress => { if (current()) setCardReadProgress(progress); },
         onTelemetryAttempt: code => { if (current()) setCardAttemptCode(code); },
       });
+      trackGa4(controller.signal.aborted ? "card_read_cancelled" : (result.status === "accepted" || result.status === "accepted_unsaved") && result.session?.currentCard ? "card_read_success" : "card_read_error");
       if (!mountedRef.current || generationRef.current !== generation) return;
       if (result.session) setCardSession(result.session);
       if ((result.status === "accepted" || result.status === "accepted_unsaved") && result.session?.currentCard) {
@@ -421,6 +433,9 @@ export default function AppV2Client() {
         setCapturedAtIso(result.session.capturedAtIso); setRestoreState("restored");
       }
     } catch (error) {
+      trackGa4(controller.signal.aborted ? "card_read_cancelled" : "card_read_error");
+      telemetry?.preparationError(error, { cancelled: controller.signal.aborted });
+      void telemetry?.finish({ status: "preparation_error" });
       if (liveTransportRef.current === transport) await closePersistentLive(null, transport);
       else { try { await transport.close(); } catch {} }
       if (!mountedRef.current) return;
@@ -455,7 +470,7 @@ export default function AppV2Client() {
 
   return (
     <div className={styles.stage}>
-      <EmailAccessPanel locale={locale} access={trial.access} onRefresh={() => void trial.refresh()} />
+      <aside className={styles.betaNotice} lang={locale} aria-label={openBetaCopy[locale].title}><details><summary>{openBetaCopy[locale].title}</summary><p>{openBetaCopy[locale].intro}</p></details></aside>
       <section className={styles.instrumentFrame} aria-label="TachoCommand premium instrument">
         <FieldProvenPremiumUi
           state={state}
@@ -463,7 +478,7 @@ export default function AppV2Client() {
             canonicalCard: savedCardVisible ? cardState : null,
             persisted: cardSession.persisted,
             phase: productPhase,
-            accessAllowed: (trial.access.status === "active" || trial.access.status === "owner") && trial.permitsNow(),
+            accessAllowed: true,
             restoreState,
             restoredLabel,
             errorText: visibleErrorText,
@@ -473,7 +488,7 @@ export default function AppV2Client() {
             diagnosticsEnabled,
             versionLine: formatTachoCommandVersionLine(),
             locale,
-            onLocale: (next) => { setLocale(next); try { localStorage.setItem("tachocommand-locale", next); } catch {} },
+            onLocale: (next) => { setLocale(next); publishProductLocale(next); },
             zone,
             periodLabel: period.start + " — " + period.end,
             periodComplete: period.complete,

@@ -7,6 +7,8 @@ export type FieldProvenHistoryEventKind = "card-inserted" | "card-removed";
 export type FieldProvenHistoryEvent = Readonly<{
   kind: FieldProvenHistoryEventKind;
   minute: number;
+  utcMinute?: number | null;
+  timeLabel?: string | null;
 }>;
 
 export type FieldProvenHistorySegment = Readonly<{
@@ -15,6 +17,9 @@ export type FieldProvenHistorySegment = Readonly<{
   percent: number;
   startMinute: number | null;
   endMinute: number | null;
+  timelineStart?: number | null;
+  timelineEnd?: number | null;
+  timeLabel?: string | null;
   cardStatus: FieldProvenHistoryCardStatus | null;
   label: string | null;
 }>;
@@ -25,6 +30,9 @@ export type FieldProvenHistoryDay = Readonly<{
   drivingMinutes: number;
   activityTotals: Readonly<Record<FieldProvenTimelineKind, number>>;
   timingComplete: boolean;
+  timelineMinutes?: number;
+  timelineTicks?: readonly Readonly<{minute: number; label: string}>[];
+  coverageComplete: boolean;
   events: readonly FieldProvenHistoryEvent[];
   segments: readonly FieldProvenHistorySegment[];
 }>;

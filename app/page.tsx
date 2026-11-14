@@ -6,7 +6,7 @@ import LandingPage from "./landing-page";
 
 const title = "TachoCommand — Smart Tacho 2 driver-card cockpit";
 const description =
-  "TachoCommand čita podržanu Smart Tacho 2 karticu vozača preko Android/Chrome Bluetooth puta i pretvara Gen2 v2 istoriju u jasan 56-day cockpit za profesionalne vozače.";
+  "Read a supported driver card with Android Chrome and Bluetooth. Review your driving activity on your phone in the free TachoCommand beta.";
 
 export const metadata: Metadata = {
   title,
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     siteName: "TachoCommand",
     title,
     description,
-    locale: "sr_RS",
+    locale: "en_GB",
   },
   twitter: {
     card: "summary",
@@ -43,7 +43,7 @@ const structuredData = {
       "@id": "https://tachocommand.com/#website",
       url: "https://tachocommand.com/",
       name: "TachoCommand",
-      inLanguage: "sr",
+      inLanguage: "en",
     },
     {
       "@type": "SoftwareApplication",
@@ -68,7 +68,7 @@ export default async function Home() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
       />
-      <LandingPage />
+      <LandingPage initialLocale="en" />
     </>
   );
 }

@@ -19,9 +19,6 @@
     "AUTH_EMAIL_FROM": "onboarding@resend.dev",
     "AUTH_PUBLIC_ORIGIN": "https://tacho-command.jak-doh-work.workers.dev/"
   },
-  "secrets": {
-    "required": ["EMAIL_ID_SECRET", "RESEND_API_KEY"]
-  },
   "triggers": { "crons": ["17 3 * * *"] },
   "observability": {
     "enabled": true

@@ -66,8 +66,11 @@ const card={cardReadComplete:true,historyDaysAvailable:1,historyDays:[{dateIso:'
 test('break calculation is invariant across phone zones including repeated DST hour',()=>{
   for(const zone of ['UTC','Europe/Vienna','America/New_York','Asia/Kolkata','Pacific/Auckland']){
     const result=reviewUtcCardBreaks(card,zone);
-    assert.equal(result.incomplete,false);assert.equal(result.findings.length,1);
+    assert.equal(result.incomplete,true);assert.equal(result.findings.length,1); // Only five hours are recorded, not the whole UTC day.
     assert.equal(result.findings[0].excessMinutes,30);
+    const throughRead = reviewUtcCardBreaks({...card,lastCardReadAtIso:'2026-10-25T05:00:00Z'},zone);
+    assert.equal(throughRead.incomplete,false);
+    assert.equal(throughRead.findings[0].excessMinutes,30);
   }
 });
 test('CSV carries unambiguous UTC and local offsets through DST',()=>{

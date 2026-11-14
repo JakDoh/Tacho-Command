@@ -73,3 +73,16 @@ test('connecting and handoff both expose cancellation',()=>{
   assert.match(render(Ui,{state:createFieldProvenProductState(),controls:{...controls,phase}}),/Prekini očitavanje/);
  }
 });
+
+test('first use offers connection steps and guidance instead of dead metrics or a disabled read action',()=>{
+ const html=render(Ui,{state:createFieldProvenProductState(),controls:{...controls,locale:'en'}});
+ assert.match(html,/Your first connection/);assert.match(html,/href="\/en#connect"/);
+ assert.match(html,/Bluetooth settings/);assert.doesNotMatch(html,/Unknown|<strong>—<\/strong>|<button disabled="">Read driver card/);
+ assert.match(html,/href="\/en"/);
+});
+test('onboarding never hides an in-progress read or explicit saved-card choice',()=>{
+ for(const override of [{phase:'card-reading'},{savedAvailable:true},{accepted:true}]) {
+  const html=render(Ui,{state:createFieldProvenProductState(),controls:{...controls,locale:'en',...override}});
+  assert.doesNotMatch(html,/Your first connection/);
+ }
+});

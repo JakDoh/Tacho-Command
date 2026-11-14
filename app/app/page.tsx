@@ -1,7 +1,7 @@
 import AppV2Client from "../app-v2/app-v2-client";
 
 export const metadata = {
-  title: "TachoCommand",
+  title: { absolute: "TachoCommand" },
   robots: { index: false, follow: false },
 };
 

@@ -30,7 +30,7 @@ test('phone projection splits midnight and preserves elapsed minutes across DST'
  }
 });
 test('calendar period requires every date, not just its first day',()=>{
- const days=Array.from({length:8},(_,i)=>({dateIso:`2026-09-${21+i}`,drivingMinutes:60}));
+ const days=Array.from({length:8},(_,i)=>({dateIso:`2026-09-${21+i}`,drivingMinutes:60,coverageComplete:true}));
  const options={now:new Date('2026-09-28T12:00:00Z'),timeZone:'Europe/Vienna'};
  assert.equal(calendarCardPeriod(days,options).minutes,480);
  assert.equal(calendarCardPeriod(days.filter((_,i)=>i!==3),options).minutes,null);
@@ -53,7 +53,7 @@ test('service worker excludes API and admin from online interception and offline
 test('cache activation removes only prior app shell caches',async()=>{
  const handlers={},removed=[];let work;
  vm.runInNewContext(await readFile(new URL('../public/sw.js',import.meta.url),'utf8'),{self:{addEventListener:(name,fn)=>handlers[name]=fn,clients:{claim(){}}},caches:{keys:async()=>['unrelated-cache','tachocommand-shell-v47-app-v3','tachocommand-shell-v49-email-beta','tachocommand-shell-v50-canonical-origin','tachocommand-shell-v51-read-reliability','tachocommand-shell-v52-transfer-indicator'],delete:async key=>removed.push(key)}});
- handlers.activate({waitUntil(p){work=p;}});await work;assert.deepEqual(removed,['tachocommand-shell-v47-app-v3','tachocommand-shell-v49-email-beta','tachocommand-shell-v50-canonical-origin','tachocommand-shell-v51-read-reliability']);
+ handlers.activate({waitUntil(p){work=p;}});await work;assert.deepEqual(removed,['tachocommand-shell-v47-app-v3','tachocommand-shell-v49-email-beta','tachocommand-shell-v50-canonical-origin','tachocommand-shell-v51-read-reliability','tachocommand-shell-v52-transfer-indicator']);
 });
 test('retention runs without ingest for both event stores',async()=>{
  const calls=[];await purgeExpiredTechnicalEvents({prepare(sql){return {bind(value){calls.push([sql,value]);return {};}}},batch:async()=>[]},Date.UTC(2026,8,28));

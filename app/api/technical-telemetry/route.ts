@@ -1,5 +1,5 @@
 import { readLimitedJson, requestRateAllowed, RequestLimitError } from "../../../lib/request-guards";
-import { lt } from "drizzle-orm";
+import { storeTechnicalTelemetry } from "../../../lib/technical-telemetry-storage";
 import { getDb } from "../../../db";
 import { technicalTelemetryEvents } from "../../../db/schema";
 import {
@@ -56,26 +56,7 @@ export async function POST(request: Request) {
     const createdAt = Math.floor(Date.now() / 1000);
     const cutoff = technicalTelemetryRetentionCutoffEpochSeconds(createdAt * 1000);
 
-    await db.delete(technicalTelemetryEvents).where(lt(technicalTelemetryEvents.createdAt, cutoff));
-    await db.insert(technicalTelemetryEvents).values(
-      events.map((event) => ({
-        sessionId: event.sessionId,
-        attemptCode: event.attemptCode,
-        event: event.event,
-        phase: event.phase,
-        outcome: event.outcome,
-        did: event.did,
-        durationMs: event.durationMs,
-        nrc: event.nrc,
-        deviceFamily: event.deviceFamily,
-        errorCode: event.errorCode,
-        stage: event.stage,
-        lastConfirmedStage: event.lastConfirmedStage,
-        packetCount: event.packetCount,
-        byteCount: event.byteCount,
-        createdAt,
-      })),
-    );
+    await storeTechnicalTelemetry(db, events, createdAt, cutoff);
 
     return json(
       {
